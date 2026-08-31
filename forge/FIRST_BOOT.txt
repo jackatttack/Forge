@@ -1,0 +1,147 @@
+FORGE FIRST BOOT
+================
+
+Forge is a local Python runtime for human + AI pair-programming.
+
+The assistant proposes.
+The user runs.
+Forge reports.
+The packet confirms.
+
+The run packet is ground truth.
+
+
+FIRST RESPONSE
+--------------
+
+At the start of a cold Forge session, output this read-only bundle first:
+
+    MAP .
+    DEPTH: 2
+
+    FORGE ops
+
+Return the bundle as one clean, copyable code block with no explanation
+inside the block.
+
+Do not explain it first.
+
+Wait for the returned packet. Inspect it, then ask what the user wants to
+work on. Do not assume the task is Forge itself.
+
+
+THE LOOP
+--------
+
+1. Write a plain-text Forge bundle.
+2. The user runs it locally.
+3. Forge parses the whole bundle before executing anything.
+4. Forge executes against project_root.
+5. Forge returns a packet.
+6. Read that packet before continuing.
+
+Nothing happened unless the packet says it happened.
+
+Never claim a local change without a returned packet.
+
+New syntax created by one bundle is available only to a later run because
+the complete bundle is parsed before execution starts.
+
+
+WORKING RULES
+-------------
+
+- Return executable Forge bundles as one clean, copyable code block.
+- Keep explanation outside the bundle.
+- Prefer small bundles.
+- Inspect before editing.
+- Use MAP for structure.
+- Use SEARCH to locate candidate areas.
+- Use READ for exact content before editing.
+- Use the smallest write operation that fits.
+- Use RUN for relevant tests.
+- Use DIFF to review changes.
+- Use BRANCH before risky work when useful.
+- Read errors and hints before retrying failures.
+- Never invent Forge syntax or directives.
+- Use FORGE help <OP> when syntax is unclear.
+- Use FORGE runs for stored run history.
+
+
+FAILURE RECOVERY
+----------------
+
+When a run fails:
+
+1. Read ERRORS, HINTS, and PREVIEW before retrying.
+2. Identify the failed operation and failure type.
+3. Follow the Forge hint when one is present.
+4. Use FORGE help <OP> if syntax or the operation contract is unclear.
+5. Inspect the relevant file or state before changing anything.
+6. Make the smallest correction that addresses the reported failure.
+7. Run again and read the new packet.
+
+Do not guess Forge syntax after a failure.
+
+
+PUBLIC LANGUAGE
+---------------
+
+    FORGE
+    MAP
+    READ
+    SEARCH
+
+    WRITE
+    REPLACE
+    INSERT
+    DELETE
+    COPY
+
+    RUN
+    DIFF
+    REVERT
+    BRANCH
+
+    URL
+    ALIAS
+
+Use:
+
+    FORGE ops
+
+for the public language.
+
+Use:
+
+    FORGE ops all
+
+to inspect installed extensions.
+
+
+NORMAL EDIT LOOP
+----------------
+
+    MAP path
+
+    READ path
+
+    REPLACE path
+    ...
+
+    RUN relevant_test.py
+
+    DIFF current
+
+
+OUTPUT
+------
+
+The canonical packet is the AI-facing audit trail.
+
+Standard Forge prints that packet unchanged, followed by a small human
+summary.
+
+A host may change how bundle text enters Forge or where rendered output goes.
+It must not change Forge execution semantics or the meaning of the canonical
+packet.

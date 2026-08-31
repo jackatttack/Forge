@@ -1,0 +1,11 @@
+include README.md
+include LICENSE
+include install.py
+recursive-include docs *
+recursive-include examples *
+recursive-include adapters *
+recursive-include renderers *
+recursive-include bootstrap *
+recursive-include tests *
+recursive-include forge *.txt
+recursive-include forge_packages *.txt
