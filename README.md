@@ -119,6 +119,48 @@ Nothing changed merely because the assistant suggested it.
 
 ## Quick start
 
+### Pythonista: one-copy install
+
+For a clean Pythonista installation, create any temporary Python script, paste
+the following code into it, and run it once:
+
+    import urllib.request
+
+    url = (
+        'https://raw.githubusercontent.com/'
+        'jackatttack/Forge/main/bootstrap/pythonista.py'
+    )
+
+    with urllib.request.urlopen(url) as response:
+        source = response.read()
+
+    exec(
+        compile(
+            source,
+            'forge_bootstrap.py',
+            'exec',
+        ),
+        {
+            '__name__': '__main__',
+            '__file__': 'forge_bootstrap.py',
+        },
+    )
+
+That is the whole bootstrap.
+
+It downloads the Portable Forge installer, installs the runtime into:
+
+    ~/Documents/site-packages-3
+
+and creates:
+
+    ~/Documents/forge_entry.py
+
+The installer then opens `forge_entry.py` in Pythonista so it is ready to use.
+
+Put a Forge bundle on the clipboard and run `forge_entry.py`.
+
+
 ### 1. Install from a checked-out repository
 
 Portable Forge includes a standard-library-only installer:
