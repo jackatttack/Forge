@@ -156,7 +156,9 @@ and creates:
 
     ~/Documents/forge_entry.py
 
-The installer then opens `forge_entry.py` in Pythonista so it is ready to use.
+On a first installation, the installer opens `forge_entry.py` in Pythonista so
+it is ready to use. Existing or updated launchers are left in place without
+being auto-opened.
 
 Put a Forge bundle on the clipboard and run `forge_entry.py`.
 

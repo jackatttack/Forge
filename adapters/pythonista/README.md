@@ -33,7 +33,10 @@ Running that bootstrap on a clean Pythonista installation will:
 2. Install `forge`, `forge_core`, and `forge_packages` into
    `~/Documents/site-packages-3`.
 3. Create `~/Documents/forge_entry.py`.
-4. Open `forge_entry.py` in the Pythonista editor.
+4. On first installation, open `forge_entry.py` in the Pythonista editor.
+
+On later updates, an existing marked launcher may be retained or refreshed, but
+it is not auto-opened.
 
 The installer owns the Pythonista-specific finishing work. The bootstrap only
 downloads and invokes the installer.

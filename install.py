@@ -188,6 +188,7 @@ def pythonista_launcher_preflight(
             'source': source,
             'destination': destination,
             'write': True,
+            'created': True,
         }
 
     if not os.path.isfile(
@@ -210,6 +211,7 @@ def pythonista_launcher_preflight(
             'source': source,
             'destination': destination,
             'write': False,
+            'created': False,
         }
 
     if not launcher_is_portable(
@@ -239,6 +241,7 @@ def pythonista_launcher_preflight(
         'source': source,
         'destination': destination,
         'write': True,
+        'created': False,
     }
 
 
@@ -1008,9 +1011,10 @@ def main(argv=None):
             )
 
         pythonista = is_pythonista()
+        launcher_plan = None
 
         if pythonista:
-            pythonista_launcher_preflight(
+            launcher_plan = pythonista_launcher_preflight(
                 source_root,
                 force=args.force,
             )
@@ -1025,6 +1029,7 @@ def main(argv=None):
         launcher = None
         launcher_opened = False
         launcher_open_error = ''
+        launcher_should_open = False
 
         if pythonista:
             launcher = install_pythonista_launcher(
@@ -1032,12 +1037,18 @@ def main(argv=None):
                 force=args.force,
             )
 
-            (
-                launcher_opened,
-                launcher_open_error,
-            ) = open_pythonista_launcher(
-                launcher
+            launcher_should_open = bool(
+                launcher_plan
+                and launcher_plan.get('created')
             )
+
+            if launcher_should_open:
+                (
+                    launcher_opened,
+                    launcher_open_error,
+                ) = open_pythonista_launcher(
+                    launcher
+                )
 
         print('')
         print(
@@ -1064,11 +1075,16 @@ def main(argv=None):
                 print(
                     'Pythonista launcher opened in the editor.'
                 )
-            else:
+            elif launcher_should_open:
                 print(
                     'Pythonista launcher created but could not be '
                     'opened automatically: '
                     + launcher_open_error
+                )
+            else:
+                print(
+                    'Pythonista launcher ready. Existing or updated '
+                    'launchers are not auto-opened.'
                 )
 
         print('')
