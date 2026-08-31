@@ -13,7 +13,7 @@ OVERWRITE: no|yes
 Recovery model:
 - source is read but not changed
 - destination is recorded with its real previous state
-- REVERT_RUN can restore or delete the destination
+- REVERT can restore or delete the destination
 """
 
 import os
@@ -56,7 +56,7 @@ HINTS = {
         'next': [
             'READ the destination first if unsure.',
             'Use OVERWRITE: yes only when the existing destination should be replaced.',
-            'Use MOVE when the source should disappear after the operation.',
+            'If the source should disappear, verify the copy and then DELETE the source deliberately.',
         ],
         'priority': 100,
     },

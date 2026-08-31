@@ -166,7 +166,39 @@ def parse_bundle(text):
 
         op_name, target = _match_op_header(lines[i])
         if not op_name:
-            errors.append('Expected known op header at line %d: %r' % (i + 1, lines[i]))
+            raw_header = (lines[i] or '').strip()
+            token = (
+                raw_header.split(None, 1)[0].upper()
+                if raw_header
+                else ''
+            )
+
+            replacement = ''
+
+            if token:
+                try:
+                    from forge_core.language import replacement_for
+                    replacement = replacement_for(token)
+                except Exception:
+                    replacement = ''
+
+            if replacement:
+                errors.append(
+                    '%s is retired. Use %s instead.'
+                    % (
+                        token,
+                        replacement,
+                    )
+                )
+            else:
+                errors.append(
+                    'Expected known op header at line %d: %r'
+                    % (
+                        i + 1,
+                        lines[i],
+                    )
+                )
+
             break
 
         i += 1
