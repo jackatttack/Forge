@@ -59,7 +59,7 @@ HELP = {
         'Use MODE: relationships on a Python file for reverse imports and statically resolved external callers.',
         'Use SEARCH when looking for a specific symbol or phrase.',
     ],
-    'related_ops': ['READ', 'SEARCH', 'LIST_FILES', 'LIST_TARGETS'],
+    'related_ops': ['READ', 'SEARCH'],
 }
 
 
@@ -1384,7 +1384,7 @@ def _render_directory(root, abs_path, target, mode, depth, docs, limit):
         lines.append('- ... %d more' % overflow)
 
     if not readme and not entrypoints and not py_files:
-        lines.append('- LIST_FILES %s' % rel)
+        lines.append('- READ %s' % rel)
 
     return lines
 
