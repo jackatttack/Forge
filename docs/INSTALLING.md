@@ -4,26 +4,28 @@ Portable Forge is intended to support several installation routes.
 
 ## Standard Python packaging
 
-The repository includes pyproject.toml so Forge can eventually be installed as
-a normal Python distribution.
+Forge is published as the normal Python distribution:
 
-The final public distribution name should be confirmed before the first PyPI
-upload.
+    portable-forge
 
-The Python import will remain:
+Install it with:
+
+    pip install portable-forge
+
+The Python import is:
 
     import forge
 
 ## Pure Python installer
 
-The repository will include a standard-library-only installer:
+The repository includes a standard-library-only installer:
 
     install.py
 
 Its purpose is to support environments where pip is unavailable or
 inconvenient.
 
-The installer will be able to install from:
+The installer can install from:
 
 - a local checkout;
 - a tagged GitHub release archive;
@@ -71,11 +73,10 @@ The public repository is:
 
     jackatttack/Forge
 
-During development, installation can use:
-
-    python install.py --github jackatttack/Forge --ref main
-
-Stable installation instructions should prefer a tagged release once the
-first release tag exists, for example:
+Stable installation uses the tagged release:
 
     python install.py --github jackatttack/Forge --ref v0.1.0
+
+For deliberate development testing, main remains available:
+
+    python install.py --github jackatttack/Forge --ref main

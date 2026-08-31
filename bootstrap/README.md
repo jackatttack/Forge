@@ -22,14 +22,10 @@ The initial bootstrap template is:
 
     pythonista.py
 
-Before the public repository is created, it contains placeholder repository
-coordinates.
+The Pythonista bootstrap uses:
 
-After the repository exists, set:
+    REPOSITORY = jackatttack/Forge
+    REF = v0.1.0
 
-    REPOSITORY
-    REF
-
-to the real GitHub repository and a known release tag.
-
-Stable instructions should prefer a tagged release rather than main.
+Stable bootstrap releases are pinned to a tag rather than main so installation
+remains reproducible after later development changes.

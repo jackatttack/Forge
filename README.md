@@ -128,7 +128,7 @@ the following code into it, and run it once:
 
     url = (
         'https://raw.githubusercontent.com/'
-        'jackatttack/Forge/main/bootstrap/pythonista.py'
+        'jackatttack/Forge/v0.1.0/bootstrap/pythonista.py'
     )
 
     with urllib.request.urlopen(url) as response:
@@ -572,11 +572,13 @@ With an explicit package directory:
 
     python install.py --source . --target /path/to/site-packages
 
-From GitHub using the current development branch:
+From the stable v0.1.0 release:
+
+    python install.py --github jackatttack/Forge --ref v0.1.0
+
+For deliberate testing of the current development branch:
 
     python install.py --github jackatttack/Forge --ref main
-
-Tagged releases should be preferred once the first release tag exists.
 
 The installer uses only the Python standard library.
 
@@ -593,19 +595,20 @@ See `bootstrap/`.
 
 ### Python packaging
 
-The repository contains a valid `pyproject.toml` and can be packaged as a
-normal Python distribution.
-
-Current distribution metadata uses:
+Forge is packaged as the Python distribution:
 
     portable-forge
+
+Install it from PyPI with:
+
+    pip install portable-forge
 
 The Python import remains:
 
     import forge
 
-A public package upload is separate from the source release and should only be
-done once the distribution name and release policy are final.
+The distribution is pure Python and the public package contains the portable
+runtime packages `forge`, `forge_core`, and `forge_packages`.
 
 
 ## Repository layout

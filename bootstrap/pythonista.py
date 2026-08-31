@@ -2,7 +2,7 @@
 """
 Portable Forge bootstrap for Pythonista.
 
-Set REPOSITORY and REF after the public GitHub repository exists.
+The stable bootstrap is pinned to the Portable Forge v0.1.0 release.
 
 The bootstrap has one job:
 
@@ -11,7 +11,8 @@ The bootstrap has one job:
     run install.py
 
 The installer itself detects Pythonista, chooses site-packages-3, installs the
-runtime, creates the root forge_entry.py launcher, and opens that launcher.
+runtime, creates the root forge_entry.py launcher, and opens a newly created
+launcher on first installation.
 """
 
 import os
@@ -22,7 +23,7 @@ import urllib.request
 
 
 REPOSITORY = 'jackatttack/Forge'
-REF = 'main'
+REF = 'v0.1.0'
 
 
 def main():
