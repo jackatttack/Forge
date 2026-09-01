@@ -29,3 +29,22 @@ The Pythonista bootstrap uses:
 
 Stable bootstrap releases are pinned to a tag rather than main so installation
 remains reproducible after later development changes.
+
+## PythonIDE
+
+The development bootstrap is:
+
+    pythonide.py
+
+PythonIDE development installs currently use:
+
+    REPOSITORY = jackatttack/Forge
+    REF = main
+
+This deliberately tracks the GitHub development branch so Forge changes can be
+tested in PythonIDE without waiting for a new PyPI release. The bootstrap only
+downloads and launches the repository-root install.py; it does not duplicate
+installer logic.
+
+For the cleanest development setup, remove any existing PyPI-installed Portable
+Forge runtime before using this bootstrap.
