@@ -45,6 +45,9 @@ INSTALL_MARKER_TEXT = 'portable-forge-runtime-v1\n'
 PYTHONISTA_LAUNCHER_MARKER = 'portable-forge-pythonista-launcher-v1'
 PYTHONISTA_LAUNCHER_NAME = 'forge_entry.py'
 
+PYTHONISTA_RENDERER_MARKER = 'portable-forge-pythonista-live-ui-v1'
+PYTHONISTA_RENDERER_NAME = 'forge_console_ui.py'
+
 PYTHONIDE_LAUNCHER_MARKER = 'portable-forge-pythonide-launcher-v1'
 PYTHONIDE_LAUNCHER_NAME = 'forge-entry.py'
 
@@ -142,6 +145,24 @@ def pythonista_launcher_source(source_root):
         'adapters',
         'pythonista',
         'Forge.py',
+    )
+
+
+def pythonista_renderer_path():
+    return os.path.join(
+        pythonista_documents_root(),
+        PYTHONISTA_RENDERER_NAME,
+    )
+
+
+def pythonista_renderer_source(source_root):
+    return os.path.join(
+        absolute(
+            source_root
+        ),
+        'adapters',
+        'pythonista',
+        PYTHONISTA_RENDERER_NAME,
     )
 
 
@@ -294,6 +315,161 @@ def install_pythonista_launcher(
             temporary,
         )
 
+        os.replace(
+            temporary,
+            destination,
+        )
+
+    finally:
+        if os.path.exists(
+            temporary
+        ):
+            os.remove(
+                temporary
+            )
+
+    return destination
+
+
+def pythonista_renderer_is_portable(path):
+    if not os.path.isfile(
+        path
+    ):
+        return False
+
+    try:
+        text = _read_text(
+            path
+        )
+    except Exception:
+        return False
+
+    return PYTHONISTA_RENDERER_MARKER in text
+
+
+def pythonista_renderer_preflight(
+    source_root,
+    force=False,
+):
+    source = pythonista_renderer_source(
+        source_root
+    )
+
+    if not os.path.isfile(
+        source
+    ):
+        raise RuntimeError(
+            'Pythonista renderer source was not found: '
+            + source
+        )
+
+    source_text = _read_text(
+        source
+    )
+
+    if PYTHONISTA_RENDERER_MARKER not in source_text:
+        raise RuntimeError(
+            'Pythonista renderer source is missing the '
+            'Portable Forge renderer marker.'
+        )
+
+    destination = pythonista_renderer_path()
+
+    if not os.path.exists(
+        destination
+    ):
+        return {
+            'source': source,
+            'destination': destination,
+            'write': True,
+            'created': True,
+        }
+
+    if not os.path.isfile(
+        destination
+    ):
+        raise RuntimeError(
+            (
+                'Portable Forge refuses to replace an existing '
+                'non-file Pythonista renderer path:\n%s'
+            )
+            % destination
+        )
+
+    destination_text = _read_text(
+        destination
+    )
+
+    if destination_text == source_text:
+        return {
+            'source': source,
+            'destination': destination,
+            'write': False,
+            'created': False,
+        }
+
+    if not pythonista_renderer_is_portable(
+        destination
+    ):
+        raise RuntimeError(
+            (
+                'Portable Forge refuses to overwrite an unrecognised '
+                'Pythonista renderer:\n%s\n'
+                'No renderer files were changed.'
+            )
+            % destination
+        )
+
+    if not force:
+        raise RuntimeError(
+            (
+                'A different Portable Forge Pythonista renderer already '
+                'exists:\n%s\n'
+                'Use --force only when deliberately updating this '
+                'marked Portable Forge renderer.'
+            )
+            % destination
+        )
+
+    return {
+        'source': source,
+        'destination': destination,
+        'write': True,
+        'created': False,
+    }
+
+
+def install_pythonista_renderer(
+    source_root,
+    force=False,
+):
+    plan = pythonista_renderer_preflight(
+        source_root,
+        force=force,
+    )
+
+    source = plan['source']
+    destination = plan['destination']
+
+    if not plan['write']:
+        return destination
+
+    parent = os.path.dirname(
+        destination
+    )
+
+    os.makedirs(
+        parent,
+        exist_ok=True,
+    )
+
+    temporary = destination + '.portable-forge-new'
+
+    try:
+        shutil.copyfile(
+            source,
+            temporary,
+        )
         os.replace(
             temporary,
             destination,
@@ -1248,10 +1424,15 @@ def main(argv=None):
         )
 
         launcher_plan = None
+        renderer_plan = None
         pythonide_plan = None
 
         if pythonista:
             launcher_plan = pythonista_launcher_preflight(
+                source_root,
+                force=args.force,
+            )
+            renderer_plan = pythonista_renderer_preflight(
                 source_root,
                 force=args.force,
             )
@@ -1271,12 +1452,17 @@ def main(argv=None):
         )
 
         launcher = None
+        renderer = None
         launcher_opened = False
         launcher_open_error = ''
         launcher_should_open = False
         pythonide_files = []
 
         if pythonista:
+            renderer = install_pythonista_renderer(
+                source_root,
+                force=args.force,
+            )
             launcher = install_pythonista_launcher(
                 source_root,
                 force=args.force,
@@ -1342,6 +1528,11 @@ def main(argv=None):
                 'Pythonista launcher:',
                 launcher,
             )
+            if renderer:
+                print(
+                    'Pythonista live UI:',
+                    renderer,
+                )
 
             if launcher_opened:
                 print(

@@ -128,7 +128,7 @@ the following code into it, and run it once:
 
     url = (
         'https://raw.githubusercontent.com/'
-        'jackatttack/Forge/v0.1.1/bootstrap/pythonista.py'
+        'jackatttack/Forge/main/bootstrap/pythonista.py'
     )
 
     with urllib.request.urlopen(url) as response:
@@ -155,10 +155,12 @@ It downloads the Portable Forge installer, installs the runtime into:
 and creates:
 
     ~/Documents/forge_entry.py
+    ~/Documents/forge_console_ui.py
 
 On a first installation, the installer opens `forge_entry.py` in Pythonista so
-it is ready to use. Existing or updated launchers are left in place without
-being auto-opened.
+it is ready to use. Existing marked Portable Forge runtime and adapter files
+can be refreshed safely by later bootstrap runs; updated launchers are not
+auto-opened.
 
 Put a Forge bundle on the clipboard and run `forge_entry.py`.
 
@@ -525,6 +527,7 @@ The intended layout is:
         forge_packages/
 
     ~/Documents/forge_entry.py
+    ~/Documents/forge_console_ui.py
 
 The bootstrap helper:
 
@@ -532,11 +535,15 @@ The bootstrap helper:
 
 downloads the Portable Forge installer. The installer detects Pythonista,
 installs the runtime into `~/Documents/site-packages-3`, creates the small
-`~/Documents/forge_entry.py` launcher, and opens it in the editor.
+`~/Documents/forge_entry.py` launcher plus `~/Documents/forge_console_ui.py`,
+and opens a newly created launcher in the editor.
 
-The launcher provides a clipboard-based workflow by default.
+The launcher provides a clipboard-based workflow by default and passes Forge's
+structured progress events to the Pythonista live console renderer. The
+canonical Forge packet is still copied back to the clipboard unchanged.
 
-Clipboard behaviour is part of the Pythonista adapter, not part of Forge core.
+Clipboard and console presentation belong to the Pythonista adapter, not Forge
+core.
 
 
 ### Existing Forge installations

@@ -2,17 +2,17 @@
 """
 Portable Forge bootstrap for Pythonista.
 
-The stable bootstrap is pinned to the Portable Forge v0.1.1 release.
+The bootstrap installs the current Portable Forge main branch.
 
-The bootstrap has one job:
+It has one job:
 
     download install.py
     ->
     run install.py
 
-The installer itself detects Pythonista, chooses site-packages-3, installs the
-runtime, creates the root forge_entry.py launcher, and opens a newly created
-launcher on first installation.
+The installer detects Pythonista, chooses site-packages-3, installs the
+runtime, creates the root forge_entry.py launcher and forge_console_ui.py live
+renderer, and opens a newly created launcher on first installation.
 """
 
 import os
@@ -23,7 +23,7 @@ import urllib.request
 
 
 REPOSITORY = 'jackatttack/Forge'
-REF = 'v0.1.1'
+REF = 'main'
 
 
 def main():
@@ -74,6 +74,7 @@ def main():
             REPOSITORY,
             '--ref',
             REF,
+            '--force',
         ]
 
         try:

@@ -15,10 +15,12 @@ On Pythonista, the intended layout is:
         forge_packages/
 
     ~/Documents/forge_entry.py
+    ~/Documents/forge_console_ui.py
 
 The Forge runtime lives in `site-packages-3`.
 
-`forge_entry.py` is only the small Pythonista-specific host launcher.
+`forge_entry.py` is the small Pythonista-specific host launcher.
+`forge_console_ui.py` is the Pythonista live console renderer.
 
 
 ## Bootstrap
@@ -27,16 +29,17 @@ The repository includes:
 
     bootstrap/pythonista.py
 
-Running that bootstrap on a clean Pythonista installation will:
+Running that bootstrap on Pythonista will:
 
-1. Download the Portable Forge installer.
+1. Download the current Portable Forge installer from `main`.
 2. Install `forge`, `forge_core`, and `forge_packages` into
    `~/Documents/site-packages-3`.
-3. Create `~/Documents/forge_entry.py`.
-4. On first installation, open `forge_entry.py` in the Pythonista editor.
+3. Install `~/Documents/forge_entry.py`.
+4. Install `~/Documents/forge_console_ui.py`.
+5. On first installation, open `forge_entry.py` in the Pythonista editor.
 
-On later updates, an existing marked launcher may be retained or refreshed, but
-it is not auto-opened.
+Marked Portable Forge adapter files can be safely refreshed on later bootstrap
+runs.
 
 The installer owns the Pythonista-specific finishing work. The bootstrap only
 downloads and invokes the installer.
@@ -144,23 +147,25 @@ silently shadow or overwrite an existing runtime.
 Migration should be deliberate.
 
 
-## Richer Pythonista rendering
+## Pythonista live rendering
 
-A richer Pythonista renderer can later live beside the root launcher:
+The Pythonista adapter includes:
 
-    renderer.py
+    adapters/pythonista/forge_console_ui.py
 
-The launcher could then do:
+During installation it is copied to:
 
-    import forge
-    from renderer import render
+    ~/Documents/forge_console_ui.py
 
-    run = forge.run_text(...)
-    render(run)
+`forge_entry.py` constructs `ForgeConsoleUI` and passes it to:
 
-That renderer remains a Pythonista concern.
+    forge.run_text(..., on_event=progress)
 
-The dependency direction must stay:
+The renderer consumes Portable Forge's structured execution events and draws
+the live Pythonista console presentation. The canonical standard packet is
+still rendered separately and copied to the clipboard.
+
+Presentation remains strictly host-side. The dependency direction is:
 
     Pythonista adapter -> Forge
 
