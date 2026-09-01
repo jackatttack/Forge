@@ -2,7 +2,7 @@
 """
 Portable Forge bootstrap for Pythonista.
 
-The stable bootstrap is pinned to the Portable Forge v0.1.0 release.
+The stable bootstrap is pinned to the Portable Forge v0.1.1 release.
 
 The bootstrap has one job:
 
@@ -23,7 +23,7 @@ import urllib.request
 
 
 REPOSITORY = 'jackatttack/Forge'
-REF = 'v0.1.0'
+REF = 'v0.1.1'
 
 
 def main():

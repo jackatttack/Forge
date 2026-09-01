@@ -128,7 +128,7 @@ the following code into it, and run it once:
 
     url = (
         'https://raw.githubusercontent.com/'
-        'jackatttack/Forge/v0.1.0/bootstrap/pythonista.py'
+        'jackatttack/Forge/v0.1.1/bootstrap/pythonista.py'
     )
 
     with urllib.request.urlopen(url) as response:
@@ -572,9 +572,9 @@ With an explicit package directory:
 
     python install.py --source . --target /path/to/site-packages
 
-From the stable v0.1.0 release:
+From the stable v0.1.1 release:
 
-    python install.py --github jackatttack/Forge --ref v0.1.0
+    python install.py --github jackatttack/Forge --ref v0.1.1
 
 For deliberate testing of the current development branch:
 

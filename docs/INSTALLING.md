@@ -75,7 +75,7 @@ The public repository is:
 
 Stable installation uses the tagged release:
 
-    python install.py --github jackatttack/Forge --ref v0.1.0
+    python install.py --github jackatttack/Forge --ref v0.1.1
 
 For deliberate development testing, main remains available:
 

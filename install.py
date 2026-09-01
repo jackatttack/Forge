@@ -17,7 +17,7 @@ Examples:
 
     python install.py --source .
 
-    python install.py --github OWNER/REPOSITORY --ref v0.1.0
+    python install.py --github OWNER/REPOSITORY --ref v0.1.1
 
     python install.py --source . --target /path/to/site-packages
 """

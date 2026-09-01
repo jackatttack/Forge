@@ -153,6 +153,183 @@ jobs:
       - name: Check distribution metadata
         run: python -m twine check dist/*
 
+      - name: Verify direct wheel import
+        shell: bash
+        working-directory: ${{ runner.temp }}
+        run: |
+          python - <<'PY'
+          import glob
+          import os
+          import sys
+          import tempfile
+
+          wheels = glob.glob(
+              os.path.join(
+                  os.environ['GITHUB_WORKSPACE'],
+                  'dist',
+                  '*.whl',
+              )
+          )
+
+          if len(wheels) != 1:
+              raise SystemExit(
+                  'Expected exactly one wheel, found %d.'
+                  % len(wheels)
+              )
+
+          wheel = os.path.realpath(
+              wheels[0]
+          )
+
+          sys.path.insert(
+              0,
+              wheel,
+          )
+
+          import forge
+
+          origin = os.path.realpath(
+              forge.__file__
+          )
+
+          print(
+              'Direct wheel Forge origin:',
+              origin,
+          )
+
+          if wheel not in origin:
+              raise SystemExit(
+                  'Forge was not imported directly from the wheel.'
+              )
+
+          root = tempfile.mkdtemp(
+              prefix='portable-forge-wheel-ci-'
+          )
+
+          forge_home = os.path.join(
+              root,
+              '.forge',
+          )
+
+          ops_run = forge.run_text(
+              'FORGE ops',
+              project_root=root,
+              forge_home=forge_home,
+              mode='test',
+              store=False,
+          )
+
+          if ops_run.get('status') != 'APPLIED':
+              raise SystemExit(
+                  'FORGE ops failed under direct wheel import: %r'
+                  % ops_run.get('status')
+              )
+
+          results = (
+              ops_run.get('results')
+              or []
+          )
+
+          if not results:
+              raise SystemExit(
+                  'FORGE ops returned no result.'
+              )
+
+          rows = (
+              (
+                  results[0].get('data')
+                  or {}
+              ).get('ops')
+              or []
+          )
+
+          names = {
+              str(
+                  row.get('name')
+                  or ''
+              ).upper()
+              for row in rows
+          }
+
+          expected = {
+              'ALIAS',
+              'BRANCH',
+              'COPY',
+              'DELETE',
+              'DIFF',
+              'FORGE',
+              'INSERT',
+              'MAP',
+              'READ',
+              'REPLACE',
+              'REVERT',
+              'RUN',
+              'SEARCH',
+              'URL',
+              'WRITE',
+          }
+
+          if names != expected:
+              raise SystemExit(
+                  'Unexpected wheel-mounted op set: %r'
+                  % sorted(names)
+              )
+
+          audit_run = forge.run_text(
+              'FORGE audit',
+              project_root=root,
+              forge_home=forge_home,
+              mode='test',
+              store=False,
+          )
+
+          if audit_run.get('status') != 'APPLIED':
+              raise SystemExit(
+                  'FORGE audit failed under direct wheel import.'
+              )
+
+          audit_results = (
+              audit_run.get('results')
+              or []
+          )
+
+          audit_data = (
+              (
+                  audit_results[0].get('data')
+                  if audit_results
+                  else {}
+              )
+              or {}
+          )
+
+          if audit_data.get('total') != 15:
+              raise SystemExit(
+                  'Wheel audit did not discover all 15 ops.'
+              )
+
+          if audit_data.get('failed') != 0:
+              raise SystemExit(
+                  'Wheel audit reported failures.'
+              )
+
+          help_run = forge.run_text(
+              'FORGE help WRITE full',
+              project_root=root,
+              forge_home=forge_home,
+              mode='test',
+              store=False,
+          )
+
+          if help_run.get('status') != 'APPLIED':
+              raise SystemExit(
+                  'Full help failed under direct wheel import.'
+              )
+
+          print(
+              'Direct wheel Forge discovery passed.'
+          )
+          PY
+
       - name: Install and verify built wheel
         shell: bash
         run: |

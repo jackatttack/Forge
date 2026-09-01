@@ -12,8 +12,14 @@ One read-only home for Forge's own machinery:
 - stored run inspection
 """
 
+import importlib
 import importlib.util
 import os
+
+try:
+    from importlib import resources as importlib_resources
+except ImportError:
+    importlib_resources = None
 
 from forge_core.language import (
     classify_op,
@@ -23,6 +29,7 @@ from forge_core.registry import (
     OPS_BY_NAME,
     discover_ops,
     get_package_kind,
+    get_package_module,
     get_package_path,
 )
 from forge_core.run_storage import (
@@ -248,11 +255,189 @@ def _ops(result, all_ops=False):
         'ops': rows,
     }
 
+def _package_leaf(
+    name,
+    folder='',
+):
+    package_name = (
+        get_package_module(
+            name
+        )
+        or ''
+    )
+
+    if package_name:
+        return package_name.rsplit(
+            '.',
+            1,
+        )[-1]
+
+    return os.path.basename(
+        folder
+        or ''
+    )
+
+
+def _package_resource_bytes(
+    name,
+    folder,
+    resource_name,
+):
+    package_name = (
+        get_package_module(
+            name
+        )
+        or ''
+    )
+
+    if (
+        package_name
+        and importlib_resources is not None
+    ):
+        try:
+            package = importlib.import_module(
+                package_name
+            )
+
+            files_fn = getattr(
+                importlib_resources,
+                'files',
+                None,
+            )
+
+            if callable(
+                files_fn
+            ):
+                item = files_fn(
+                    package
+                ).joinpath(
+                    resource_name
+                )
+
+                if item.is_file():
+                    return item.read_bytes()
+
+            elif importlib_resources.is_resource(
+                package,
+                resource_name,
+            ):
+                return importlib_resources.read_binary(
+                    package,
+                    resource_name,
+                )
+
+        except Exception:
+            pass
+
+    if folder:
+        path = os.path.join(
+            folder,
+            resource_name,
+        )
+
+        if os.path.isfile(
+            path
+        ):
+            try:
+                with open(
+                    path,
+                    'rb',
+                ) as handle:
+                    return handle.read()
+            except Exception:
+                pass
+
+    return None
+
+
+def _package_resource_exists(
+    name,
+    folder,
+    resource_name,
+):
+    return (
+        _package_resource_bytes(
+            name,
+            folder,
+            resource_name,
+        )
+        is not None
+    )
+
+
+def _read_package_text(
+    name,
+    folder,
+    resource_name,
+):
+    raw = _package_resource_bytes(
+        name,
+        folder,
+        resource_name,
+    )
+
+    if raw is None:
+        return ''
+
+    try:
+        return raw.decode(
+            'utf-8',
+            'replace',
+        )
+    except Exception:
+        return str(
+            raw
+        )
+
 
 def _load_manifest(
     folder,
     op_name,
 ):
+    package_name = (
+        get_package_module(
+            op_name
+        )
+        or ''
+    )
+
+    if package_name:
+        module_name = (
+            package_name
+            + '.manifest'
+        )
+
+        try:
+            mod = importlib.import_module(
+                module_name
+            )
+
+            manifest = getattr(
+                mod,
+                'MANIFEST',
+                None,
+            )
+
+            if not isinstance(
+                manifest,
+                dict,
+            ):
+                return None, (
+                    'MANIFEST is not a dict'
+                )
+
+            return manifest, None
+
+        except Exception as e:
+            if not folder:
+                return None, (
+                    'manifest import failed: %s: %s'
+                    % (
+                        type(e).__name__,
+                        e,
+                    )
+                )
+
     path = os.path.join(
         folder,
         'manifest.py',
@@ -268,7 +453,9 @@ def _load_manifest(
     try:
         mod_name = (
             'forge_next_manifest_'
-            + str(op_name).lower()
+            + str(
+                op_name
+            ).lower()
         )
 
         spec = (
@@ -277,6 +464,14 @@ def _load_manifest(
                 path,
             )
         )
+
+        if (
+            spec is None
+            or spec.loader is None
+        ):
+            return None, (
+                'could not create manifest import spec'
+            )
 
         mod = (
             importlib.util.module_from_spec(
@@ -324,17 +519,26 @@ def _contract_issues(
         name
     ) or ''
 
-    if not folder:
+    package_name = (
+        get_package_module(
+            name
+        )
+        or ''
+    )
+
+    if (
+        not folder
+        and not package_name
+    ):
         issues.append(
-            'package path unavailable'
+            'package metadata unavailable'
         )
         return issues, None
 
-    if not os.path.isfile(
-        os.path.join(
-            folder,
-            'README.txt',
-        )
+    if not _package_resource_exists(
+        name,
+        folder,
+        'README.txt',
     ):
         issues.append(
             'missing README.txt'
@@ -367,8 +571,9 @@ def _contract_issues(
 
         if manifest.get(
             'name'
-        ) != os.path.basename(
-            folder
+        ) != _package_leaf(
+            name,
+            folder,
         ):
             issues.append(
                 'MANIFEST name mismatch'
@@ -563,27 +768,17 @@ def _help(
         ])
 
     elif mode == 'full':
-        readme_path = os.path.join(
+        readme = _read_package_text(
+            name,
             folder,
             'README.txt',
-        )
+        ).rstrip()
 
-        if os.path.isfile(
-            readme_path
-        ):
-            with open(
-                readme_path,
-                'r',
-                encoding='utf-8',
-                errors='replace',
-            ) as f:
-                readme = f.read().rstrip()
-
-            if readme:
-                lines.extend([
-                    '',
-                    readme,
-                ])
+        if readme:
+            lines.extend([
+                '',
+                readme,
+            ])
 
         lines.extend([
             '',

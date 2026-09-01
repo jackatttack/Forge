@@ -25,7 +25,7 @@ The initial bootstrap template is:
 The Pythonista bootstrap uses:
 
     REPOSITORY = jackatttack/Forge
-    REF = v0.1.0
+    REF = v0.1.1
 
 Stable bootstrap releases are pinned to a tag rather than main so installation
 remains reproducible after later development changes.
