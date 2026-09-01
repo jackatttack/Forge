@@ -45,6 +45,23 @@ INSTALL_MARKER_TEXT = 'portable-forge-runtime-v1\n'
 PYTHONISTA_LAUNCHER_MARKER = 'portable-forge-pythonista-launcher-v1'
 PYTHONISTA_LAUNCHER_NAME = 'forge_entry.py'
 
+PYTHONIDE_LAUNCHER_MARKER = 'portable-forge-pythonide-launcher-v1'
+PYTHONIDE_LAUNCHER_NAME = 'forge-entry.py'
+
+PYTHONIDE_LIVE_UI_MARKER = 'portable-forge-pythonide-live-ui-v1'
+PYTHONIDE_LIVE_UI_NAME = 'forge_live_ui.py'
+
+PYTHONIDE_ADAPTER_FILES = (
+    (
+        PYTHONIDE_LAUNCHER_NAME,
+        PYTHONIDE_LAUNCHER_MARKER,
+    ),
+    (
+        PYTHONIDE_LIVE_UI_NAME,
+        PYTHONIDE_LIVE_UI_MARKER,
+    ),
+)
+
 
 def absolute(path):
     return os.path.abspath(
@@ -312,6 +329,182 @@ def open_pythonista_launcher(path):
                 exc,
             ),
         )
+
+def pythonide_adapter_source(
+    source_root,
+    filename,
+):
+    return os.path.join(
+        absolute(
+            source_root
+        ),
+        'adapters',
+        'pythonide',
+        filename,
+    )
+
+
+def pythonide_adapter_preflight(
+    source_root,
+    workspace,
+    force=False,
+):
+    workspace = absolute(
+        workspace
+    )
+
+    plans = []
+
+    for filename, marker in PYTHONIDE_ADAPTER_FILES:
+        source = pythonide_adapter_source(
+            source_root,
+            filename,
+        )
+
+        if not os.path.isfile(
+            source
+        ):
+            raise RuntimeError(
+                'PythonIDE adapter source was not found: '
+                + source
+            )
+
+        source_text = _read_text(
+            source
+        )
+
+        if marker not in source_text:
+            raise RuntimeError(
+                'PythonIDE adapter source is missing its '
+                'Portable Forge marker: '
+                + filename
+            )
+
+        destination = os.path.join(
+            workspace,
+            filename,
+        )
+
+        if not os.path.exists(
+            destination
+        ):
+            plans.append({
+                'source': source,
+                'destination': destination,
+                'write': True,
+                'created': True,
+            })
+            continue
+
+        if not os.path.isfile(
+            destination
+        ):
+            raise RuntimeError(
+                'Portable Forge refuses to replace an existing '
+                'non-file PythonIDE adapter path:\n'
+                + destination
+            )
+
+        destination_text = _read_text(
+            destination
+        )
+
+        if destination_text == source_text:
+            plans.append({
+                'source': source,
+                'destination': destination,
+                'write': False,
+                'created': False,
+            })
+            continue
+
+        if marker not in destination_text:
+            raise RuntimeError(
+                'Portable Forge refuses to overwrite an unrecognised '
+                'PythonIDE adapter file:\n%s\n'
+                'No PythonIDE adapter files were changed.'
+                % destination
+            )
+
+        if not force:
+            raise RuntimeError(
+                'A different Portable Forge PythonIDE adapter already '
+                'exists:\n%s\n'
+                'Use --force only when deliberately updating this '
+                'marked Portable Forge adapter.'
+                % destination
+            )
+
+        plans.append({
+            'source': source,
+            'destination': destination,
+            'write': True,
+            'created': False,
+        })
+
+    return plans
+
+
+def install_pythonide_adapter(
+    source_root,
+    workspace,
+    force=False,
+):
+    workspace = absolute(
+        workspace
+    )
+
+    plans = pythonide_adapter_preflight(
+        source_root,
+        workspace,
+        force=force,
+    )
+
+    os.makedirs(
+        workspace,
+        exist_ok=True,
+    )
+
+    installed = []
+
+    for plan in plans:
+        destination = plan[
+            'destination'
+        ]
+
+        if plan[
+            'write'
+        ]:
+            temporary = (
+                destination
+                + '.portable-forge-new'
+            )
+
+            try:
+                shutil.copyfile(
+                    plan['source'],
+                    temporary,
+                )
+
+                os.replace(
+                    temporary,
+                    destination,
+                )
+
+            finally:
+                if os.path.exists(
+                    temporary
+                ):
+                    os.remove(
+                        temporary
+                    )
+
+        installed.append(
+            destination
+        )
+
+    return installed
+
 
 def default_target():
     if is_pythonista():
@@ -956,6 +1149,14 @@ def parser():
     )
 
     result.add_argument(
+        '--pythonide-workspace',
+        help=(
+            'Install the runtime and PythonIDE adapter directly into '
+            'this workspace. Forge home becomes WORKSPACE/.forge.'
+        ),
+    )
+
+    result.add_argument(
         '--force',
         action='store_true',
         help=(
@@ -972,15 +1173,43 @@ def main(argv=None):
         argv
     )
 
-    target = absolute(
-        args.target
-        or default_target()
+    pythonide_workspace = (
+        absolute(
+            args.pythonide_workspace
+        )
+        if args.pythonide_workspace
+        else None
     )
 
-    forge_home = absolute(
-        args.home
-        or '~/.forge'
-    )
+    if pythonide_workspace:
+        if args.target:
+            raise RuntimeError(
+                '--target cannot be combined with '
+                '--pythonide-workspace.'
+            )
+
+        if args.home:
+            raise RuntimeError(
+                '--home cannot be combined with '
+                '--pythonide-workspace.'
+            )
+
+        target = pythonide_workspace
+        forge_home = os.path.join(
+            pythonide_workspace,
+            '.forge',
+        )
+
+    else:
+        target = absolute(
+            args.target
+            or default_target()
+        )
+
+        forge_home = absolute(
+            args.home
+            or '~/.forge'
+        )
 
     temp_root = None
 
@@ -1010,12 +1239,27 @@ def main(argv=None):
                 )
             )
 
-        pythonista = is_pythonista()
+        # An explicit PythonIDE installation takes precedence over host
+        # autodetection. This avoids Pythonista-like compatibility modules in
+        # another host accidentally selecting the Pythonista launcher path.
+        pythonista = (
+            not pythonide_workspace
+            and is_pythonista()
+        )
+
         launcher_plan = None
+        pythonide_plan = None
 
         if pythonista:
             launcher_plan = pythonista_launcher_preflight(
                 source_root,
+                force=args.force,
+            )
+
+        if pythonide_workspace:
+            pythonide_plan = pythonide_adapter_preflight(
+                source_root,
+                pythonide_workspace,
                 force=args.force,
             )
 
@@ -1030,6 +1274,7 @@ def main(argv=None):
         launcher_opened = False
         launcher_open_error = ''
         launcher_should_open = False
+        pythonide_files = []
 
         if pythonista:
             launcher = install_pythonista_launcher(
@@ -1050,6 +1295,13 @@ def main(argv=None):
                     launcher
                 )
 
+        if pythonide_workspace:
+            pythonide_files = install_pythonide_adapter(
+                source_root,
+                pythonide_workspace,
+                force=args.force,
+            )
+
         print('')
         print(
             'Portable Forge installed.'
@@ -1064,6 +1316,26 @@ def main(argv=None):
             'Forge home:',
             installed['forge_home'],
         )
+
+        if pythonide_files:
+            print(
+                'PythonIDE workspace:',
+                pythonide_workspace,
+            )
+            print(
+                'PythonIDE launcher:',
+                os.path.join(
+                    pythonide_workspace,
+                    PYTHONIDE_LAUNCHER_NAME,
+                ),
+            )
+            print(
+                'PythonIDE live UI:',
+                os.path.join(
+                    pythonide_workspace,
+                    PYTHONIDE_LIVE_UI_NAME,
+                ),
+            )
 
         if launcher:
             print(
@@ -1089,11 +1361,18 @@ def main(argv=None):
 
         print('')
 
-        if launcher:
+        if pythonide_files:
+            print(
+                'Next: put a Forge bundle on the clipboard and run '
+                + PYTHONIDE_LAUNCHER_NAME
+            )
+
+        elif launcher:
             print(
                 'Next: put a Forge bundle on the clipboard and run '
                 + PYTHONISTA_LAUNCHER_NAME
             )
+
         else:
             print(
                 'Next: import forge'

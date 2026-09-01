@@ -38,8 +38,13 @@ def main():
 
     print('Portable Forge — PythonIDE GitHub bootstrap')
     print('===========================================')
+    workspace = os.path.abspath(
+        os.getcwd()
+    )
+
     print('repository:', REPOSITORY)
     print('ref:', REF)
+    print('workspace:', workspace)
     print('')
     print('Downloading installer from GitHub...')
 
@@ -78,6 +83,9 @@ def main():
             REPOSITORY,
             '--ref',
             REF,
+            '--pythonide-workspace',
+            workspace,
+            '--force',
         ]
 
         try:
@@ -114,11 +122,12 @@ def main():
     print('')
     print('PythonIDE GitHub bootstrap complete.')
     print('')
+    print('Installed runtime and PythonIDE adapter into:')
+    print(' ', workspace)
+    print('')
     print('Restart the Python interpreter if Forge was imported earlier.')
-    print('Then verify with:')
-    print('  import inspect, forge')
-    print('  print(forge.__file__)')
-    print('  print(inspect.signature(forge.run_text))')
+    print('Then put a Forge bundle on the clipboard and run:')
+    print('  forge-entry.py')
 
 
 if __name__ == '__main__':
