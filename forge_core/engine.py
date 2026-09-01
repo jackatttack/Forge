@@ -9,6 +9,9 @@ Only APPLIED results are clean. Any non-APPLIED result is recorded on
 run['errors'] so the runner can classify the whole run as FAILED.
 """
 
+import time
+
+from forge_core.events import emit_event
 from forge_core.models import make_result
 from forge_core.registry import get_op
 from forge_core.hinting import render_hints_for_result
@@ -43,7 +46,16 @@ def _record_run_error(run, result):
     run.setdefault('errors', []).append(text)
 
 
-def _finish_result(run, results, mod, result):
+def _finish_result(
+    run,
+    results,
+    mod,
+    result,
+    on_event=None,
+    index=None,
+    total=None,
+    started_at=None,
+):
     control = result.get('surface_control')
     if isinstance(control, dict) and control:
         run.setdefault('surface', {}).update(control)
@@ -57,7 +69,32 @@ def _finish_result(run, results, mod, result):
 
     _record_run_error(run, result)
 
-def execute_ops(parsed_ops, project_root, run, environment=None):
+    elapsed_seconds = None
+    if started_at is not None:
+        elapsed_seconds = round(
+            time.monotonic() - started_at,
+            6,
+        )
+
+    emit_event(
+        on_event,
+        'operation_finished',
+        stamp=(run or {}).get('stamp') or '',
+        index=index,
+        total=total,
+        op=result.get('op') or '?',
+        target=result.get('target') or '',
+        status=result.get('status') or '',
+        elapsed_seconds=elapsed_seconds,
+    )
+
+def execute_ops(
+    parsed_ops,
+    project_root,
+    run,
+    environment=None,
+    on_event=None,
+):
     environment = (
         environment
         or (run or {}).get('environment')
@@ -78,6 +115,7 @@ def execute_ops(parsed_ops, project_root, run, environment=None):
     results = []
     stop_mutating = False
     stop_reason = ''
+    total_ops = len(parsed_ops)
 
     def parsed_is_mutating(parsed_op):
         try:
@@ -118,11 +156,24 @@ def execute_ops(parsed_ops, project_root, run, environment=None):
         status = str((result or {}).get('status') or '').strip().upper()
         return status != 'APPLIED'
 
-    for parsed_op in parsed_ops:
+    for index, parsed_op in enumerate(parsed_ops, 1):
         op_name = parsed_op.get('op')
         target = parsed_op.get('target') or ''
         result = make_result(op_name, target)
         mod = get_op(op_name)
+
+        emit_event(
+            on_event,
+            'operation_started',
+            stamp=(run or {}).get('stamp') or '',
+            index=index,
+            total=total_ops,
+            op=op_name or '?',
+            target=target,
+            mutating=parsed_is_mutating(parsed_op),
+        )
+
+        started_at = time.monotonic()
 
         if (
             stop_mutating
@@ -131,14 +182,32 @@ def execute_ops(parsed_ops, project_root, run, environment=None):
         ):
             result['status'] = 'SKIPPED_AFTER_FAILURE'
             result['message'] = 'Skipped mutating op after earlier failure: ' + stop_reason
-            _finish_result(run, results, mod, result)
+            _finish_result(
+                run,
+                results,
+                mod,
+                result,
+                on_event=on_event,
+                index=index,
+                total=total_ops,
+                started_at=started_at,
+            )
             ctx['last'] = result
             continue
 
         if mod is None:
             result['status'] = 'FAILED_PARSE'
             result['message'] = 'Unknown op: ' + str(op_name)
-            _finish_result(run, results, mod, result)
+            _finish_result(
+                run,
+                results,
+                mod,
+                result,
+                on_event=on_event,
+                index=index,
+                total=total_ops,
+                started_at=started_at,
+            )
             ctx['last'] = result
             continue
 
@@ -155,7 +224,16 @@ def execute_ops(parsed_ops, project_root, run, environment=None):
         if not ok:
             result['status'] = 'FAILED_CORE_GUARD'
             result['message'] = msg
-            _finish_result(run, results, mod, result)
+            _finish_result(
+                run,
+                results,
+                mod,
+                result,
+                on_event=on_event,
+                index=index,
+                total=total_ops,
+                started_at=started_at,
+            )
             if parsed_is_mutating(parsed_op):
                 stop_mutating = True
                 stop_reason = '%s on %s' % (op_name, target or '?')
@@ -171,7 +249,16 @@ def execute_ops(parsed_ops, project_root, run, environment=None):
             if errors:
                 result['status'] = 'FAILED_PARSE'
                 result['message'] = '; '.join(errors)
-                _finish_result(run, results, mod, result)
+                _finish_result(
+                    run,
+                    results,
+                    mod,
+                    result,
+                    on_event=on_event,
+                    index=index,
+                    total=total_ops,
+                    started_at=started_at,
+                )
                 if parsed_is_mutating(parsed_op):
                     stop_mutating = True
                     stop_reason = '%s on %s' % (op_name, target or '?')
@@ -182,7 +269,16 @@ def execute_ops(parsed_ops, project_root, run, environment=None):
         if not callable(execute):
             result['status'] = 'FAILED_PARSE'
             result['message'] = 'Op has no execute(): ' + str(op_name)
-            _finish_result(run, results, mod, result)
+            _finish_result(
+                run,
+                results,
+                mod,
+                result,
+                on_event=on_event,
+                index=index,
+                total=total_ops,
+                started_at=started_at,
+            )
             if parsed_is_mutating(parsed_op):
                 stop_mutating = True
                 stop_reason = '%s on %s' % (op_name, target or '?')
@@ -195,7 +291,16 @@ def execute_ops(parsed_ops, project_root, run, environment=None):
             result['status'] = 'FAILED_RUNTIME'
             result['message'] = type(e).__name__ + ': ' + str(e)
 
-        _finish_result(run, results, mod, result)
+        _finish_result(
+            run,
+            results,
+            mod,
+            result,
+            on_event=on_event,
+            index=index,
+            total=total_ops,
+            started_at=started_at,
+        )
 
         if result_failed(result) and parsed_is_mutating(parsed_op):
             stop_mutating = True

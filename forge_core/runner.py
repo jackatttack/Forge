@@ -14,8 +14,10 @@ outside this module.
 """
 
 import os
+import time
 
 from forge_core.engine import execute_ops
+from forge_core.events import emit_event
 from forge_core.environment import normalise_environment
 from forge_core.hinting import render_parse_hints
 from forge_core.models import final_status, make_run
@@ -34,6 +36,7 @@ def run_text(
     environment=None,
     forge_home=None,
     capabilities=None,
+    on_event=None,
 ):
     """
     Execute one Forge bundle using resolved environmental context.
@@ -43,7 +46,13 @@ def run_text(
     project_root and forge_home must be supplied either directly or through
     the resolved environment. Normal application code should usually call
     the public ``forge.run_text`` standard-host API instead.
+
+    ``on_event`` is an optional observational callback. Forge sends small
+    structured dictionaries describing parse, operation, and run progress.
+    Callback failures are isolated and never affect execution or packet data.
     """
+    run_started_at = time.monotonic()
+
     if project_root is None:
         project_root = (
             (environment or {}).get('project_root')
@@ -91,6 +100,21 @@ def run_text(
         project_root,
         mode=mode,
         environment=environment,
+    )
+
+    emit_event(
+        on_event,
+        'run_started',
+        stamp=run.get('stamp') or '',
+        mode=mode,
+    )
+
+    parse_started_at = time.monotonic()
+
+    emit_event(
+        on_event,
+        'parse_started',
+        stamp=run.get('stamp') or '',
     )
 
     try:
@@ -141,6 +165,19 @@ def run_text(
         else []
     )
 
+    emit_event(
+        on_event,
+        'parse_finished',
+        stamp=run.get('stamp') or '',
+        success=not bool(run['errors']),
+        op_count=len(run['parsed_ops']),
+        error_count=len(run['errors']),
+        elapsed_seconds=round(
+            time.monotonic() - parse_started_at,
+            6,
+        ),
+    )
+
     if run['errors']:
         run['results'] = []
     else:
@@ -149,6 +186,7 @@ def run_text(
             project_root,
             run,
             environment=environment,
+            on_event=on_event,
         )
 
     run['status'] = final_status(
@@ -165,5 +203,18 @@ def run_text(
             run,
             environment=environment,
         )
+
+    emit_event(
+        on_event,
+        'run_finished',
+        stamp=run.get('stamp') or '',
+        status=run.get('status') or '',
+        result_count=len(run.get('results') or []),
+        error_count=len(run.get('errors') or []),
+        elapsed_seconds=round(
+            time.monotonic() - run_started_at,
+            6,
+        ),
+    )
 
     return run

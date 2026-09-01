@@ -144,6 +144,7 @@ def run_text(
     forge_home=None,
     capabilities=None,
     config_path=None,
+    on_event=None,
 ):
     """
     Execute Forge from normal Python code.
@@ -151,6 +152,9 @@ def run_text(
     Supplying environment gives the caller complete control.
 
     Otherwise the standard host resolves project_root and writable Forge home.
+
+    ``on_event`` optionally receives structured execution progress from the
+    portable core. Presentation remains the host's responsibility.
     """
     if environment is None:
         environment = standard_environment(
@@ -168,6 +172,7 @@ def run_text(
         mode=mode,
         store=store,
         environment=environment,
+        on_event=on_event,
     )
 
 
