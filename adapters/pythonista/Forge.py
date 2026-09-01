@@ -48,6 +48,34 @@ def progress_renderer():
         return None
 
 
+def attach_local_extensions():
+    """
+    Attach optional host-local Forge extensions.
+
+    Portable Forge does not depend on forge_local. A Pythonista workspace may
+    provide ~/Documents/forge_local/loader.py to extend the normal custom-op
+    discovery path without modifying the installed runtime.
+    """
+    local_root = os.path.join(
+        PROJECT_ROOT,
+        'forge_local',
+    )
+
+    if not os.path.isdir(
+        local_root
+    ):
+        return []
+
+    try:
+        from forge_local.loader import attach_local_ops
+    except Exception:
+        return []
+
+    return attach_local_ops(
+        PROJECT_ROOT
+    )
+
+
 def main():
     bundle = get_bundle_text()
 
@@ -56,6 +84,8 @@ def main():
             'Forge: clipboard contains no bundle text.'
         )
         return
+
+    attach_local_extensions()
 
     progress = progress_renderer()
 
