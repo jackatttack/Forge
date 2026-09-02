@@ -34,8 +34,8 @@ The installer can install from:
 The installer should copy only the runtime packages:
 
     forge/
-    forge_core/
-    forge_packages/
+    forge/core/
+    forge/packages/
 
 Platform adapters and documentation remain repository assets.
 

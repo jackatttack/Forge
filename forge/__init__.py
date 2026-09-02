@@ -18,8 +18,8 @@ Normal use:
 Advanced callers may build and supply an explicit environment.
 """
 
-from forge_core.environment import make_environment
-from forge_core.presentation.standard import (
+from forge.core.environment import make_environment
+from forge.core.presentation.standard import (
     format_summary,
     render_standard,
 )

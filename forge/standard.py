@@ -20,17 +20,17 @@ import argparse
 import os
 import sys
 
-from forge_core.config import (
+from forge.core.config import (
     load_config,
     resolve_config,
 )
-from forge_core.environment import (
+from forge.core.environment import (
     make_environment,
 )
-from forge_core.presentation.standard import (
+from forge.core.presentation.standard import (
     render_standard,
 )
-from forge_core.runner import (
+from forge.core.runner import (
     run_text as core_run_text,
 )
 

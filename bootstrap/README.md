@@ -22,13 +22,14 @@ The initial bootstrap template is:
 
     pythonista.py
 
-The Pythonista bootstrap uses:
+The Pythonista bootstrap currently uses:
 
     REPOSITORY = jackatttack/Forge
-    REF = v0.1.1
+    REF = main
 
-Stable bootstrap releases are pinned to a tag rather than main so installation
-remains reproducible after later development changes.
+The README one-copy bootstrap therefore installs the current public main
+branch. Tagged releases can still be installed explicitly through `install.py`
+with `--ref <tag>`.
 
 ## PythonIDE
 

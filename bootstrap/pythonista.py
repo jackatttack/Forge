@@ -11,8 +11,9 @@ It has one job:
     run install.py
 
 The installer detects Pythonista, chooses site-packages-3, installs the
-runtime, creates the root forge_entry.py launcher and forge_console_ui.py live
-renderer, and opens a newly created launcher on first installation.
+runtime including forge.adapters.pythonista, creates the root forge_entry.py
+launcher, removes an owned legacy root renderer when present, and opens a newly
+created launcher on first installation.
 """
 
 import os

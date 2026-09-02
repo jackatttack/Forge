@@ -200,10 +200,12 @@ the following code into it, and run it once:
 
 That is the whole bootstrap.
 
-It installs the Portable Forge runtime and creates:
+It installs Portable Forge into `~/Documents/site-packages-3/forge` and creates:
 
     ~/Documents/forge_entry.py
-    ~/Documents/forge_console_ui.py
+
+The Pythonista console UI is packaged inside Forge at
+`forge.adapters.pythonista.console_ui`; no separate root renderer is required.
 
 On first install, `forge_entry.py` opens in Pythonista ready to use.
 
@@ -462,7 +464,7 @@ The intended Python API is deliberately small:
     forge.standard_environment(...)
     forge.first_boot_text()
 
-Most users should never need to import `forge_core` or `forge_packages`
+Most users should never need to import `forge.core` or `forge.packages`
 directly.
 
 For embedding examples, see [docs/EMBEDDING.md](docs/EMBEDDING.md).

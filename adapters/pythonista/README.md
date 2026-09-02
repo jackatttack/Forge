@@ -11,16 +11,18 @@ On Pythonista, the intended layout is:
 
     ~/Documents/site-packages-3/
         forge/
-        forge_core/
-        forge_packages/
+            core/
+            packages/
+            adapters/
+                pythonista/
+                    console_ui.py
 
     ~/Documents/forge_entry.py
-    ~/Documents/forge_console_ui.py
 
-The Forge runtime lives in `site-packages-3`.
+The Forge runtime and supported Pythonista console adapter live beneath the
+single `forge` package in `site-packages-3`.
 
 `forge_entry.py` is the small Pythonista-specific host launcher.
-`forge_console_ui.py` is the Pythonista live console renderer.
 
 
 ## Bootstrap
@@ -32,11 +34,11 @@ The repository includes:
 Running that bootstrap on Pythonista will:
 
 1. Download the current Portable Forge installer from `main`.
-2. Install `forge`, `forge_core`, and `forge_packages` into
+2. Install the single `forge` package, including `forge.core`,
+   `forge.packages`, and `forge.adapters.pythonista`, into
    `~/Documents/site-packages-3`.
 3. Install `~/Documents/forge_entry.py`.
-4. Install `~/Documents/forge_console_ui.py`.
-5. On first installation, open `forge_entry.py` in the Pythonista editor.
+4. On first installation, open `forge_entry.py` in the Pythonista editor.
 
 Marked Portable Forge adapter files can be safely refreshed on later bootstrap
 runs.
@@ -136,8 +138,8 @@ directory.
 Portable Forge uses these import namespaces:
 
     forge
-    forge_core
-    forge_packages
+    forge.core
+    forge.packages
 
 An older Forge installation may already use one or more of the same names.
 
@@ -149,26 +151,23 @@ Migration should be deliberate.
 
 ## Pythonista live rendering
 
-The Pythonista adapter includes:
+The supported Pythonista console adapter is packaged at:
 
-    adapters/pythonista/forge_console_ui.py
+    forge.adapters.pythonista.console_ui
 
-During installation it is copied to:
-
-    ~/Documents/forge_console_ui.py
-
-`forge_entry.py` constructs `ForgeConsoleUI` and passes it to:
+`forge_entry.py` imports `ForgeConsoleUI` from that packaged adapter and passes
+it to:
 
     forge.run_text(..., on_event=progress)
 
-The renderer consumes Portable Forge's structured execution events and draws
+The adapter consumes Portable Forge's structured execution events and draws
 the live Pythonista console presentation. The canonical standard packet is
 still rendered separately and copied to the clipboard.
 
-Presentation remains strictly host-side. The dependency direction is:
+There is no separate root-level renderer in new installations.
 
-    Pythonista adapter -> Forge
+Presentation remains host-side. The dependency direction is:
 
-never:
+    forge.adapters.pythonista -> Forge public API -> forge.core
 
-    Forge -> Pythonista adapter
+The portable core does not depend on the Pythonista adapter.

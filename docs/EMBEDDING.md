@@ -25,7 +25,7 @@ The intended public surface is small:
     forge.standard_environment(...)
     forge.first_boot_text()
 
-Most applications should not need to import forge_core directly.
+Most applications should not need to import forge.core directly.
 
 ## Explicit environments
 

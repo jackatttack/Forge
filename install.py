@@ -4,14 +4,16 @@ Portable Forge installer.
 
 Uses only the Python standard library.
 
-The installer places these runtime packages into a Python package directory:
+The installer places one Forge package into a Python package directory:
 
     forge
-    forge_core
-    forge_packages
 
-Platform adapters, examples, documentation, and bootstrap scripts are not
-installed into site-packages.
+Portable core, bundled operations, and supported host adapters live beneath
+the forge namespace.
+
+Examples, documentation, bootstrap scripts, and host launchers are not part
+of the portable runtime unless a host-specific installation explicitly adds
+them.
 
 Examples:
 
@@ -35,6 +37,12 @@ import zipfile
 
 RUNTIME_PACKAGES = (
     'forge',
+)
+
+# Portable Forge versions before the single-namespace layout installed these
+# as separate top-level packages. They are recognised only so an owned legacy
+# installation can be migrated safely.
+LEGACY_RUNTIME_PACKAGES = (
     'forge_core',
     'forge_packages',
 )
@@ -45,6 +53,8 @@ INSTALL_MARKER_TEXT = 'portable-forge-runtime-v1\n'
 PYTHONISTA_LAUNCHER_MARKER = 'portable-forge-pythonista-launcher-v1'
 PYTHONISTA_LAUNCHER_NAME = 'forge_entry.py'
 
+# Legacy root renderer ownership data. New installations use the packaged
+# forge.adapters.pythonista console UI instead.
 PYTHONISTA_RENDERER_MARKER = 'portable-forge-pythonista-live-ui-v1'
 PYTHONISTA_RENDERER_NAME = 'forge_console_ui.py'
 
@@ -155,16 +165,20 @@ def pythonista_renderer_path():
     )
 
 
-def pythonista_renderer_source(source_root):
-    return os.path.join(
-        absolute(
-            source_root
-        ),
-        'adapters',
-        'pythonista',
-        PYTHONISTA_RENDERER_NAME,
+def pythonista_adapter_path(target=None):
+    """Return the installed packaged Pythonista console adapter path."""
+    root = absolute(
+        target
+        or pythonista_site_packages()
     )
 
+    return os.path.join(
+        root,
+        'forge',
+        'adapters',
+        'pythonista',
+        'console_ui.py',
+    )
 
 def _read_text(path):
     with open(
@@ -347,144 +361,29 @@ def pythonista_renderer_is_portable(path):
     return PYTHONISTA_RENDERER_MARKER in text
 
 
-def pythonista_renderer_preflight(
-    source_root,
-    force=False,
-):
-    source = pythonista_renderer_source(
-        source_root
-    )
+def remove_owned_legacy_pythonista_renderer():
+    """
+    Remove the obsolete root renderer only when Portable Forge owns it.
 
-    if not os.path.isfile(
-        source
-    ):
-        raise RuntimeError(
-            'Pythonista renderer source was not found: '
-            + source
-        )
-
-    source_text = _read_text(
-        source
-    )
-
-    if PYTHONISTA_RENDERER_MARKER not in source_text:
-        raise RuntimeError(
-            'Pythonista renderer source is missing the '
-            'Portable Forge renderer marker.'
-        )
-
+    Foreign files with the same name are left untouched.
+    """
     destination = pythonista_renderer_path()
 
-    if not os.path.exists(
-        destination
-    ):
-        return {
-            'source': source,
-            'destination': destination,
-            'write': True,
-            'created': True,
-        }
-
     if not os.path.isfile(
         destination
     ):
-        raise RuntimeError(
-            (
-                'Portable Forge refuses to replace an existing '
-                'non-file Pythonista renderer path:\n%s'
-            )
-            % destination
-        )
-
-    destination_text = _read_text(
-        destination
-    )
-
-    if destination_text == source_text:
-        return {
-            'source': source,
-            'destination': destination,
-            'write': False,
-            'created': False,
-        }
+        return False
 
     if not pythonista_renderer_is_portable(
         destination
     ):
-        raise RuntimeError(
-            (
-                'Portable Forge refuses to overwrite an unrecognised '
-                'Pythonista renderer:\n%s\n'
-                'No renderer files were changed.'
-            )
-            % destination
-        )
+        return False
 
-    if not force:
-        raise RuntimeError(
-            (
-                'A different Portable Forge Pythonista renderer already '
-                'exists:\n%s\n'
-                'Use --force only when deliberately updating this '
-                'marked Portable Forge renderer.'
-            )
-            % destination
-        )
-
-    return {
-        'source': source,
-        'destination': destination,
-        'write': True,
-        'created': False,
-    }
-
-
-def install_pythonista_renderer(
-    source_root,
-    force=False,
-):
-    plan = pythonista_renderer_preflight(
-        source_root,
-        force=force,
-    )
-
-    source = plan['source']
-    destination = plan['destination']
-
-    if not plan['write']:
-        return destination
-
-    parent = os.path.dirname(
+    os.remove(
         destination
     )
 
-    os.makedirs(
-        parent,
-        exist_ok=True,
-    )
-
-    temporary = destination + '.portable-forge-new'
-
-    try:
-        shutil.copyfile(
-            source,
-            temporary,
-        )
-        os.replace(
-            temporary,
-            destination,
-        )
-
-    finally:
-        if os.path.exists(
-            temporary
-        ):
-            os.remove(
-                temporary
-            )
-
-    return destination
-
+    return True
 
 def open_pythonista_launcher(path):
     try:
@@ -1052,6 +951,35 @@ def existing_runtime_packages(target):
     ]
 
 
+def existing_owned_legacy_packages(target):
+    """Return obsolete Portable Forge packages that this installer owns."""
+    target = absolute(
+        target
+    )
+
+    result = []
+
+    for package_name in LEGACY_RUNTIME_PACKAGES:
+        package_path = os.path.join(
+            target,
+            package_name,
+        )
+
+        if (
+            os.path.exists(
+                package_path
+            )
+            and package_is_portable_install(
+                package_path
+            )
+        ):
+            result.append(
+                package_name
+            )
+
+    return result
+
+
 def package_is_portable_install(path):
     if not os.path.isdir(
         path
@@ -1179,6 +1107,10 @@ def install(
         target
     )
 
+    legacy_owned = existing_owned_legacy_packages(
+        target
+    )
+
     if existing:
         foreign = []
 
@@ -1230,6 +1162,18 @@ def install(
         exist_ok=True,
     )
 
+    # User-owned operations live outside the replaceable runtime package.
+    #
+    # Forge creates this directory but never populates, replaces, or deletes
+    # its contents during normal installation.
+    os.makedirs(
+        os.path.join(
+            forge_home,
+            'ops',
+        ),
+        exist_ok=True,
+    )
+
     stage = tempfile.mkdtemp(
         prefix='.forge-install-',
         dir=target,
@@ -1266,6 +1210,28 @@ def install(
                     os.remove(
                         path
                     )
+
+        # Remove only obsolete packages carrying Portable Forge's ownership
+        # marker. Never remove an unrelated package merely because it has an
+        # old Forge package name.
+        for package_name in legacy_owned:
+            package_path = os.path.join(
+                target,
+                package_name,
+            )
+
+            if os.path.isdir(
+                package_path
+            ):
+                shutil.rmtree(
+                    package_path
+                )
+            elif os.path.exists(
+                package_path
+            ):
+                os.remove(
+                    package_path
+                )
 
         for package_name in RUNTIME_PACKAGES:
             shutil.move(
@@ -1424,15 +1390,10 @@ def main(argv=None):
         )
 
         launcher_plan = None
-        renderer_plan = None
         pythonide_plan = None
 
         if pythonista:
             launcher_plan = pythonista_launcher_preflight(
-                source_root,
-                force=args.force,
-            )
-            renderer_plan = pythonista_renderer_preflight(
                 source_root,
                 force=args.force,
             )
@@ -1452,20 +1413,33 @@ def main(argv=None):
         )
 
         launcher = None
-        renderer = None
+        pythonista_adapter = None
+        legacy_renderer_removed = False
         launcher_opened = False
         launcher_open_error = ''
         launcher_should_open = False
         pythonide_files = []
 
         if pythonista:
-            renderer = install_pythonista_renderer(
-                source_root,
-                force=args.force,
-            )
             launcher = install_pythonista_launcher(
                 source_root,
                 force=args.force,
+            )
+
+            pythonista_adapter = pythonista_adapter_path(
+                installed['target']
+            )
+
+            if not os.path.isfile(
+                pythonista_adapter
+            ):
+                raise RuntimeError(
+                    'Installed Pythonista adapter was not found: '
+                    + pythonista_adapter
+                )
+
+            legacy_renderer_removed = (
+                remove_owned_legacy_pythonista_renderer()
             )
 
             launcher_should_open = bool(
@@ -1528,10 +1502,16 @@ def main(argv=None):
                 'Pythonista launcher:',
                 launcher,
             )
-            if renderer:
+            if pythonista_adapter:
                 print(
                     'Pythonista live UI:',
-                    renderer,
+                    pythonista_adapter,
+                )
+
+            if legacy_renderer_removed:
+                print(
+                    'Removed legacy root Pythonista live UI:',
+                    pythonista_renderer_path(),
                 )
 
             if launcher_opened:

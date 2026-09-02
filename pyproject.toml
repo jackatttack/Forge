@@ -49,11 +49,7 @@ include-package-data = true
 where = ["."]
 include = [
     "forge",
-    "forge.*",
-    "forge_core",
-    "forge_core.*",
-    "forge_packages",
-    "forge_packages.*"
+    "forge.*"
 ]
 
 [tool.setuptools.package-data]

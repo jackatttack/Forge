@@ -8,4 +8,3 @@ recursive-include renderers *
 recursive-include bootstrap *
 recursive-include tests *
 recursive-include forge *.txt
-recursive-include forge_packages *.txt
