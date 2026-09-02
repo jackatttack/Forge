@@ -1,95 +1,143 @@
 # Forge
 
-**A portable local execution bridge for human-in-the-loop AI pair programming.**
+**A better copy-paste loop for coding with AI.**
 
-Forge lets an AI assistant work with code that lives in an environment the
-assistant cannot directly control.
+If you regularly copy code out of ChatGPT, Claude, or another AI and paste it
+into a local project, Forge was made for that workflow.
 
-The assistant writes a small plain-text **Forge bundle**. You run that bundle
-locally. Forge inspects, edits, executes, or recovers project files and returns
-a structured **run packet** describing exactly what happened.
+Forge turns copy and paste into a small coding protocol.
 
-The packet is ground truth.
+Instead of passing loose snippets back and forth, the AI can send you a plain
+text **Forge bundle** that asks your local environment to inspect files, search
+code, make edits, run programs, or show what changed.
+
+You run that bundle locally.
+
+Forge does the work and returns a structured **run packet** showing exactly
+what happened.
+
+Copy that packet back into the chat and the AI now has real information about
+the code on your device.
+
+**The packet is ground truth.**
+
+At its simplest:
+
+    chat
+      |
+      | copy Forge bundle
+      v
+    Forge on your device
+      |
+      | inspect / edit / run
+      v
+    Forge run packet
+      |
+      | copy back
+      v
+    chat
+
+For a clipboard-driven environment such as Pythonista:
+
+**Python + clipboard + chat + Forge gives you a robust local coding loop.**
+
+
+## Why Forge exists
+
+Coding with an AI in a normal chat window is useful, but the manual loop gets
+old quickly:
+
+    ask -> copy code -> find file -> paste -> run -> copy result -> paste back
+
+Then repeat.
+
+Forge tightens that loop.
+
+Instead of copying loose code fragments, you can copy a small set of explicit
+operations:
+
+    READ app.py
+
+    REPLACE app.py::calculate_total
+    BEGIN_BODY
+    def calculate_total(items):
+        return sum(item.price for item in items)
+    END_BODY
+
+    RUN tests.py
+
+Forge performs those operations locally and tells the chat what actually
+happened.
+
+So the loop becomes:
+
+    chat -> copy bundle -> Forge -> copy packet -> chat
+
+That means less file hunting, less repeated context explaining, and fewer
+moments where the conversation and the real project silently drift apart.
+
+
+## Give the chat eyes into your environment
+
+Forge is not only about writing code.
+
+It gives an AI conversation a simple way to inspect an environment it cannot
+normally see.
+
+For example:
+
+    MAP .
+
+    SEARCH . FOR "calculate_total"
+
+    READ app.py
+
+You copy the bundle, run Forge, and paste the resulting packet back.
+
+The AI can now reason from the real project structure and real file contents
+instead of relying on your description of them.
+
+In a clipboard-based setup, the clipboard becomes a tiny text tool channel
+between the chat and your machine.
+
+No special tool integration from the AI provider is required.
+
+If the model can produce text and understand the text you return, it can work
+through Forge.
+
+
+## The idea in 60 seconds
+
+The assistant proposes a Forge bundle.
+
+You decide whether to run it.
+
+Forge parses the whole bundle first, validates it, executes it against the
+local project, records what happened, and produces a deterministic run packet.
+
+That packet is what makes the copy-paste loop robust.
+
+The chat does not have to guess whether a file changed or whether some code
+actually ran. Forge reports the result.
 
     The assistant proposes.
     The user runs.
     Forge reports.
     The packet confirms.
 
-Forge is pure Python. The portable runtime has no dependency on a particular
-IDE, clipboard, UI toolkit, shell, or operating-system integration.
-
-
-## The idea in 60 seconds
-
-The basic loop is:
-
-    AI assistant
-        |
-        | Forge bundle
-        v
-    Portable Forge
-        |
-        | parse
-        | validate
-        | execute
-        | record
-        v
-    Canonical run packet
-        |
-        +----> human
-        |
-        +----> AI assistant
-
-A host can wrap the two edges:
-
-    get bundle text
-        ->
-    Forge
-        ->
-    return rendered result
-
-For example, a terminal can read a file and print the result. Pythonista can
-read from the clipboard and put the packet back on the clipboard. Another host
-could use a GUI, editor extension, web view, or custom transport.
-
-The center stays portable.
-
-Everything environment-specific lives at the edges.
-
-
-## What Forge is - and what it is not
-
-Forge is not an autonomous coding agent.
-
-It does not silently control your machine, upload your project, or require the
-assistant to have filesystem or shell access.
-
-Forge is a local protocol and runtime.
-
-The AI produces ordinary text. The user chooses whether to run it. Forge
-executes that text against an explicit project root and reports the result as
-deterministic text.
-
-That makes Forge useful when:
-
-- your AI assistant lives in a separate chat interface;
-- your code is on a phone, tablet, embedded system, or unusual Python IDE;
-- a full coding-agent integration is unavailable or undesirable;
-- you want an explicit human approval step before local execution;
-- you want each local action confirmed by an inspectable packet.
-
 
 ## A first Forge loop
 
-An assistant might send:
+Suppose the AI has no idea what is in your project yet.
+
+It might start with:
 
     MAP .
     DEPTH: 2
 
     FORGE ops
 
-Save the bundle to a file and run:
+Save that bundle to a file and run:
 
     python -m forge bundle.txt
 
@@ -112,14 +160,18 @@ Forge returns something shaped like:
     Ops: 2 applied - 0 skipped - 0 failed
     Changed: 0 files
 
-The assistant reads that packet before deciding what to do next.
+Paste that packet back into the chat.
+
+The assistant now has grounded information about the environment and can decide
+what to inspect next.
 
 Nothing changed merely because the assistant suggested it.
 
 
-## Quick start
+## Pythonista: one-copy install
 
-### Pythonista: one-copy install
+Pythonista is where Forge started, and it remains one of the cleanest examples
+of the clipboard loop.
 
 For a clean Pythonista installation, create any temporary Python script, paste
 the following code into it, and run it once:
@@ -148,63 +200,55 @@ the following code into it, and run it once:
 
 That is the whole bootstrap.
 
-It downloads the Portable Forge installer, installs the runtime into:
-
-    ~/Documents/site-packages-3
-
-and creates:
+It installs the Portable Forge runtime and creates:
 
     ~/Documents/forge_entry.py
     ~/Documents/forge_console_ui.py
 
-On a first installation, the installer opens `forge_entry.py` in Pythonista so
-it is ready to use. Existing marked Portable Forge runtime and adapter files
-can be refreshed safely by later bootstrap runs; updated launchers are not
-auto-opened.
+On first install, `forge_entry.py` opens in Pythonista ready to use.
 
-Put a Forge bundle on the clipboard and run `forge_entry.py`.
+Then the loop is simply:
 
+    1. Copy a Forge bundle from the chat.
+    2. Run forge_entry.py.
+    3. Forge works against your Pythonista Documents folder.
+    4. The result goes back onto the clipboard.
+    5. Paste it into the chat.
+    6. Repeat.
 
-### 1. Install from a checked-out repository
-
-Portable Forge includes a standard-library-only installer:
-
-    python install.py --source .
-
-The installer places the runtime packages into a Python package directory and
-keeps writable Forge state separate from the installed code.
+That is the workflow Forge was originally built to make tighter.
 
 
-### 2. Read the first-boot guide
+## What Forge can do
 
-Forge ships with a compact operating prompt for an AI assistant:
+Forge can:
 
-    python -m forge --first-boot
+- inspect directory structure;
+- read files;
+- search projects;
+- create and edit text files;
+- make targeted Python edits;
+- copy and delete project content;
+- run local Python code;
+- show what changed;
+- record and recover changes;
+- create filesystem checkpoints;
+- work with URLs;
+- provide reusable aliases.
 
-At the beginning of a cold Forge session, give that text to the assistant.
+The model does not need to memorise the command language.
 
-It establishes the important rules:
+Ask the installed runtime:
 
-- the returned packet is ground truth;
-- inspect before editing;
-- do not claim local changes without a returned packet;
-- read errors and hints before retrying failures;
-- orient to the real project and installed Forge language first.
+    FORGE ops
 
+For help with one operation:
 
-### 3. Run a bundle
+    FORGE help WRITE
 
-From a file:
+For deeper help:
 
-    python -m forge bundle.txt
-
-From stdin:
-
-    python -m forge < bundle.txt
-
-With an explicit project root:
-
-    python -m forge --project /path/to/project bundle.txt
+    FORGE help WRITE full
 
 
 ## The public Forge language
@@ -221,31 +265,15 @@ Portable Forge deliberately keeps its normal vocabulary small.
 
 That is 15 public operations.
 
-Ask the installed runtime for the current catalogue:
+Host environments can add their own extensions without expanding the portable
+core.
 
-    FORGE ops
-
-Get help for one operation:
-
-    FORGE help WRITE
-
-Get deeper help:
-
-    FORGE help WRITE full
-
-Inspect all installed operations, including host-specific extensions:
-
-    FORGE ops all
-
-Detailed syntax belongs to each operation's own help. The root README is not
-intended to duplicate the full command manual.
+Detailed syntax belongs to the installed help system rather than this README.
 
 
-## Typical working pattern
+## A typical working session
 
-A good Forge session is inspect-first.
-
-For example:
+A good Forge session is inspect-first:
 
     MAP path/to/area
 
@@ -262,26 +290,72 @@ For example:
 
     DIFF current
 
-The exact editing operation depends on the task.
+The pattern matters more than the exact operation:
 
-Forge is designed around small grounded changes rather than broad speculative
-rewrites.
+    inspect
+        ->
+    make a small grounded change
+        ->
+    run or verify it
+        ->
+    inspect the packet
+        ->
+    decide what happens next
 
 
-## Three ways to use Forge
+## The packet is the contract
 
-### Standard terminal host
+Forge separates execution from claims about execution.
 
-The terminal host is built in:
+An AI can suggest anything it wants.
+
+Until you run the bundle, nothing has happened locally.
+
+After the run, the packet records the result.
+
+Successful packets confirm what Forge actually did.
+
+Failed packets are useful too: they give the next turn concrete evidence
+instead of forcing the assistant to guess.
+
+That makes long copy-paste sessions much less fragile.
+
+
+## What Forge is - and what it is not
+
+Forge is a local execution protocol and runtime.
+
+It is not tied to a particular AI company.
+
+It is not tied to a particular editor.
+
+It does not require the AI provider to expose tool calling, filesystem access,
+or a coding-agent API.
+
+The AI produces ordinary text.
+
+The user chooses whether to run it.
+
+Forge executes it locally and returns ordinary text.
+
+Forge does not need to replace your chat app.
+
+It sits between the chat you already use and the code you already have.
+
+
+## Other ways to run Forge
+
+The clipboard loop is only one host.
+
+Forge can also run from a terminal:
 
     python -m forge bundle.txt
 
-Standard Forge prints the canonical packet followed by a small human summary.
+or from stdin:
 
+    python -m forge < bundle.txt
 
-### As a Python library
-
-The core loop is deliberately small:
+It can also be embedded in another Python program:
 
     import forge
 
@@ -292,321 +366,19 @@ The core loop is deliberately small:
 
     result = forge.render_standard(run)
 
-Forge does not care where `bundle` came from or what you do with `result`.
-
-
-### Through a host wrapper
-
-A host can provide the two environment-specific edges:
-
-    bundle = get_bundle_text()
-
-    run = forge.run_text(
-        bundle,
-        project_root=PROJECT_ROOT,
-    )
-
-    result = forge.render_standard(run)
-
-    set_result_text(result)
-
-`get_bundle_text()` and `set_result_text()` belong to the host.
-
-The Forge runtime between them does not.
-
-See `examples/minimal_loop.py` for the smallest complete example.
-
-
-## The packet is the contract
-
-Forge separates execution from claims about execution.
-
-A successful packet can prove that a file was read, changed, executed, or
-restored.
-
-A failed packet is useful too. It records the failure rather than requiring the
-assistant to guess what happened.
-
-The normal loop is:
-
-    propose
-        ->
-    run
-        ->
-    inspect packet
-        ->
-    decide next action
-
-That distinction is central to Forge.
-
-
-## Safety model
-
-Forge is intentionally powerful enough to edit and execute project code, so
-its boundaries need to remain explicit.
-
-
-### The complete bundle is parsed first
-
-Forge parses the full submitted bundle before executing operations.
-
-A parser failure does not leave a half-parsed instruction stream.
-
-
-### Project boundaries are explicit
-
-Project operations resolve against `project_root`.
-
-Portable Forge does not silently discover a hidden working project inside its
-core.
-
-
-### Installed code and writable state are separate
-
-The installed package can be treated as read-only.
-
-Run history, aliases, branches, configuration, and other generated state live
-under a writable Forge home.
-
-The standard host uses:
-
-    ~/.forge
-
-unless another location is supplied.
-
-
-### Mutations are observable
-
-Successful editing operations report touched files and record recovery
-information where appropriate.
-
-Use:
-
-    DIFF current
-
-to inspect changes.
-
-Use:
-
-    REVERT <run>
-
-to restore project files from a stored Forge run.
-
-
-### Destructive scope matters
-
-A precise ordinary `DELETE` expresses deletion intent directly.
-
-Broader destructive scope, such as deleting every matching block with
-`ALL: yes`, requires explicit confirmation.
-
-Protected Forge internals may independently require confirmation.
-
-
-### Installer collisions are blocked
-
-Portable Forge uses the Python package names:
-
-    forge
-    forge_core
-    forge_packages
-
-The installer checks for namespace collisions before installation.
-
-It refuses to overwrite unrecognised packages merely because they share those
-names.
-
-`--force` can replace only an installation carrying Portable Forge's own
-installer marker.
-
-This protects existing Forge installations and unrelated Python packages from
-accidental replacement.
-
-
-### Failures are evidence
-
-When a Forge run fails:
-
-1. read `ERRORS`, `HINTS`, and `PREVIEW`;
-2. identify the failed operation;
-3. follow the Forge hint when present;
-4. use `FORGE help <OP>` when syntax is unclear;
-5. inspect the relevant state;
-6. make the smallest correction;
-7. run again and inspect the new packet.
-
-Do not guess Forge syntax after a failure.
-
-See `docs/SAFETY.md` for the fuller model.
-
-
-## Portable core and host adapters
-
-The central architectural rule is:
-
-**Adapters import Forge. Forge never imports adapters.**
-
-Portable Forge core does not import Pythonista UI modules, clipboard APIs,
-editors, terminal wrappers, or other platform adapters.
-
-A host adapter may choose:
-
-- how bundle text is obtained;
-- what the project root is;
-- where writable Forge state lives;
-- what capabilities the environment exposes;
-- where output is sent;
-- whether richer presentation is available.
-
-A host must not change Forge execution semantics or the meaning of the
-canonical packet.
-
-See `docs/HOST_ADAPTERS.md`.
-
-
-## Environment and configuration
-
-Forge separates persistent wishes from runtime truth.
-
-Configuration describes defaults and preferences.
-
-Environment context describes the resolved runtime:
-
-- project root;
-- writable Forge home;
-- storage root;
-- aliases path;
-- host name;
-- available capabilities.
-
-The portable core consumes that explicit environment.
-
-Environment detection belongs to the host.
-
-
-## Presentation
-
-The portable baseline is intentionally simple:
-
-    forge.render_standard(run)
-
-That produces:
-
-    canonical packet
-    +
-    small human summary
-
-The canonical packet does not depend on a particular renderer.
-
-A richer host can render the structured run however it wants:
-
-    import forge
-    from my_renderer import render
-
-    run = forge.run_text(
-        bundle,
-        project_root=PROJECT_ROOT,
-    )
-
-    render(run)
-
-No large renderer framework is required.
-
-
-## Pythonista
-
-Forge itself does not depend on Pythonista.
-
-Pythonista is one example of a host environment.
-
-The intended layout is:
-
-    writable Python package directory/
-        forge/
-        forge_core/
-        forge_packages/
-
-    ~/Documents/forge_entry.py
-    ~/Documents/forge_console_ui.py
-
-The bootstrap helper:
-
-    bootstrap/pythonista.py
-
-downloads the Portable Forge installer. The installer detects Pythonista,
-installs the runtime into `~/Documents/site-packages-3`, creates the small
-`~/Documents/forge_entry.py` launcher plus `~/Documents/forge_console_ui.py`,
-and opens a newly created launcher in the editor.
-
-The launcher provides a clipboard-based workflow by default and passes Forge's
-structured progress events to the Pythonista live console renderer. The
-canonical Forge packet is still copied back to the clipboard unchanged.
-
-Clipboard and console presentation belong to the Pythonista adapter, not Forge
-core.
-
-
-### Existing Forge installations
-
-Pythonista can also contain older Forge layouts such as:
-
-    ~/Documents/forge/
-
-Installing another runtime with the same top-level Python namespaces can
-shadow the existing one.
-
-The Pythonista bootstrap therefore checks for conflicting Forge namespaces and
-stops before installation when one is found.
-
-Migration should be deliberate rather than silently replacing or shadowing an
-existing runtime.
-
-See `adapters/pythonista/` for the Pythonista-specific layer.
+That means a clipboard launcher, terminal, editor extension, GUI, web view, or
+another transport can all sit around the same portable runtime.
 
 
 ## Installation options
 
-Portable Forge supports multiple installation paths.
+### PyPI
 
-
-### Standard-library installer
-
-From a local checkout:
-
-    python install.py --source .
-
-With an explicit package directory:
-
-    python install.py --source . --target /path/to/site-packages
-
-From the stable v0.1.1 release:
-
-    python install.py --github jackatttack/Forge --ref v0.1.1
-
-For deliberate testing of the current development branch:
-
-    python install.py --github jackatttack/Forge --ref main
-
-The installer uses only the Python standard library.
-
-
-### Bootstrap
-
-Some constrained Python environments make downloading or arranging an entire
-repository awkward.
-
-A small environment bootstrap can download `install.py` and invoke it.
-
-See `bootstrap/`.
-
-
-### Python packaging
-
-Forge is packaged as the Python distribution:
+Forge is distributed as:
 
     portable-forge
 
-Install it from PyPI with:
+Install it with:
 
     pip install portable-forge
 
@@ -614,31 +386,75 @@ The Python import remains:
 
     import forge
 
-The distribution is pure Python and the public package contains the portable
-runtime packages `forge`, `forge_core`, and `forge_packages`.
+
+### Local checkout
+
+Portable Forge includes a standard-library-only installer:
+
+    python install.py --source .
 
 
-## Repository layout
+### GitHub source
 
-    .
-    |-- README.md
-    |-- install.py
-    |-- pyproject.toml
-    |
-    |-- forge/              public Python API and standard host
-    |-- forge_core/         portable execution runtime
-    |-- forge_packages/     Forge operation packages
-    |
-    |-- adapters/           environment-specific wrappers
-    |-- bootstrap/          environment bootstrap helpers
-    |-- docs/               architecture and usage documentation
-    |-- examples/           embedding examples
-    `-- renderers/          presentation notes and future richer renderers
+Install from the stable v0.1.1 release:
+
+    python install.py --github jackatttack/Forge --ref v0.1.1
+
+Or deliberately install the current development branch:
+
+    python install.py --github jackatttack/Forge --ref main
+
+The installer protects existing Python packages from accidental namespace collisions.
+
+For the full installation guide, see
+[docs/INSTALLING.md](docs/INSTALLING.md).
+
+
+## Safety model
+
+Forge can edit and execute local project code, so its boundaries are explicit.
+
+The complete bundle is parsed before execution, project operations stay inside
+an explicit project root, mutations are reported, and recovery information is
+recorded where appropriate.
+
+The user or host still decides when a bundle is actually run.
+
+For the full model, see [docs/SAFETY.md](docs/SAFETY.md).
+
+
+## Portable core and host adapters
+
+Forge itself does not depend on Pythonista, a clipboard API, a UI toolkit, or
+a particular operating system.
+
+Environment-specific behaviour lives in small host adapters around the
+portable runtime.
+
+The central rule is:
+
+**Adapters import Forge. Forge never imports adapters.**
+
+For the architecture and host contract, see
+[docs/HOST_ADAPTERS.md](docs/HOST_ADAPTERS.md).
+
+
+## Pythonista
+
+Pythonista is the original Forge host and the reason the clipboard workflow
+exists.
+
+Its adapter provides clipboard input/output and richer console presentation
+around the portable core.
+
+The one-copy bootstrap above is the recommended starting point.
+
+See [adapters/pythonista/](adapters/pythonista/) for the host-specific layer.
 
 
 ## Public Python API
 
-The intended public API is small:
+The intended Python API is deliberately small:
 
     forge.run_text(...)
     forge.render_standard(...)
@@ -646,50 +462,46 @@ The intended public API is small:
     forge.standard_environment(...)
     forge.first_boot_text()
 
-Most users should not need to import `forge_core` directly.
+Most users should never need to import `forge_core` or `forge_packages`
+directly.
 
-See `docs/EMBEDDING.md`.
+For embedding examples, see [docs/EMBEDDING.md](docs/EMBEDDING.md).
 
 
-## Design principles
+## Learn more
 
-Forge aims to stay:
+The README is the front door.
 
-- local-first;
-- human-in-the-loop;
-- pure Python;
-- portable;
-- inspectable;
-- recoverable;
-- text-protocol friendly;
-- useful in constrained environments;
-- understandable by the person who owns the code.
+The deeper technical material lives in the docs:
 
-A host can become sophisticated.
+- [How Forge works](docs/HOW_FORGE_WORKS.md)
+- [Installing Forge](docs/INSTALLING.md)
+- [Safety model](docs/SAFETY.md)
+- [Host adapters](docs/HOST_ADAPTERS.md)
+- [Embedding Forge](docs/EMBEDDING.md)
 
-The core should remain boring.
-## License
+The installed runtime is also part of the documentation:
 
-Forge is released under the MIT License. See `LICENSE`.
+    FORGE ops
+
+    FORGE help <OP>
+
+    FORGE help <OP> full
 
 
 ## Project status
 
-This repository is an early portable rebuild of Forge.
+Forge is an early portable project built out of a real daily AI coding
+workflow.
 
-The portable release boundary is tested independently from the historical
-Pythonista-specific implementation.
+It began as a way to make coding with a chat model on an iPhone dramatically
+less tedious, then grew into a portable text protocol that can sit behind
+different Python environments and host interfaces.
 
-The current baseline proves that Forge can:
+The API, adapters, packaging, and presentation may continue to evolve before a
+stable 1.0 release.
 
-- run with platform UI physically absent;
-- run with clipboard integration physically absent;
-- run with editor integration physically absent;
-- install without pip;
-- execute through a standard Python API;
-- operate through a thin host wrapper;
-- protect against conflicting Forge namespaces during installation;
-- return deterministic packets suitable for a human/AI feedback loop.
 
-The API, compatibility matrix, adapters, packaging, and presentation may still
-evolve before a stable 1.0 release.
+## License
+
+Forge is released under the MIT License. See [LICENSE](LICENSE).
