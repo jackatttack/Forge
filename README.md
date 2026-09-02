@@ -209,14 +209,40 @@ The Pythonista console UI is packaged inside Forge at
 
 On first install, `forge_entry.py` opens in Pythonista ready to use.
 
-Then the loop is simply:
+### Start a new AI session
 
-    1. Copy a Forge bundle from the chat.
-    2. Run forge_entry.py.
+Forge can teach the model how to use Forge.
+
+Copy this onto the clipboard:
+
+    FORGE boot
+
+Run `forge_entry.py`, then paste the returned `FORGE FIRST BOOT` text into
+ChatGPT, Claude, or another LLM.
+
+That guide tells the model how the Forge loop works and asks it to begin with
+a small read-only orientation bundle:
+
+    MAP .
+    DEPTH: 2
+
+    FORGE ops
+
+The model gives you that bundle. Run it with `forge_entry.py` and paste the
+returned packet back into the conversation.
+
+From there, the normal loop is simply:
+
+    1. The model gives you a Forge bundle.
+    2. Run `forge_entry.py`.
     3. Forge works against your Pythonista Documents folder.
     4. The result goes back onto the clipboard.
-    5. Paste it into the chat.
+    5. Paste it into the conversation.
     6. Repeat.
+
+No special AI integration is required. `FORGE boot` gives a new conversation
+the protocol it needs, and the returned run packets keep the conversation
+grounded in what actually happened on your machine.
 
 That is the workflow Forge was originally built to make tighter.
 
