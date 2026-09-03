@@ -55,6 +55,41 @@ Use this pattern for plain text files or deliberately inspected flat-file edits:
     new line
     END_BODY
 
+Whitespace
+
+The two insertion families treat the body differently, because they have
+different jobs.
+
+Plain-file insertion writes the body exactly as given. Leading spaces,
+relative indentation, and blank lines all survive. Indentation is often
+the meaning of the line in YAML, Markdown, or indented configuration, so
+Forge does not touch it:
+
+    INSERT .github/workflows/ci.yml
+    LINE: 12
+    POSITION: after
+    BEGIN_BODY
+          - name: Run tests
+            run: python -m unittest
+    END_BODY
+
+Those six and eight leading spaces reach the file unchanged.
+
+AST insertion re-aligns the body to its destination in the syntax tree.
+Write the body at whatever indentation reads naturally and Forge places
+it correctly inside the target:
+
+    INSERT app.py::main
+    POSITION: end
+    BEGIN_BODY
+    print("done")
+    END_BODY
+
+That lands indented inside main, not at column zero.
+
+INDENT applies only to anchored AST insertion. It has no effect on
+plain-file insertion, where the body is already verbatim.
+
 Target shapes
 
 1. AST sibling insertion
@@ -148,6 +183,9 @@ Use INDENT: auto by default.
 Use INDENT: child when inserting under a block header such as if ready:.
 Use INDENT: same when inserting beside the anchor line.
 
+INDENT applies to anchored AST insertion only. Plain-file insertion
+writes the body verbatim, so there is no indent to compute.
+
 MATCH:
 - exact
 - fuzzy
@@ -200,6 +238,7 @@ INSERT must:
 - reject anchor plus POSITION: start/end
 - not write when validation fails
 - not write when anchor resolution fails
+- write plain-file bodies verbatim, preserving leading whitespace
 - record touched files for DIFF and REVERT
 - preserve recovery through REVERT
 
@@ -210,6 +249,13 @@ Use INSERT when adding code or text.
 Use REPLACE when changing something that already exists.
 
 Use REPLACE with LINES when changing an explicit flat-file line range after READ.
+
+Notes for LLMs
+
+- Plain-file insertion is verbatim. Write the body at the exact indentation the file needs, including leading spaces on every line.
+- AST insertion re-aligns. Write the body at natural indentation and let Forge place it.
+- For YAML, Markdown, or any whitespace-significant file, count the leading spaces in the surrounding lines with READ before writing the body.
+- INDENT does nothing on plain-file insertion.
 
 Use WRITE with CONFIRM: overwrite when replacing a whole existing file.
 
