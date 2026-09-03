@@ -44,6 +44,11 @@ FIRST_BOOT_PATH = os.path.join(
     'FIRST_BOOT.txt',
 )
 
+BUNDLE_SYNTAX_PATH = os.path.join(
+    HERE,
+    'BUNDLE.txt',
+)
+
 
 def _absolute(path):
     return os.path.abspath(
@@ -186,6 +191,21 @@ def first_boot_text():
         return handle.read()
 
 
+def bundle_syntax_text():
+    """
+    Return the portable Forge bundle syntax guide.
+
+    Companion to first_boot_text(). Boot explains the loop; this explains
+    the grammar a bundle must follow.
+    """
+    with open(
+        BUNDLE_SYNTAX_PATH,
+        'r',
+        encoding='utf-8',
+    ) as handle:
+        return handle.read()
+
+
 def _parser():
     parser = argparse.ArgumentParser(
         prog='python -m forge',
@@ -231,6 +251,12 @@ def _parser():
         '--first-boot',
         action='store_true',
         help='Print the portable AI first-boot prompt.',
+    )
+
+    parser.add_argument(
+        '--bundle-syntax',
+        action='store_true',
+        help='Print the Forge bundle syntax guide.',
     )
 
     return parser
@@ -286,8 +312,12 @@ def main(
         argv
     )
 
-    if args.first_boot:
-        text = first_boot_text()
+    if args.first_boot or args.bundle_syntax:
+        text = (
+            bundle_syntax_text()
+            if args.bundle_syntax
+            else first_boot_text()
+        )
 
         stdout.write(
             text
