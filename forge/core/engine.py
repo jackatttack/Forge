@@ -10,11 +10,20 @@ run['errors'] so the runner can classify the whole run as FAILED.
 """
 
 import time
+import traceback
 
+from forge.core.core_guard import check as core_guard_check
+from forge.core.core_guard import is_mutating_op
 from forge.core.events import emit_event
 from forge.core.models import make_result
 from forge.core.registry import get_op
 from forge.core.hinting import render_hints_for_result
+
+
+# How much traceback to attach to an unexpected operation failure in dev
+# mode. Enough to locate the fault; not so much that it dominates a packet
+# being carried back through a clipboard.
+DEV_TRACEBACK_LINE_LIMIT = 15
 
 
 def _is_clean_status(status):
@@ -118,14 +127,22 @@ def execute_ops(
     total_ops = len(parsed_ops)
 
     def parsed_is_mutating(parsed_op):
-        try:
-            from forge.core.core_guard import is_mutating_op
-            return is_mutating_op((parsed_op or {}).get('op'))
-        except Exception:
-            return False
+        return is_mutating_op((parsed_op or {}).get('op'))
 
     def parsed_can_continue_after_failure(parsed_op):
-        """Return True for diagnostic ops that should still run after failure."""
+        """
+        Return True for diagnostic ops that should still run after failure.
+
+        RUN is deliberately absent. It compiles and executes arbitrary
+        project Python, so it can do anything a mutating op can do, and
+        core_guard already classifies it as mutating. Letting it proceed
+        after an earlier mutating failure would defeat the stop.
+
+        This name list is a known design wart: portable Forge should not
+        need to know which operations are diagnostic, let alone the
+        subcommands of a host extension such as GIT. The intended
+        replacement is per-op policy declared in the operation contract.
+        """
         op = str((parsed_op or {}).get('op') or '').strip().upper()
         target = str((parsed_op or {}).get('target') or '').strip()
         command = target.split()[0].lower() if target else ''
@@ -136,7 +153,6 @@ def execute_ops(
             'MAP',
             'SEARCH',
             'DIFF',
-            'RUN',
         ):
             return True
 
@@ -212,13 +228,12 @@ def execute_ops(
             continue
 
         try:
-            from forge.core.core_guard import check as core_guard_check
             ok, msg = core_guard_check(parsed_op)
         except Exception as e:
             ok = False
             msg = (
-                'Core guard unavailable: %s: %s\n'
-                'WHY: mutating ops are blocked until the guard can be imported.'
+                'Core guard raised: %s: %s\n'
+                'WHY: mutating ops are blocked when the guard cannot answer.'
             ) % (type(e).__name__, e)
 
         if not ok:
@@ -290,6 +305,16 @@ def execute_ops(
         except Exception as e:
             result['status'] = 'FAILED_RUNTIME'
             result['message'] = type(e).__name__ + ': ' + str(e)
+
+            # An operation raising is a Forge bug, not a user error, and
+            # the packet is the only diagnostic that reaches the chat.
+            # Dev mode carries a bounded traceback so the next turn can
+            # see where it broke.
+            if str((run or {}).get('mode') or '').strip().lower() == 'dev':
+                lines = traceback.format_exc().splitlines()
+                result.setdefault('data', {})['traceback'] = '\n'.join(
+                    lines[-DEV_TRACEBACK_LINE_LIMIT:]
+                )
 
         _finish_result(
             run,
