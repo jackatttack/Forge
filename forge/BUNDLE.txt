@@ -1,0 +1,154 @@
+FORGE BUNDLE SYNTAX
+===================
+
+A bundle is plain text describing operations for Forge to run locally.
+
+Forge parses the whole bundle before executing any of it. If any line is
+malformed, nothing runs.
+
+
+SHAPE
+-----
+
+One operation looks like this:
+
+    OP target
+    DIRECTIVE: value
+    BEGIN_BODY
+    content
+    END_BODY
+
+Only the first line is required. Separate operations with a blank line:
+
+    READ notes.txt
+
+    MAP projects/example
+    DEPTH: 2
+
+
+COMMAND LEVEL
+-------------
+
+Outside BEGIN_/END_ blocks, Forge accepts exactly three things:
+
+- blank lines
+- known op headers
+- DIRECTIVE: value lines
+
+Anything else is a parse error and the whole bundle is refused.
+
+There is no free prose in a bundle. Explanation belongs in the chat
+around it, not inside the copied text.
+
+A mistyped op name is therefore caught rather than ignored:
+
+    WRITE notes.txt
+    BEGIN_BODY
+    hello
+    END_BODY
+
+    REPLCE app.py
+
+That bundle fails to parse. Nothing is written. Forge names the
+unrecognised line and its number.
+
+
+OP HEADERS
+----------
+
+An op header starts at column zero:
+
+    READ notes.txt
+
+The text after the op name is its target. Targets are project-relative;
+paths resolve from the project root.
+
+Some ops address a Python target inside a file with :: —
+
+    READ app.py::main
+
+Use FORGE ops for the current op vocabulary.
+
+
+DIRECTIVES
+----------
+
+A directive is an uppercase key, a colon, and a value:
+
+    LINES: 1-80
+    DEPTH: 2
+    CONFIRM: overwrite
+
+Directives belong to the operation above them. Each op accepts its own
+set; FORGE help <OP> lists them.
+
+
+BLOCKS
+------
+
+Content goes inside a block. Three exist:
+
+    BEGIN_BODY  ... END_BODY     file or code content
+    BEGIN_OLD   ... END_OLD      exact text to find
+    BEGIN_NEW   ... END_NEW      exact text to replace it with
+
+Markers sit alone on their own line at column zero.
+
+Everything between them is literal data. Forge does not interpret it, so
+a body may contain blank lines, indentation, and text that looks like
+Forge syntax:
+
+    WRITE guide.txt
+    BEGIN_BODY
+    To replace a function, write:
+
+    REPLACE app.py::main
+    BEGIN_BODY
+    def main():
+        return True
+    END_BODY
+
+That writes a file documenting REPLACE. It does not run REPLACE.
+
+Because of that, a body cannot contain its own END_BODY marker at column
+zero. When writing about Forge syntax, indent the example or build the
+text from separate lines in code.
+
+
+WHOLE-BUNDLE PARSING
+--------------------
+
+Forge parses everything before executing anything. Two consequences:
+
+A parse error anywhere refuses the entire bundle. Earlier operations do
+not run.
+
+Syntax added by one bundle is not available to later operations in that
+same bundle. Patch first, then use the new syntax in a later run.
+
+
+AFTER A FAILURE
+---------------
+
+A failed mutating operation stops later mutating operations in the same
+bundle. Read-only inspection continues, so the returned packet still
+carries the information needed to diagnose the failure.
+
+RUN is not read-only. It executes arbitrary project Python, so it does
+not continue after a failure.
+
+
+WRITING BUNDLES FOR A CHAT LOOP
+-------------------------------
+
+Return one copyable code block containing only bundle text.
+
+Keep reasoning outside the block.
+
+Prefer the smallest operation that fits: REPLACE over WRITE for an edit,
+a line range or Python target over a whole file.
+
+Inspect before mutating when the current state is not already known.
+
+Read the returned packet before deciding what comes next. Nothing
+happened unless the packet says it happened.
