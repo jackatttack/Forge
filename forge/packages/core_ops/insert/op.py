@@ -70,6 +70,14 @@ HELP = {
         'new line',
         'END_BODY',
         '',
+        'INSERT .github/workflows/ci.yml',
+        'LINE: 12',
+        'POSITION: after',
+        'BEGIN_BODY',
+        '      - name: Run tests',
+        '        run: python -m unittest',
+        'END_BODY',
+        '',
         'INSERT app.py::main',
         'ANCHOR: if ready:',
         'POSITION: after',
@@ -333,7 +341,15 @@ def _execute_plain_file(ctx, parsed_op, result):
     inserted_lines = len(str(body).splitlines())
 
     try:
-        after = insert_after_line(before, insert_line, body, indent='', tight=True)
+        # Plain files get the body verbatim. See insert_after_line.
+        after = insert_after_line(
+            before,
+            insert_line,
+            body,
+            indent='',
+            tight=True,
+            dedent=False,
+        )
     except Exception as e:
         result['status'] = 'FAILED_PARSE'
         result['message'] = '%s: %s' % (type(e).__name__, e)
