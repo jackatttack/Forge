@@ -48,11 +48,29 @@ def replace_line_range(source_text, start_line, end_line, new_body):
     return ''.join(before) + ''.join(new_lines) + ''.join(after)
 
 
-def insert_after_line(source_text, line_no, insert_body, indent='', tight=False):
+def insert_after_line(
+    source_text,
+    line_no,
+    insert_body,
+    indent='',
+    tight=False,
+    dedent=True,
+):
     """
     Insert insert_body after 1-based line_no.
 
     line_no may be 0 to insert at the very start of the file.
+
+    dedent controls whether the body's common leading whitespace is
+    stripped before the indent prefix is applied. AST insertion needs it,
+    because the body arrives at whatever indent the author wrote and must
+    be re-aligned to its destination in the syntax tree.
+
+    Plain-file insertion needs the opposite. There is no destination
+    indent to compute, so dedenting removes the author's whitespace and
+    puts nothing back. In a whitespace-significant file such as YAML that
+    silently produces a broken result while the operation still reports
+    APPLIED. Pass dedent=False to insert the body exactly as written.
     """
     src_lines = (source_text or '').splitlines(True)
 
@@ -62,7 +80,10 @@ def insert_after_line(source_text, line_no, insert_body, indent='', tight=False)
             % (line_no, len(src_lines))
         )
 
-    block = textwrap.dedent((insert_body or '').strip('\n'))
+    block = (insert_body or '').strip('\n')
+
+    if dedent:
+        block = textwrap.dedent(block)
 
     new_lines = []
     for line in block.splitlines():
