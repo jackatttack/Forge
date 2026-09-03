@@ -64,6 +64,7 @@ WORKING RULES
 - Use BRANCH before risky work when useful.
 - Read errors and hints before retrying failures.
 - Never invent Forge syntax or directives.
+- Use FORGE bundle for bundle grammar: command level, blocks, parse rules.
 - Use FORGE help <OP> when syntax is unclear.
 - Use FORGE runs for stored run history.
 
@@ -127,11 +128,24 @@ NORMAL EDIT LOOP
     READ path
 
     REPLACE path
-    ...
+    BEGIN_OLD
+    exact current text
+    END_OLD
+    BEGIN_NEW
+    replacement text
+    END_NEW
 
     RUN relevant_test.py
 
     DIFF current
+
+Bundles contain operations only. Outside BEGIN_/END_ blocks, Forge
+accepts blank lines, op headers, and DIRECTIVE: value lines. Anything
+else is a parse error and nothing runs.
+
+    FORGE bundle
+
+returns the full grammar.
 
 
 OUTPUT
