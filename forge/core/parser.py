@@ -243,7 +243,33 @@ def parse_bundle(text):
                 continue
 
             if stripped:
-                body_lines.append(line)
+                # Command level accepts only blank lines, known op headers,
+                # directives, and block markers. Anything else is a mistake
+                # the user needs to see.
+                #
+                # This line previously fell through into body_lines, which
+                # meant a typo such as REPLCE was silently appended to the
+                # PRECEDING operation's body, even after its END_BODY had
+                # closed. The bundle then reported APPLIED while quietly
+                # executing something the user never wrote. A packet that
+                # misreports what ran defeats the point of the packet, so
+                # unrecognised command-level text is now a parse error and
+                # the whole bundle is refused.
+                errors.append(
+                    'Unrecognised line %d under %s: %r\n'
+                    'WHY: outside BEGIN_/END_ blocks, Forge accepts only op '
+                    'headers, DIRECTIVE: value lines, and blank lines.\n'
+                    'NEXT:\n'
+                    '- Wrap file or code content in BEGIN_BODY / END_BODY.\n'
+                    '- Check the operation name for typos.\n'
+                    '- Use FORGE ops for the current public language.'
+                    % (
+                        i + 1,
+                        op_name,
+                        line,
+                    )
+                )
+                break
 
             i += 1
 
