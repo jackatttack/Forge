@@ -4,38 +4,135 @@ Portable Forge bootstrap for Pythonista.
 
 The bootstrap installs the current Portable Forge main branch.
 
-It has one job:
-
-    download install.py
-    ->
-    run install.py
-
-The installer detects Pythonista, chooses site-packages-3, installs the
-runtime including forge.adapters.pythonista, creates the root forge_entry.py
-launcher, removes an owned legacy root renderer when present, and opens a newly
-created launcher on first installation.
+It resolves main to one immutable commit before downloading anything, then
+uses that same commit for both install.py and the package archive. This keeps
+a bootstrap install snapshot-consistent even if main advances mid-install.
 """
 
+import json
 import os
 import runpy
 import sys
 import tempfile
+import urllib.parse
 import urllib.request
 
 
 REPOSITORY = 'jackatttack/Forge'
 REF = 'main'
+USER_AGENT = 'portable-forge-pythonista-bootstrap'
+
+
+def _valid_commit_sha(value):
+    value = str(
+        value
+        or ''
+    ).strip()
+
+    return (
+        len(value) == 40
+        and all(
+            char in '0123456789abcdefABCDEF'
+            for char in value
+        )
+    )
+
+
+def resolve_ref(repository, ref):
+    repository = str(
+        repository
+        or ''
+    ).strip().strip('/')
+
+    ref = str(
+        ref
+        or ''
+    ).strip()
+
+    if repository.count('/') != 1:
+        raise RuntimeError(
+            'Bootstrap repository must use OWNER/REPOSITORY.'
+        )
+
+    if not ref:
+        raise RuntimeError(
+            'Bootstrap ref cannot be empty.'
+        )
+
+    url = (
+        'https://api.github.com/repos/'
+        + repository
+        + '/commits/'
+        + urllib.parse.quote(
+            ref,
+            safe='',
+        )
+    )
+
+    request = urllib.request.Request(
+        url,
+        headers={
+            'Accept': 'application/vnd.github+json',
+            'User-Agent': USER_AGENT,
+        },
+    )
+
+    with urllib.request.urlopen(
+        request
+    ) as response:
+        payload = json.loads(
+            response.read().decode('utf-8')
+        )
+
+    commit = str(
+        payload.get('sha')
+        or ''
+    ).strip()
+
+    if not _valid_commit_sha(
+        commit
+    ):
+        raise RuntimeError(
+            'GitHub did not return a valid commit SHA for %s@%s.'
+            % (
+                repository,
+                ref,
+            )
+        )
+
+    return commit
 
 
 def main():
+    resolved_commit = resolve_ref(
+        REPOSITORY,
+        REF,
+    )
+
     installer_url = (
         'https://raw.githubusercontent.com/'
         + REPOSITORY
         + '/'
-        + REF
+        + resolved_commit
         + '/install.py'
     )
 
+    print(
+        'Portable Forge bootstrap source:'
+    )
+    print(
+        'Repository:',
+        REPOSITORY,
+    )
+    print(
+        'Requested ref:',
+        REF,
+    )
+    print(
+        'Resolved commit:',
+        resolved_commit,
+    )
+    print('')
     print(
         'Downloading Portable Forge installer...'
     )
@@ -74,6 +171,8 @@ def main():
             '--github',
             REPOSITORY,
             '--ref',
+            resolved_commit,
+            '--requested-ref',
             REF,
             '--force',
         ]
