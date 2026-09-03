@@ -25,6 +25,7 @@ from forge.core.presentation.standard import (
 )
 
 from .standard import (
+    bundle_syntax_text,
     default_forge_home,
     first_boot_text,
     main,
@@ -34,6 +35,7 @@ from .standard import (
 
 
 __all__ = [
+    'bundle_syntax_text',
     'default_forge_home',
     'first_boot_text',
     'format_summary',
