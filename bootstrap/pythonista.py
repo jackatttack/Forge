@@ -7,6 +7,11 @@ The bootstrap installs the current Portable Forge main branch.
 It resolves main to one immutable commit before downloading anything, then
 uses that same commit for both install.py and the package archive. This keeps
 a bootstrap install snapshot-consistent even if main advances mid-install.
+
+Pythonista is a long-lived process. If Forge is already imported, replacing
+its files on disk does not replace the live modules in sys.modules. The
+bootstrap therefore detects that state and requires a full Pythonista restart
+instead of attempting unsafe live module reloading.
 """
 
 import json
@@ -21,6 +26,7 @@ import urllib.request
 REPOSITORY = 'jackatttack/Forge'
 REF = 'main'
 USER_AGENT = 'portable-forge-pythonista-bootstrap'
+REVISION_MARKER_NAME = '.portable-forge-revision'
 
 
 def _valid_commit_sha(value):
@@ -103,7 +109,76 @@ def resolve_ref(repository, ref):
     return commit
 
 
+def loaded_forge_modules():
+    return sorted(
+        name
+        for name in sys.modules
+        if (
+            name == 'forge'
+            or name.startswith('forge.')
+        )
+    )
+
+
+def revision_marker_path():
+    return os.path.abspath(
+        os.path.expanduser(
+            '~/Documents/site-packages-3/forge/'
+            + REVISION_MARKER_NAME
+        )
+    )
+
+
+def write_revision_marker(commit):
+    if not _valid_commit_sha(
+        commit
+    ):
+        raise RuntimeError(
+            'Refusing to write an invalid Forge revision marker.'
+        )
+
+    path = revision_marker_path()
+
+    if not os.path.isdir(
+        os.path.dirname(path)
+    ):
+        raise RuntimeError(
+            'Installed Forge package was not found for revision marker: '
+            + path
+        )
+
+    temporary = path + '.new'
+
+    try:
+        with open(
+            temporary,
+            'w',
+            encoding='utf-8',
+        ) as handle:
+            handle.write(
+                commit.lower()
+                + '\n'
+            )
+
+        os.replace(
+            temporary,
+            path,
+        )
+
+    finally:
+        if os.path.exists(
+            temporary
+        ):
+            os.remove(
+                temporary
+            )
+
+    return path
+
+
 def main():
+    loaded_before_install = loaded_forge_modules()
+
     resolved_commit = resolve_ref(
         REPOSITORY,
         REF,
@@ -172,8 +247,6 @@ def main():
             REPOSITORY,
             '--ref',
             resolved_commit,
-            '--requested-ref',
-            REF,
             '--force',
         ]
 
@@ -207,6 +280,43 @@ def main():
         raise RuntimeError(
             'Portable Forge installer failed with code %r.'
             % install_code
+        )
+
+    revision_path = write_revision_marker(
+        resolved_commit
+    )
+
+    print('')
+    print(
+        'Installed Forge revision:',
+        resolved_commit,
+    )
+    print(
+        'Revision marker:',
+        revision_path,
+    )
+
+    if loaded_before_install:
+        print('')
+        print(
+            'WARNING:'
+        )
+        print(
+            'Forge files were updated on disk, but a Forge runtime is '
+            'already loaded in this Pythonista process.'
+        )
+        print(
+            'Fully terminate and reopen Pythonista before running Forge.'
+        )
+        print(
+            'Installed files: current'
+        )
+        print(
+            'Active runtime: unchanged until restart'
+        )
+        print(
+            'Loaded Forge modules:',
+            len(loaded_before_install),
         )
 
     print('')
