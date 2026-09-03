@@ -46,7 +46,12 @@ jobs:
 
       - name: Verify installed package import
         working-directory: ${{ runner.temp }}
-        run: python -c "import forge, forge_core, forge_packages; print(forge.__file__)"
+        run: python -c "import forge; print(forge.__file__)"
+
+      - name: Checkout regression tests
+        env:
+          FORGE_TEST_TARGET: checkout
+        run: python -m unittest discover -s tests -t tests -v
 
       - name: Runtime smoke test
         shell: bash
