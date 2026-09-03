@@ -1,66 +1,110 @@
 # -*- coding: utf-8 -*-
-# portable-forge-pythonide-live-ui-v1
+# portable-forge-pythonide-live-ui-v3
 """
-Rich live dashboard for Portable Forge on PythonIDE.
+Portable Forge terminal renderer for PythonIDE.
 
-Presentation only. Forge's canonical packet is produced separately and remains
-plain text for the clipboard.
+PythonIDE supports colour, Unicode and single-line in-place redraw well, but its
+terminal does not reliably support Rich multi-line Live repainting.
 
-Important PythonIDE detail:
-The Rich Console deliberately captures the current sys.stdout object when this
-dashboard is constructed. Forge's RUN operation may temporarily replace the
-global sys.stdout while collecting child-script output. Retaining PythonIDE's
-original stream keeps the live dashboard visible without contaminating RUN
-stdout with Rich terminal control sequences.
+This renderer therefore deliberately uses:
+
+    static append-only Forge rows
+    +
+    one animated carriage-return spinner line
+    +
+    one permanent completion summary
+
+Forge's canonical return packet remains completely separate and plain text.
 """
 
 import sys
+import threading
 import time
 
 
+PALETTE = {
+    "accent": "#5AA9FF",
+    "border": "#E91E63",
+    "danger": "#FF5A5F",
+    "muted": "#9FB4C9",
+    "success": "#4CD964",
+    "text": "#EEF6FF",
+    "warning": "#FFD166",
+    "cyan": "#5DEBFF",
+}
+
+
+SPINNER_FRAMES = (
+    "⠋",
+    "⠙",
+    "⠹",
+    "⠸",
+    "⠼",
+    "⠴",
+    "⠦",
+    "⠧",
+    "⠇",
+    "⠏",
+)
+
+
 class ForgeLiveUI:
-    MAX_HISTORY = 8
-    BAR_WIDTH = 28
+    MAX_TIMINGS = 6
+    MAX_WIDTH = 70
+    TIMING_BAR_WIDTH = 14
+    OUTCOME_BAR_WIDTH = 14
 
     def __init__(self):
         self.available = False
         self.console = None
-        self.live = None
+        self.stream = sys.stdout
 
         self.stamp = ""
         self.mode = ""
+
         self.total = 0
         self.completed = 0
-        self.status = "STARTING"
-        self.started_at = time.monotonic()
 
-        self.parse_state = "waiting"
-        self.current = None
-        self.history = []
+        self.status = "STARTING"
+
+        self.started_at = time.monotonic()
+        self.run_elapsed = 0.0
+
+        self.applied = 0
+        self.skipped = 0
+        self.failed = 0
+
+        self.error_count = 0
+        self.packet_bytes = 0
+
+        self.timings = []
+
+        self._started = False
+        self._finished = False
+
+        self._spinner_thread = None
+        self._spinner_stop = None
+        self._spinner_started = 0.0
+        self._spinner_label = ""
+        self._spinner_lock = threading.Lock()
 
         try:
             from rich.console import Console
-            from rich.live import Live
-
-            terminal = sys.stdout
 
             self.console = Console(
-                file=terminal,
-            )
-
-            self.live = Live(
-                self._render(),
-                console=self.console,
-                refresh_per_second=10,
-                transient=False,
+                file=self.stream,
+                highlight=False,
             )
 
             self.available = True
 
         except Exception:
-            self.available = False
             self.console = None
-            self.live = None
+            self.available = False
+
+    # ------------------------------------------------------------------
+    # Formatting
+    # ------------------------------------------------------------------
 
     @staticmethod
     def _clean(value):
@@ -77,6 +121,7 @@ class ForgeLiveUI:
         try:
             value = float(
                 value
+                or 0.0
             )
         except Exception:
             return ""
@@ -95,11 +140,63 @@ class ForgeLiveUI:
             value
         )
 
+    @staticmethod
+    def _bytes(value):
+        try:
+            value = int(
+                value
+                or 0
+            )
+        except Exception:
+            value = 0
+
+        if value < 1024:
+            return "{} B".format(
+                value
+            )
+
+        if value < 1024 * 1024:
+            return "{:.1f} KB".format(
+                value / 1024.0
+            )
+
+        return "{:.1f} MB".format(
+            value
+            / float(
+                1024 * 1024
+            )
+        )
+
+    @staticmethod
+    def _spaced(value):
+        return " ".join(
+            str(
+                value
+                or ""
+            )
+        )
+
+    def _width(self):
+        try:
+            width = int(
+                self.console.width
+            )
+        except Exception:
+            width = 52
+
+        return max(
+            30,
+            min(
+                self.MAX_WIDTH,
+                width - 2,
+            ),
+        )
+
     @classmethod
     def _shorten(
         cls,
         value,
-        limit=52,
+        limit,
     ):
         text = cls._clean(
             value
@@ -108,29 +205,449 @@ class ForgeLiveUI:
         if len(text) <= limit:
             return text
 
+        if limit <= 5:
+            return text[:limit]
+
+        usable = limit - 1
+        left = usable // 2
+        right = usable - left
+
         return (
-            text[: limit - 1]
+            text[:left]
             + "…"
+            + text[-right:]
         )
 
-    @classmethod
-    def _bar(
-        cls,
-        completed,
+    # ------------------------------------------------------------------
+    # Rich output helpers
+    # ------------------------------------------------------------------
+
+    def _print(
+        self,
+        text="",
+        tone="text",
+        bold=False,
+        justify=None,
+    ):
+        if self.console is None:
+            print(
+                text,
+                file=self.stream,
+            )
+            return
+
+        try:
+            from rich.text import Text
+
+            style = PALETTE.get(
+                tone,
+                PALETTE["text"],
+            )
+
+            if bold:
+                style = (
+                    "bold "
+                    + style
+                )
+
+            value = Text(
+                str(
+                    text
+                    or ""
+                ),
+                style=style,
+            )
+
+            if justify:
+                value.justify = justify
+
+            self.console.print(
+                value,
+                soft_wrap=False,
+            )
+
+        except Exception:
+            print(
+                text,
+                file=self.stream,
+            )
+
+    def _print_text(self, text):
+        if self.console is None:
+            print(
+                str(text),
+                file=self.stream,
+            )
+            return
+
+        try:
+            self.console.print(
+                text,
+                soft_wrap=False,
+            )
+        except Exception:
+            print(
+                str(text),
+                file=self.stream,
+            )
+
+    def _rule(
+        self,
+        char="═",
+    ):
+        self._print(
+            char * self._width(),
+            tone="border",
+        )
+
+    def _center(
+        self,
+        text,
+        tone="text",
+        bold=False,
+    ):
+        self._print(
+            text,
+            tone=tone,
+            bold=bold,
+            justify="center",
+        )
+
+    # ------------------------------------------------------------------
+    # Single-line animation
+    # ------------------------------------------------------------------
+
+    def _clear_spinner_line(self):
+        try:
+            self.stream.write(
+                "\r\x1b[2K"
+            )
+            self.stream.flush()
+        except Exception:
+            pass
+
+    def _spinner_loop(self):
+        frame_index = 0
+
+        while (
+            self._spinner_stop is not None
+            and not self._spinner_stop.wait(
+                0.08
+            )
+        ):
+            elapsed = (
+                time.monotonic()
+                - self._spinner_started
+            )
+
+            frame = SPINNER_FRAMES[
+                frame_index
+                % len(
+                    SPINNER_FRAMES
+                )
+            ]
+
+            frame_index += 1
+
+            label = self._shorten(
+                self._spinner_label,
+                max(
+                    8,
+                    self._width()
+                    - 14,
+                ),
+            )
+
+            line = (
+                "  {} {}  {:>5.1f}s".format(
+                    frame,
+                    label,
+                    elapsed,
+                )
+            )
+
+            with self._spinner_lock:
+                try:
+                    self.stream.write(
+                        "\r\x1b[2K"
+                    )
+
+                    self.stream.write(
+                        line
+                    )
+
+                    self.stream.flush()
+
+                except Exception:
+                    return
+
+    def _spinner_start(
+        self,
+        label,
+    ):
+        self._spinner_finish()
+
+        self._spinner_label = self._clean(
+            label
+        )
+
+        self._spinner_started = (
+            time.monotonic()
+        )
+
+        self._spinner_stop = (
+            threading.Event()
+        )
+
+        self._spinner_thread = (
+            threading.Thread(
+                target=self._spinner_loop,
+                name="ForgePythonIDESpinner",
+                daemon=True,
+            )
+        )
+
+        self._spinner_thread.start()
+
+    def _spinner_finish(self):
+        stop = self._spinner_stop
+        thread = self._spinner_thread
+
+        self._spinner_stop = None
+        self._spinner_thread = None
+
+        if stop is not None:
+            try:
+                stop.set()
+            except Exception:
+                pass
+
+        if (
+            thread is not None
+            and thread is not threading.current_thread()
+        ):
+            try:
+                thread.join(
+                    timeout=0.25
+                )
+            except Exception:
+                pass
+
+        with self._spinner_lock:
+            self._clear_spinner_line()
+
+    # ------------------------------------------------------------------
+    # Hero
+    # ------------------------------------------------------------------
+
+    def _hero(self):
+        self._rule()
+
+        self._center(
+            self._spaced(
+                "FORGE"
+            ),
+            tone="accent",
+            bold=True,
+        )
+
+        self._center(
+            "{}  ·  LIVE EXECUTION".format(
+                str(
+                    self.mode
+                    or "dev"
+                ).upper()
+            ),
+            tone="muted",
+        )
+
+        self._rule()
+
+        self._print()
+
+    def _ensure_started(self):
+        if self._started:
+            return
+
+        self._started = True
+        self._hero()
+
+    # ------------------------------------------------------------------
+    # Status helpers
+    # ------------------------------------------------------------------
+
+    def _status_word(
+        self,
+        status,
+    ):
+        status = self._clean(
+            status
+        ).upper()
+
+        if status == "APPLIED":
+            return "applied"
+
+        if status.startswith(
+            "SKIPPED"
+        ):
+            return "skipped"
+
+        if status.startswith(
+            "FAILED"
+        ):
+            return "failed"
+
+        return (
+            status.lower()
+            or "finished"
+        )
+
+    def _status_tone(
+        self,
+        status,
+    ):
+        status = self._clean(
+            status
+        ).upper()
+
+        if status == "APPLIED":
+            return "success"
+
+        if status.startswith(
+            "SKIPPED"
+        ):
+            return "warning"
+
+        if status.startswith(
+            "FAILED"
+        ):
+            return "danger"
+
+        return "accent"
+
+    def _record_status(
+        self,
+        status,
+    ):
+        status = self._clean(
+            status
+        ).upper()
+
+        if status == "APPLIED":
+            self.applied += 1
+
+        elif status.startswith(
+            "SKIPPED"
+        ):
+            self.skipped += 1
+
+        elif status.startswith(
+            "FAILED"
+        ):
+            self.failed += 1
+
+    # ------------------------------------------------------------------
+    # Operation presentation
+    # ------------------------------------------------------------------
+
+    def _operation_start(
+        self,
+        event,
+    ):
+        self._ensure_started()
+
+        try:
+            index = int(
+                event.get(
+                    "index"
+                )
+                or 0
+            )
+        except Exception:
+            index = 0
+
+        try:
+            total = int(
+                event.get(
+                    "total"
+                )
+                or self.total
+                or 0
+            )
+        except Exception:
+            total = 0
+
+        self.total = total
+
+        op = self._clean(
+            event.get(
+                "op"
+            )
+        ).upper()
+
+        target = self._shorten(
+            event.get(
+                "target"
+            ),
+            max(
+                8,
+                self._width()
+                - 2,
+            ),
+        )
+
+        self._print(
+            "● {:02d}/{:02d}  {:<8}".format(
+                index,
+                total,
+                op[:8],
+            ),
+            tone="accent",
+            bold=True,
+        )
+
+        if target:
+            self._print(
+                "  " + target,
+                tone="text",
+            )
+
+        self._spinner_start(
+            op
+        )
+
+    def _progress_bar(
+        self,
+        index,
         total,
     ):
         try:
-            completed = int(
-                completed
+            index = int(
+                index
                 or 0
             )
+        except Exception:
+            index = 0
+
+        try:
             total = int(
                 total
                 or 0
             )
         except Exception:
-            completed = 0
             total = 0
+
+        counter = "{}/{}".format(
+            index,
+            total,
+        )
+
+        width = max(
+            10,
+            self._width()
+            - len(counter)
+            - 6,
+        )
 
         if total <= 0:
             filled = 0
@@ -140,402 +657,520 @@ class ForgeLiveUI:
                 0.0,
                 min(
                     1.0,
-                    float(completed)
+                    float(index)
                     / float(total),
                 ),
             )
 
             filled = int(
                 round(
-                    cls.BAR_WIDTH
+                    width
                     * ratio
                 )
             )
 
         return (
-            "━" * filled
-            + "─"
-            * (
-                cls.BAR_WIDTH
+            "  "
+            + "█" * filled
+            + "░" * (
+                width
+                - filled
+            )
+            + "  "
+            + counter
+        )
+
+    def _operation_finish(
+        self,
+        event,
+    ):
+        self._spinner_finish()
+
+        try:
+            index = int(
+                event.get(
+                    "index"
+                )
+                or 0
+            )
+        except Exception:
+            index = 0
+
+        try:
+            total = int(
+                event.get(
+                    "total"
+                )
+                or self.total
+                or 0
+            )
+        except Exception:
+            total = 0
+
+        self.total = total
+        self.completed = index
+
+        op = self._clean(
+            event.get(
+                "op"
+            )
+        ).upper()
+
+        target = self._clean(
+            event.get(
+                "target"
+            )
+        )
+
+        status = self._clean(
+            event.get(
+                "status"
+            )
+        ).upper()
+
+        try:
+            elapsed = float(
+                event.get(
+                    "elapsed_seconds"
+                )
+                or 0.0
+            )
+        except Exception:
+            elapsed = 0.0
+
+        self.timings.append(
+            (
+                op,
+                target,
+                elapsed,
+            )
+        )
+
+        self._record_status(
+            status
+        )
+
+        word = self._status_word(
+            status
+        )
+
+        tone = self._status_tone(
+            status
+        )
+
+        duration = self._elapsed(
+            elapsed
+        )
+
+        symbol = (
+            "✓"
+            if status == "APPLIED"
+            else (
+                "○"
+                if status.startswith(
+                    "SKIPPED"
+                )
+                else "✗"
+            )
+        )
+
+        prefix = (
+            "  {} {}".format(
+                symbol,
+                word,
+            )
+        )
+
+        padding = max(
+            1,
+            self._width()
+            - len(prefix)
+            - len(duration),
+        )
+
+        self._print(
+            prefix
+            + " " * padding
+            + duration,
+            tone=tone,
+            bold=(
+                status
+                != "APPLIED"
+            ),
+        )
+
+        self._print(
+            self._progress_bar(
+                index,
+                total,
+            ),
+            tone="accent",
+        )
+
+        self._print()
+
+    # ------------------------------------------------------------------
+    # Completion graphs
+    # ------------------------------------------------------------------
+
+    def _outcome_row(
+        self,
+        label,
+        value,
+        largest,
+        tone,
+    ):
+        try:
+            value = int(
+                value
+                or 0
+            )
+        except Exception:
+            value = 0
+
+        largest = max(
+            1,
+            int(
+                largest
+                or 1
+            ),
+        )
+
+        if value:
+            filled = max(
+                1,
+                int(
+                    round(
+                        self.OUTCOME_BAR_WIDTH
+                        * float(value)
+                        / float(largest)
+                    )
+                ),
+            )
+        else:
+            filled = 0
+
+        bar = (
+            "█" * filled
+            + "░" * (
+                self.OUTCOME_BAR_WIDTH
                 - filled
             )
         )
 
-    def _render(self):
         try:
-            from rich.console import Group
-            from rich.panel import Panel
-            from rich.spinner import Spinner
-            from rich.table import Table
             from rich.text import Text
 
+            text = Text()
+
+            text.append(
+                "  {:<8} ".format(
+                    label
+                ),
+                style=PALETTE[tone],
+            )
+
+            text.append(
+                bar,
+                style=PALETTE[tone],
+            )
+
+            text.append(
+                "  {}".format(
+                    value
+                ),
+                style=PALETTE["text"],
+            )
+
+            self._print_text(
+                text
+            )
+
         except Exception:
-            return ""
-
-        elapsed = (
-            time.monotonic()
-            - self.started_at
-        )
-
-        header = Table.grid(
-            expand=True,
-        )
-        header.add_column()
-        header.add_column(
-            justify="right",
-        )
-
-        title = Text(
-            "FORGE",
-            style="bold cyan",
-        )
-
-        meta = Text()
-
-        if self.stamp:
-            meta.append(
-                self.stamp,
-                style="dim",
-            )
-
-        if self.mode:
-            if self.stamp:
-                meta.append(
-                    "  "
+            self._print(
+                "  {:<8} {}  {}".format(
+                    label,
+                    bar,
+                    value,
                 )
-
-            meta.append(
-                self.mode.upper(),
-                style="bold cyan",
             )
 
-        header.add_row(
-            title,
-            meta,
-        )
-
-        progress = Text()
-
-        if self.status == "APPLIED":
-            progress.append(
-                "✓ ",
-                style="bold green",
-            )
-
-        elif self.status.startswith(
-            "FAILED"
-        ):
-            progress.append(
-                "✗ ",
-                style="bold red",
-            )
-
+    def _timing_row(
+        self,
+        op,
+        elapsed,
+        longest,
+    ):
+        if longest <= 0:
+            length = 1
         else:
-            progress.append(
-                "● ",
-                style="bold cyan",
-            )
-
-        progress.append(
-            self._bar(
-                self.completed,
-                self.total,
-            ),
-            style=(
-                "green"
-                if self.status == "APPLIED"
-                else "cyan"
-            ),
-        )
-
-        progress.append(
-            "  {}/{}".format(
-                self.completed,
-                self.total
-                or "?",
-            ),
-            style="bold white",
-        )
-
-        progress.append(
-            "  {:.1f}s".format(
-                elapsed
-            ),
-            style="dim",
-        )
-
-        if self.status == "APPLIED":
-            status_style = "bold green"
-
-        elif self.status.startswith(
-            "FAILED"
-        ):
-            status_style = "bold red"
-
-        else:
-            status_style = "bold cyan"
-
-        header.add_row(
-            progress,
-            Text(
-                self.status,
-                style=status_style,
-            ),
-        )
-
-        body = Table(
-            box=None,
-            show_header=False,
-            pad_edge=False,
-            expand=True,
-        )
-
-        body.add_column(
-            width=2,
-            no_wrap=True,
-        )
-        body.add_column(
-            width=9,
-            no_wrap=True,
-        )
-        body.add_column(
-            ratio=1,
-        )
-        body.add_column(
-            justify="right",
-            width=8,
-            no_wrap=True,
-        )
-
-        history = self.history[
-            -self.MAX_HISTORY:
-        ]
-
-        for row in history:
-            status = row.get(
-                "status",
-                "",
-            )
-
-            if status == "APPLIED":
-                symbol = "✓"
-                style = "green"
-
-            elif status.startswith(
-                "SKIPPED"
-            ):
-                symbol = "○"
-                style = "yellow"
-
-            else:
-                symbol = "✗"
-                style = "red"
-
-            body.add_row(
-                Text(
-                    symbol,
-                    style=style,
-                ),
-                Text(
-                    self._clean(
-                        row.get(
-                            "op"
-                        )
-                    ),
-                    style=style,
-                ),
-                Text(
-                    self._shorten(
-                        row.get(
-                            "target"
-                        )
-                    ),
-                    style="white",
-                ),
-                Text(
-                    self._elapsed(
-                        row.get(
-                            "elapsed_seconds"
-                        )
-                    ),
-                    style="dim",
-                ),
-            )
-
-        current_renderable = None
-
-        if not self.status.startswith(
-            "FAILED"
-        ) and self.status != "APPLIED":
-
-            if self.parse_state == "running":
-                current_renderable = Spinner(
-                    "dots",
-                    text=Text(
-                        "Parsing Forge bundle",
-                        style="bold cyan",
-                    ),
-                    style="cyan",
-                )
-
-            elif self.current:
-                op = self._clean(
-                    self.current.get(
-                        "op"
-                    )
-                )
-
-                target = self._shorten(
-                    self.current.get(
-                        "target"
-                    ),
-                    limit=58,
-                )
-
-                text = Text()
-                text.append(
-                    "{:<9}".format(
-                        op
-                    ),
-                    style="bold cyan",
-                )
-
-                if target:
-                    text.append(
-                        "  " + target,
-                        style="white",
-                    )
-
-                current_renderable = Spinner(
-                    "dots",
-                    text=text,
-                    style="cyan",
-                )
-
-        footer = None
-
-        if self.status == "APPLIED":
-            footer = Text()
-            footer.append(
-                "✓ Forge complete",
-                style="bold green",
-            )
-            footer.append(
-                "  ·  {} operation{}".format(
-                    self.completed,
-                    (
-                        ""
-                        if self.completed == 1
-                        else "s"
-                    ),
-                ),
-                style="green",
-            )
-
-        elif self.status.startswith(
-            "FAILED"
-        ):
-            footer = Text()
-            footer.append(
-                "✗ Forge finished",
-                style="bold red",
-            )
-            footer.append(
-                "  ·  " + self.status,
-                style="red",
-            )
-
-        parts = [
-            header,
-        ]
-
-        if history:
-            parts.extend(
-                [
-                    Text(""),
-                    body,
-                ]
-            )
-
-        if current_renderable is not None:
-            parts.extend(
-                [
-                    Text(""),
-                    current_renderable,
-                ]
-            )
-
-        if footer is not None:
-            parts.extend(
-                [
-                    Text(""),
-                    footer,
-                ]
-            )
-
-        if self.status == "APPLIED":
-            border_style = "green"
-
-        elif self.status.startswith(
-            "FAILED"
-        ):
-            border_style = "red"
-
-        else:
-            border_style = "cyan"
-
-        return Panel(
-            Group(
-                *parts
-            ),
-            border_style=border_style,
-            padding=(
-                0,
+            length = max(
                 1,
-            ),
+                int(
+                    round(
+                        self.TIMING_BAR_WIDTH
+                        * elapsed
+                        / longest
+                    )
+                ),
+            )
+
+        length = min(
+            self.TIMING_BAR_WIDTH,
+            length,
         )
 
-    def _refresh(self):
-        if not self.available:
-            return
+        bar = (
+            "█" * length
+        )
 
-        try:
-            self.live.update(
-                self._render(),
-                refresh=True,
+        gap = (
+            " "
+            * (
+                self.TIMING_BAR_WIDTH
+                - length
             )
-        except Exception:
-            pass
-
-    def _start(self):
-        if not self.available:
-            return
+        )
 
         try:
-            if not self.live.is_started:
-                self.live.start(
-                    refresh=True
+            from rich.text import Text
+
+            text = Text()
+
+            text.append(
+                "  {:<8} ".format(
+                    str(
+                        op
+                        or "?"
+                    )[:8]
+                ),
+                style=PALETTE["accent"],
+            )
+
+            text.append(
+                bar,
+                style=PALETTE["accent"],
+            )
+
+            text.append(
+                gap
+            )
+
+            text.append(
+                "  {:>6}".format(
+                    self._elapsed(
+                        elapsed
+                    )
+                ),
+                style=PALETTE["text"],
+            )
+
+            self._print_text(
+                text
+            )
+
+        except Exception:
+            self._print(
+                "  {:<8} {}{}  {:>6}".format(
+                    str(
+                        op
+                        or "?"
+                    )[:8],
+                    bar,
+                    gap,
+                    self._elapsed(
+                        elapsed
+                    ),
+                )
+            )
+
+    def _completion(self):
+        if self._finished:
+            return
+
+        self._finished = True
+
+        self._spinner_finish()
+        self._ensure_started()
+
+        clean = (
+            self.status == "APPLIED"
+            and self.failed == 0
+        )
+
+        self._rule()
+
+        self._print()
+
+        if clean:
+            self._center(
+                "R U N   C L E A N",
+                tone="success",
+                bold=True,
+            )
+        else:
+            self._center(
+                "R U N   F A I L E D",
+                tone="danger",
+                bold=True,
+            )
+
+        meta = (
+            "{} operation{} · {} total".format(
+                self.completed,
+                ""
+                if self.completed == 1
+                else "s",
+                self._elapsed(
+                    self.run_elapsed
+                ),
+            )
+        )
+
+        if self.packet_bytes:
+            meta += (
+                " · {} packet".format(
+                    self._bytes(
+                        self.packet_bytes
+                    )
+                )
+            )
+
+        self._center(
+            meta,
+            tone="muted",
+        )
+
+        self._print()
+
+        if clean:
+            self._center(
+                "Run clean. {} operation{} applied with no visible errors.".format(
+                    self.completed,
+                    ""
+                    if self.completed == 1
+                    else "s",
+                ),
+                tone="success",
+            )
+
+        else:
+            self._center(
+                "Forge finished with {} failed operation{}.".format(
+                    self.failed,
+                    ""
+                    if self.failed == 1
+                    else "s",
+                ),
+                tone="danger",
+            )
+
+        self._print()
+
+        self._print(
+            "Outcome",
+            tone="muted",
+        )
+
+        largest = max(
+            self.applied,
+            self.skipped,
+            self.failed,
+            1,
+        )
+
+        self._outcome_row(
+            "applied",
+            self.applied,
+            largest,
+            "success",
+        )
+
+        self._outcome_row(
+            "skipped",
+            self.skipped,
+            largest,
+            "warning",
+        )
+
+        self._outcome_row(
+            "failed",
+            self.failed,
+            largest,
+            "danger",
+        )
+
+        if self.timings:
+            self._print()
+
+            self._print(
+                "Operation time",
+                tone="muted",
+            )
+
+            ordered = sorted(
+                self.timings,
+                key=lambda row: row[2],
+                reverse=True,
+            )
+
+            longest = max(
+                row[2]
+                for row in ordered
+            )
+
+            visible = ordered[
+                :self.MAX_TIMINGS
+            ]
+
+            for op, _target, elapsed in visible:
+                self._timing_row(
+                    op,
+                    elapsed,
+                    longest,
                 )
 
-        except Exception:
-            try:
-                self.live.start()
-            except Exception:
-                self.available = False
-
-    def _stop(self):
-        if not self.available:
-            return
-
-        try:
-            self.live.update(
-                self._render(),
-                refresh=True,
+            overflow = (
+                len(ordered)
+                - len(visible)
             )
-            self.live.stop()
 
-        except Exception:
-            pass
+            if overflow > 0:
+                self._print(
+                    "  +{} more operation{}".format(
+                        overflow,
+                        ""
+                        if overflow == 1
+                        else "s",
+                    ),
+                    tone="muted",
+                )
+
+        self._print()
+
+        if clean:
+            self._center(
+                "🧠  Summary enough",
+                tone="success",
+                bold=True,
+            )
+
+        else:
+            self._center(
+                "⚠  Inspect return packet",
+                tone="warning",
+                bold=True,
+            )
+
+        self._print()
+
+        self._rule(
+            char="─",
+        )
+
+    # ------------------------------------------------------------------
+    # Forge event callback
+    # ------------------------------------------------------------------
 
     def __call__(
         self,
@@ -548,7 +1183,9 @@ class ForgeLiveUI:
         )
 
         if name == "run_started":
-            self.started_at = time.monotonic()
+            self.started_at = (
+                time.monotonic()
+            )
 
             self.stamp = self._clean(
                 event.get(
@@ -564,105 +1201,45 @@ class ForgeLiveUI:
 
             self.status = "RUNNING"
 
-            self._start()
-            self._refresh()
+            self._ensure_started()
             return
 
         if name == "parse_started":
-            self.parse_state = "running"
-            self._refresh()
+            self._ensure_started()
+
+            self._spinner_start(
+                "Parsing bundle"
+            )
             return
 
         if name == "parse_finished":
+            self._spinner_finish()
+
             if event.get(
                 "success"
             ):
-                self.parse_state = "complete"
-                self.total = int(
-                    event.get(
-                        "op_count"
+                try:
+                    self.total = int(
+                        event.get(
+                            "op_count"
+                        )
+                        or 0
                     )
-                    or 0
-                )
+                except Exception:
+                    self.total = 0
 
-            else:
-                self.parse_state = "failed"
-
-            self._refresh()
             return
 
         if name == "operation_started":
-            self.current = {
-                "index": event.get(
-                    "index"
-                ),
-                "total": event.get(
-                    "total"
-                ),
-                "op": event.get(
-                    "op"
-                ),
-                "target": event.get(
-                    "target"
-                ),
-            }
-
-            try:
-                self.total = int(
-                    event.get(
-                        "total"
-                    )
-                    or self.total
-                )
-            except Exception:
-                pass
-
-            self._refresh()
+            self._operation_start(
+                event
+            )
             return
 
         if name == "operation_finished":
-            self.history.append(
-                {
-                    "index": event.get(
-                        "index"
-                    ),
-                    "total": event.get(
-                        "total"
-                    ),
-                    "op": event.get(
-                        "op"
-                    ),
-                    "target": event.get(
-                        "target"
-                    ),
-                    "status": self._clean(
-                        event.get(
-                            "status"
-                        )
-                    ).upper(),
-                    "elapsed_seconds": event.get(
-                        "elapsed_seconds"
-                    ),
-                }
+            self._operation_finish(
+                event
             )
-
-            try:
-                self.completed = int(
-                    event.get(
-                        "index"
-                    )
-                    or len(
-                        self.history
-                    )
-                )
-
-            except Exception:
-                self.completed = len(
-                    self.history
-                )
-
-            self.current = None
-            self._refresh()
             return
 
         if name == "run_finished":
@@ -675,75 +1252,93 @@ class ForgeLiveUI:
                 or "FINISHED"
             )
 
-            self.current = None
+            try:
+                self.run_elapsed = float(
+                    event.get(
+                        "elapsed_seconds"
+                    )
+                    or (
+                        time.monotonic()
+                        - self.started_at
+                    )
+                )
+            except Exception:
+                self.run_elapsed = (
+                    time.monotonic()
+                    - self.started_at
+                )
+
+            try:
+                self.error_count = int(
+                    event.get(
+                        "error_count"
+                    )
+                    or 0
+                )
+            except Exception:
+                self.error_count = 0
+
+            try:
+                self.packet_bytes = int(
+                    event.get(
+                        "packet_bytes"
+                    )
+                    or 0
+                )
+            except Exception:
+                self.packet_bytes = 0
 
             if not self.total:
-                self.total = self.completed
+                self.total = (
+                    self.completed
+                )
 
-            self._stop()
+            self._completion()
             return
 
     def abort(self):
+        self._spinner_finish()
+
         self.status = "FAILED"
-        self.current = None
-        self._stop()
+
+        if not self.run_elapsed:
+            self.run_elapsed = (
+                time.monotonic()
+                - self.started_at
+            )
+
+        if self.failed <= 0:
+            self.failed = 1
+
+        self._completion()
+
+    # ------------------------------------------------------------------
+    # Clipboard handoff
+    # ------------------------------------------------------------------
 
     def print_clipboard_status(
         self,
         ok,
     ):
-        if self.console is None:
-            if ok:
-                print(
-                    "Forge return packet copied to clipboard."
-                )
-            else:
-                print(
-                    "Forge ran, but clipboard update failed."
-                )
-            return
+        self._spinner_finish()
 
-        try:
-            from rich.text import Text
+        self._print()
 
-            self.console.print()
-
-            if ok:
-                text = Text()
-                text.append(
-                    "✓ ",
-                    style="bold green",
-                )
-                text.append(
-                    "Return packet copied to clipboard",
-                    style="green",
-                )
-                text.append(
-                    "  ·  paste back into ChatGPT",
-                    style="dim",
-                )
-
-            else:
-                text = Text()
-                text.append(
-                    "✗ ",
-                    style="bold red",
-                )
-                text.append(
-                    "Clipboard update failed",
-                    style="red",
-                )
-
-            self.console.print(
-                text
+        if ok:
+            self._center(
+                "✓ Return packet copied to clipboard",
+                tone="success",
+                bold=True,
             )
 
-        except Exception:
-            if ok:
-                print(
-                    "Forge return packet copied to clipboard."
-                )
-            else:
-                print(
-                    "Forge ran, but clipboard update failed."
-                )
+            self._center(
+                "paste back into ChatGPT",
+                tone="muted",
+            )
+
+        else:
+            self._center(
+                "✗ Clipboard update failed",
+                tone="danger",
+                bold=True,
+            )
