@@ -192,7 +192,7 @@ Search a broad tree but deliberately skip noisy areas:
 
 - QUERY: text — explicit text query. In MATCH: ast, it can act like DEFINES, but prefer explicit AST directives.
 - MATCH: exact, fuzzy, regex, or ast.
-- EXT: .py,.txt — restrict file extensions.
+- EXT: .py,.txt — restrict file extensions. SEARCH always filters by extension: when EXT is omitted, text search reads only .py, .txt, and .md, and AST search reads only .py. Use EXT: all to search every file type.
 - LIMIT: N — cap matches. Default: 80.
 - CASE: yes — use case-sensitive matching.
 - CONTEXT: N — show neighbouring lines for text search.
@@ -203,6 +203,33 @@ Search a broad tree but deliberately skip noisy areas:
 - CALLS: name — AST search for function/method calls.
 - IMPORTS: module — AST search for import sites.
 - ASSIGNS: name — AST search for assignments.
+
+## What a search did not read
+
+SEARCH never reads every file. Two filters apply before matching:
+
+Extension. Text search defaults to .py, .txt, and .md. AST search
+defaults to .py. Configuration and data files such as .yml, .json,
+.toml, and .cfg are therefore invisible by default.
+
+    SEARCH . FOR workflow_dispatch
+    EXT: all
+
+Directories. Caches, vendored packages, and Forge artifacts are pruned
+from the walk, along with dot-directories such as .github.
+
+Because "0 hits" and "never looked" are easy to confuse, results report
+their own scope:
+
+    EXT=.md,.py,.txt
+    skipped: 147 files by extension (searched .md,.py,.txt — use EXT: all to widen)
+    skipped dirs: .github
+
+Those lines appear only when something was actually skipped. A search
+that read everything in scope stays quiet.
+
+Treat a zero-hit result with a skip line as inconclusive rather than
+negative. Rerun with EXT: all before concluding the text is absent.
 
 ## Limits
 
@@ -236,3 +263,5 @@ Those belong in a future dependency-focused op.
 - SEARCH suggests next READ/MAP commands for high-value hits when possible.
 - After SEARCH finds candidates, use READ on the specific file or AST target.
 - SEARCH is read-only. It should not touch files or create snapshots.
+- Check the skip lines before concluding text is absent. Zero hits with files skipped by extension means the search never looked, not that the text is missing.
+- Use EXT: all when searching for anything in .yml, .json, .toml, .cfg, or another non-default file type, including workflow and configuration files.
