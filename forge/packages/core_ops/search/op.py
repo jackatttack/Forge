@@ -43,6 +43,17 @@ _SKIP_PATH_SUFFIXES = (
 # Default extensions when EXT is not given. Source + common docs.
 _DEFAULT_EXTS = ('.py', '.txt', '.md')
 
+# EXT: all searches every extension. Without this, a search that finds
+# nothing cannot be distinguished from a search that never looked, which
+# is the most misleading answer a locator can give.
+_EXT_ALL_TOKENS = ('all', '*', 'any')
+
+# Skipped directory names that are never worth reporting. These are
+# caches, vendored packages, and Forge's own artifacts: their absence
+# from results tells the reader nothing. A skipped dot-directory such as
+# .github IS worth reporting, because it may hold real project content.
+_UNREPORTED_SKIP_DIRS = set(_SKIP_DIR_NAMES)
+
 
 SPEC = {
     'name': 'SEARCH',
@@ -74,6 +85,9 @@ HELP = {
         'SEARCH forge FOR surface',
         'EXT: .py,.txt',
         'LIMIT: 40',
+        '',
+        'SEARCH . FOR workflow_dispatch',
+        'EXT: all',
         '',
         'SEARCH forge',
         'MATCH: ast',
@@ -170,21 +184,88 @@ def _truthy(value):
     return str(value or '').strip().lower() in ('1', 'yes', 'y', 'true', 'on')
 
 
-def _parse_exts(raw):
-    text = str(raw or '').strip()
-    if not text:
-        return tuple(_DEFAULT_EXTS)
+def _describe_exts(exts):
+    """Human-readable extension scope. exts of None means everything."""
+    if exts is None:
+        return 'all'
+    return ','.join(sorted(exts))
 
-    exts = []
-    for part in text.split(','):
-        p = part.strip()
-        if not p:
+
+def _exts_for_data(exts):
+    """Machine-readable extension scope for result data."""
+    if exts is None:
+        return 'all'
+    return sorted(exts)
+
+
+def _scope_notes(exts, stats):
+    """
+    Describe what a search did NOT look at.
+
+    Returns zero, one, or two lines. Silence when nothing was skipped:
+    a search that read everything should not have to say so.
+    """
+    notes = []
+
+    skipped_ext = int((stats or {}).get('skipped_ext') or 0)
+    if skipped_ext and exts is not None:
+        notes.append(
+            'skipped: %d file%s by extension (searched %s — use EXT: all to widen)'
+            % (
+                skipped_ext,
+                '' if skipped_ext == 1 else 's',
+                _describe_exts(exts),
+            )
+        )
+
+    skipped_dirs = sorted((stats or {}).get('skipped_dirs') or [])
+    if skipped_dirs:
+        notes.append('skipped dirs: ' + ', '.join(skipped_dirs))
+
+    return notes
+
+
+def _result_message(hits, searched, exts, stats):
+    """
+    One-line summary for the packet's ops list.
+
+    Zero hits is the case that misleads, so the count of unread files
+    rides along with it rather than living only in the preview.
+    """
+    text = '%d hits across %d files scanned' % (hits, searched)
+
+    skipped_ext = int((stats or {}).get('skipped_ext') or 0)
+    if skipped_ext and exts is not None:
+        text += ', %d skipped by extension' % skipped_ext
+
+    return text
+
+
+def _parse_exts(value):
+    """
+    Parse the EXT directive into a set of extensions, or None for all.
+
+    Returns None when the caller asked for every extension, which callers
+    must treat as "do not filter" rather than "filter against nothing".
+    """
+    raw = str(value or '').strip()
+
+    if not raw:
+        return set(_DEFAULT_EXTS)
+
+    if raw.strip().lower() in _EXT_ALL_TOKENS:
+        return None
+
+    out = set()
+    for part in raw.replace(';', ',').split(','):
+        item = part.strip().lower()
+        if not item:
             continue
-        if not p.startswith('.'):
-            p = '.' + p
-        exts.append(p.lower())
+        if not item.startswith('.'):
+            item = '.' + item
+        out.add(item)
 
-    return tuple(exts) if exts else tuple(_DEFAULT_EXTS)
+    return out or set(_DEFAULT_EXTS)
 
 def _strip_wrapping_quotes(text):
     """Remove one simple pair of wrapping quotes from a search query."""
@@ -380,20 +461,59 @@ def _should_skip_dir(root, dirpath, dirname):
     return False
 
 
-def _iter_files(root, abs_path, exts):
+def _iter_files(root, abs_path, exts, stats=None):
+    """
+    Yield candidate files under abs_path.
+
+    exts is a set of lowercase extensions, or None to accept every file.
+
+    stats, when supplied, is a dict this function fills in so the caller
+    can report what was NOT searched:
+      skipped_ext   count of files excluded by the extension filter
+      skipped_dirs  sorted names of dot-directories pruned from the walk
+
+    Reporting the shape of the exclusion matters more than it looks: a
+    caller that sees only "0 hits" will conclude the text is absent when
+    it may simply never have been read.
+    """
+    if stats is None:
+        stats = {}
+
+    stats.setdefault('skipped_ext', 0)
+    skipped_dirs = stats.setdefault('skipped_dirs', set())
+
+    def accepted(path):
+        if exts is None:
+            return True
+        return os.path.splitext(path)[1].lower() in exts
+
     if os.path.isfile(abs_path):
-        if os.path.splitext(abs_path)[1].lower() in exts:
+        if accepted(abs_path):
             yield abs_path
+        else:
+            stats['skipped_ext'] += 1
         return
 
     for dirpath, dirnames, filenames in os.walk(abs_path):
-        dirnames[:] = [d for d in dirnames if not _should_skip_dir(root, dirpath, d)]
+        kept = []
+        for name in dirnames:
+            if _should_skip_dir(root, dirpath, name):
+                # Only surface pruned directories that might hold real
+                # project content. Caches and vendored trees are noise.
+                if name not in _UNREPORTED_SKIP_DIRS:
+                    skipped_dirs.add(name)
+                continue
+            kept.append(name)
+
+        dirnames[:] = kept
+
         for name in filenames:
             if name.startswith('.'):
                 continue
 
             path = os.path.join(dirpath, name)
-            if os.path.splitext(path)[1].lower() not in exts:
+            if not accepted(path):
+                stats['skipped_ext'] += 1
                 continue
 
             yield path
@@ -418,7 +538,8 @@ def execute(ctx, parsed_op, result):
     query = str(query or '').strip()
     case_sensitive = _truthy(directives.get('CASE'))
     limit = _as_int(directives.get('LIMIT'), 80)
-    exts = set(_parse_exts(directives.get('EXT')))
+    exts = _parse_exts(directives.get('EXT'))
+    scan_stats = {}
     match_mode = str(directives.get('MATCH') or 'exact').strip().lower()
     context = _as_int(directives.get('CONTEXT'), 0)
     context = max(0, min(context, 20))
@@ -429,9 +550,9 @@ def execute(ctx, parsed_op, result):
     if match_mode == 'ast':
         from forge.core.ast_search import search_ast_files
 
-        ast_exts = set(_parse_exts(directives.get('EXT') or '.py'))
+        ast_exts = _parse_exts(directives.get('EXT') or '.py')
         files = []
-        for path in _iter_files(root, abs_path, ast_exts):
+        for path in _iter_files(root, abs_path, ast_exts, scan_stats):
             try:
                 rel = os.path.relpath(path, root)
             except Exception:
@@ -479,6 +600,8 @@ def execute(ctx, parsed_op, result):
             header.append('FILTER=%r' % path_filter)
         if exclude_terms:
             header.append('EXCLUDE=%r' % ','.join(exclude_terms))
+        header.append('EXT=' + _describe_exts(ast_exts))
+        header.extend(_scope_notes(ast_exts, scan_stats))
         header.append('LIMIT=%d' % limit)
         if stopped_at_limit:
             header.append('(limit reached, results may be incomplete)')
@@ -525,7 +648,9 @@ def execute(ctx, parsed_op, result):
             'path_filter': path_filter,
             'exclude_terms': list(exclude_terms),
             'suggested_reads': _unique_suggested_reads(hits),
-            'exts': sorted(ast_exts),
+            'exts': _exts_for_data(ast_exts),
+            'skipped_ext': int(scan_stats.get('skipped_ext') or 0),
+            'skipped_dirs': sorted(scan_stats.get('skipped_dirs') or []),
             'syntax_errors': syntax_errors,
         }
         return
@@ -548,7 +673,7 @@ def execute(ctx, parsed_op, result):
     searched = 0
     stopped_at_limit = False
 
-    for path in _iter_files(root, abs_path, exts):
+    for path in _iter_files(root, abs_path, exts, scan_stats):
         try:
             rel = os.path.relpath(path, root)
         except Exception:
@@ -616,7 +741,8 @@ def execute(ctx, parsed_op, result):
             files_hit, '' if files_hit == 1 else 's',
         ),
     ]
-    header.append('EXT=' + ','.join(sorted(exts)))
+    header.append('EXT=' + _describe_exts(exts))
+    header.extend(_scope_notes(exts, scan_stats))
     header.append('MATCH=' + match_mode)
     if path_filter:
         header.append('FILTER=%r' % path_filter)
@@ -658,7 +784,7 @@ def execute(ctx, parsed_op, result):
             out.append('- ' + cmd.replace('\n', ' | '))
 
     result['status'] = 'APPLIED'
-    result['message'] = '%d hits across %d files scanned' % (total_hits, searched)
+    result['message'] = _result_message(total_hits, searched, exts, scan_stats)
     result['preview'] = '\n'.join(out)
     result['data'] = {
         'target': target,
@@ -674,5 +800,7 @@ def execute(ctx, parsed_op, result):
         'path_filter': path_filter,
         'exclude_terms': list(exclude_terms),
         'suggested_reads': suggested_reads,
-        'exts': sorted(exts),
+        'exts': _exts_for_data(exts),
+        'skipped_ext': int(scan_stats.get('skipped_ext') or 0),
+        'skipped_dirs': sorted(scan_stats.get('skipped_dirs') or []),
     }
