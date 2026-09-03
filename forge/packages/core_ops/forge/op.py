@@ -61,6 +61,8 @@ HELP = {
         '',
         'FORGE boot',
         '',
+        'FORGE bundle',
+        '',
         'FORGE help WRITE',
         '',
         'FORGE audit',
@@ -79,6 +81,7 @@ HINTS = {
         'example': [
             'FORGE ops',
             'FORGE boot',
+            'FORGE bundle',
             'FORGE help WRITE',
             'FORGE audit',
             'FORGE config',
@@ -136,6 +139,9 @@ def _usage():
         'Orientation:',
         '  FORGE boot',
         '',
+        'Bundle syntax:',
+        '  FORGE bundle',
+        '',
         'Installed powers:',
         '  FORGE ops all',
         '',
@@ -167,6 +173,19 @@ def _boot(result):
     result['preview'] = text.rstrip()
     result['data'] = {
         'mode': 'boot',
+    }
+
+
+def _bundle_syntax(result):
+    from forge.standard import bundle_syntax_text
+
+    text = bundle_syntax_text()
+
+    result['status'] = 'APPLIED'
+    result['message'] = 'bundle syntax guide'
+    result['preview'] = text.rstrip()
+    result['data'] = {
+        'mode': 'bundle',
     }
 
 
@@ -1391,6 +1410,15 @@ def execute(ctx, parsed_op, result):
             return
 
         _boot(result)
+        return
+
+    if command == 'bundle':
+        if rest:
+            result['status'] = 'FAILED_PARSE'
+            result['message'] = 'FORGE bundle takes no arguments'
+            return
+
+        _bundle_syntax(result)
         return
 
     if command == 'ops':
