@@ -130,6 +130,31 @@ class DirectiveDocumentationContract(unittest.TestCase):
             issues,
         )
 
+    def test_public_contract_is_mandatory_but_extensions_opt_in(self):
+        self.assertTrue(
+            forge_op._directive_documentation_required(
+                'FORGE',
+                {},
+            )
+        )
+
+        self.assertFalse(
+            forge_op._directive_documentation_required(
+                'GIT',
+                {},
+            )
+        )
+
+        self.assertTrue(
+            forge_op._directive_documentation_required(
+                'GIT',
+                {
+                    'directives': {},
+                },
+            )
+        )
+
+
 class ForgeHelpRendering(ForgeCase):
 
     def help_preview(

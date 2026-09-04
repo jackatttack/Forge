@@ -558,6 +558,38 @@ def _load_manifest(
         )
 
 
+def _directive_documentation_required(
+    name,
+    help_data,
+):
+    """
+    Require structured directive help for the public language.
+
+    Optional extensions retain their older package contract until they add
+    either structured directive field, at which point the full validation
+    applies to them too.
+    """
+    if str(
+        name
+        or ''
+    ).strip().upper() in set(
+        public_ops()
+    ):
+        return True
+
+    return (
+        isinstance(
+            help_data,
+            dict,
+        )
+        and (
+            'directives' in help_data
+            or 'internal_directives'
+            in help_data
+        )
+    )
+
+
 def _directive_documentation_issues(
     spec,
     help_data,
@@ -877,12 +909,16 @@ def _contract_issues(
             'HELP missing summary'
         )
 
-    issues.extend(
-        _directive_documentation_issues(
-            spec,
-            help_data,
+    if _directive_documentation_required(
+        name,
+        help_data,
+    ):
+        issues.extend(
+            _directive_documentation_issues(
+                spec,
+                help_data,
+            )
         )
-    )
 
     if not callable(
         getattr(
