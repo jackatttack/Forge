@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-INSERT reboot op.
+INSERT operation.
 
-Unified insertion op for the reboot.
+Unified insertion operation for files and AST targets.
 
 Supported shapes:
 
@@ -95,6 +95,49 @@ HELP = {
         '    return True',
         'END_BODY',
     ],
+    'directives': {
+        'ANCHOR': (
+            'Existing text to match inside a resolved AST target.'
+        ),
+        'CONFIRM': (
+            'Use yes only to approve an intentional edit when the '
+            'shared core guard identifies the target as protected.'
+        ),
+        'EXPECT': (
+            'Required total anchor-match count; the default is 1.'
+        ),
+        'INDENT': (
+            'Anchored AST indentation: auto, same, or child.'
+        ),
+        'LINE': (
+            'One-based insertion line required for plain files.'
+        ),
+        'MATCH': (
+            'Anchor matching: exact or fuzzy; the default is exact.'
+        ),
+        'OCCURRENCE': (
+            'One-based anchor match to select; the default is 1.'
+        ),
+        'POSITION': (
+            'before/after for siblings, anchors, and plain files; '
+            'start/end for AST bodies.'
+        ),
+    },
+    'common_failures': [
+        'Plain-file insertion without LINE.',
+        'Using start or end on a plain file.',
+        'Using an anchor outside a resolved AST target.',
+        'Selecting OCCURRENCE: 2 while leaving EXPECT at its default of 1.',
+        'Producing invalid Python after insertion.',
+    ],
+    'safe_usage': [
+        'READ the exact target or surrounding lines first.',
+        'Use explicit POSITION rather than relying on placement guesses.',
+        'Preserve exact body whitespace for plain-file insertion.',
+        'Use INDENT only for anchored AST insertion.',
+        'Set EXPECT and OCCURRENCE together for repeated anchors.',
+    ],
+    'related_ops': ['READ', 'REPLACE', 'WRITE'],
 }
 
 

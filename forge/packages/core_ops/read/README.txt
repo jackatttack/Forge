@@ -1,107 +1,79 @@
 # READ
 
-READ is the reboot public inspection verb.
+## Summary
 
-Use it before editing. It answers:
+READ shows the content of a known file or Python target.
 
-    what is here?
+It answers:
 
-READ is deliberately broad. It can inspect:
+    What is here?
 
-- normal files
-- line ranges
-- Python AST targets
-- anchored slices
-- Python target lists
-- directories, with a compact structural listing
+READ targets files. Use MAP for directory structure and SEARCH when the
+location is unknown.
 
 ## Decision guide
 
-Read a whole file or default first slice:
+Read a whole short file or the default first slice:
 
     READ app.py
 
-Read a numbered slice:
+Read an inclusive line range:
 
     READ app.py
     LINES: 1-120
 
-Read a Python function, method, class, or assignment target:
+Read a Python function, method, class, or assignment:
 
     READ app.py::main
 
-Discover Python targets:
+List the Python targets that can be addressed directly:
 
     READ app.py
     TARGETS: yes
 
-Read around an anchor inside a file:
+Hide docstring summaries from that target list:
+
+    READ app.py
+    TARGETS: yes
+    DOCS: no
+
+Read around the first exact matching line:
 
     READ app.py
     ANCHOR: def main
     CONTEXT: 8
 
-Use fuzzy anchor matching when whitespace drift is expected:
+Use fuzzy matching when insignificant whitespace may have drifted:
 
     READ app.py
     ANCHOR: if ready:
     MATCH: fuzzy
     CONTEXT: 6
 
-Read a directory as an orientation tree:
-
-    READ docs
-
-Read a deeper directory tree:
-
-    READ docs
-    DEPTH: 3
-    FILES: yes
-
-## Mental model
-
-READ is the safe first move.
-
-Use READ before:
-
-- INSERT
-- REPLACE
-- DELETE
-- RUN on unfamiliar scripts
-
-READ should usually replace older inspect-only habits unless a specialist op is clearly better.
-
 ## Directives
 
-- LINES: start-end — read an inclusive line range.
-- ANCHOR: text — read around the first matching line.
-- CONTEXT: N — number of lines either side of ANCHOR. Default is 10.
-- MATCH: exact or fuzzy — controls ANCHOR matching.
-- TARGETS: yes — list Python AST targets in a file.
-- DOCS: yes/no — include doc hints in target/directory modes where supported.
-- DEPTH: N — directory depth when reading a directory.
-- FILES: yes/no — show files in directory mode.
-- README: yes/no — include README summaries in directory mode.
-- FILTER: text or suffix — pass through to directory mode.
-- ALL: yes — include otherwise skipped noisy/system folders in directory mode.
+- `LINES: start-end` reads an inclusive line range.
+- `ANCHOR: text` reads around the first matching line.
+- `CONTEXT: N` controls lines shown either side of `ANCHOR`; default 10.
+- `MATCH: exact|fuzzy` controls anchor matching; default exact.
+- `TARGETS: yes` lists Python AST targets rather than source.
+- `DOCS: yes|no` controls docstring hints in `TARGETS` output; default yes.
 
-## Modes
+## Result modes
 
-READ result data reports a mode:
+READ reports one of three content modes:
 
-- file
-- ast
-- targets
-- directory
+- `file` for ordinary file content or a line range
+- `ast` for one resolved Python target
+- `targets` for a Python target listing
 
-The Surface uses this mode to render a dashboard, source view, target list, or directory view.
+Directories are deliberately not a READ mode. Use:
+
+    MAP docs
 
 ## Recommended workflows
 
-Before replacing a function:
-
-    READ app.py
-    TARGETS: yes
+Before replacing a known function:
 
     READ app.py::main
 
@@ -134,10 +106,27 @@ Before an anchored insert:
     run()
     END_BODY
 
-## Related ops
+## Limits
 
-- MAP — structural directory and project orientation.
-- SEARCH — find files or text before reading.
-- INSERT — add new content.
-- REPLACE — change existing content.
-- RUN — execute inspected scripts.
+READ is read-only and never changes files.
+
+It does not map directories, resolve imports, follow references, or trace
+runtime behaviour. MAP handles structure and SEARCH locates unknown content.
+
+A broad file read may return a bounded first slice rather than every line.
+Request an exact `LINES` range or AST target when the omitted content matters.
+
+`DOCS` only affects Python target listings; it does not change ordinary file or
+AST-target reads.
+
+## Notes for LLMs
+
+Use READ when the relevant file or Python target is already known.
+
+Use MAP when the structure is unclear. Use SEARCH when the location is
+unclear.
+
+Inspect the exact current range, anchor, or AST target before mutating it.
+
+Do not invent directory controls for READ. `DEPTH`, `FILES`, `README`,
+`FILTER`, and `ALL` belong elsewhere and are rejected by READ.

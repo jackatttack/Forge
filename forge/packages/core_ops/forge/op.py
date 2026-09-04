@@ -46,7 +46,6 @@ SPEC = {
     'allowed_directives': set([
         'ARGS',
         'LIMIT',
-        'MODE',
     ]),
     'required_directives': set(),
 }
@@ -59,15 +58,24 @@ HELP = {
         '',
         'FORGE ops',
         '',
-        'FORGE boot',
+        'FORGE help WRITE',
+        '',
+        'FORGE help WRITE full',
         '',
         'FORGE bundle',
-        '',
-        'FORGE help WRITE',
         '',
         'FORGE audit',
         '',
         'FORGE runs latest',
+    ],
+    'directives': {
+        'LIMIT': (
+            'Maximum stored runs returned by FORGE runs; '
+            'the default is 10.'
+        ),
+    },
+    'internal_directives': [
+        'ARGS',
     ],
 }
 
@@ -550,6 +558,166 @@ def _load_manifest(
         )
 
 
+def _directive_documentation_issues(
+    spec,
+    help_data,
+):
+    """
+    Compare parser directives with mandatory structured help metadata.
+
+    Every public operation classifies accepted directives as either public,
+    with a useful description, or internal parser plumbing.
+    """
+    if not isinstance(
+        spec,
+        dict,
+    ):
+        return []
+
+    if not isinstance(
+        help_data,
+        dict,
+    ):
+        return []
+
+    issues = []
+
+    if 'directives' not in help_data:
+        issues.append(
+            'HELP missing directives dict'
+        )
+
+
+
+    documented = help_data.get(
+        'directives',
+        {},
+    )
+
+    internal = help_data.get(
+        'internal_directives',
+        [],
+    )
+
+    if not isinstance(
+        documented,
+        dict,
+    ):
+        issues.append(
+            'HELP directives must be a dict'
+        )
+        documented = {}
+
+    if not isinstance(
+        internal,
+        (
+            list,
+            tuple,
+            set,
+        ),
+    ):
+        issues.append(
+            (
+                'HELP internal_directives '
+                'must be a sequence'
+            )
+        )
+        internal = []
+
+    accepted_names = set(
+        str(name).upper()
+        for name in (
+            spec.get(
+                'allowed_directives'
+            )
+            or []
+        )
+    )
+
+    documented_names = set(
+        str(name).upper()
+        for name in documented
+    )
+
+    internal_names = set(
+        str(name).upper()
+        for name in internal
+    )
+
+    overlap = sorted(
+        documented_names
+        & internal_names
+    )
+
+    if overlap:
+        issues.append(
+            (
+                'HELP directives classified '
+                'as both public and internal: '
+                + ', '.join(overlap)
+            )
+        )
+
+    described_but_rejected = sorted(
+        documented_names
+        - accepted_names
+    )
+
+    if described_but_rejected:
+        issues.append(
+            (
+                'HELP documents rejected directives: '
+                + ', '.join(
+                    described_but_rejected
+                )
+            )
+        )
+
+    internal_but_rejected = sorted(
+        internal_names
+        - accepted_names
+    )
+
+    if internal_but_rejected:
+        issues.append(
+            (
+                'HELP marks rejected directives internal: '
+                + ', '.join(
+                    internal_but_rejected
+                )
+            )
+        )
+
+    unclassified = sorted(
+        accepted_names
+        - documented_names
+        - internal_names
+    )
+
+    if unclassified:
+        issues.append(
+            (
+                'HELP leaves directives unclassified: '
+                + ', '.join(
+                    unclassified
+                )
+            )
+        )
+
+    for name, description in documented.items():
+        if not str(
+            description
+            or ''
+        ).strip():
+            issues.append(
+                (
+                    'HELP directive %s has no description'
+                    % str(name).upper()
+                )
+            )
+
+    return issues
+
 def _contract_issues(
     name,
     mod,
@@ -709,6 +877,13 @@ def _contract_issues(
             'HELP missing summary'
         )
 
+    issues.extend(
+        _directive_documentation_issues(
+            spec,
+            help_data,
+        )
+    )
+
     if not callable(
         getattr(
             mod,
@@ -739,6 +914,7 @@ def _help(
     name,
     mode='quick',
 ):
+    """Render quick help, full reference, or package-contract health."""
     discover_ops()
 
     name = str(
@@ -786,6 +962,46 @@ def _help(
         )
     )
 
+    documented_directives = (
+        help_data.get(
+            'directives'
+        )
+    )
+
+    internal_directives = set(
+        str(value).upper()
+        for value in (
+            help_data.get(
+                'internal_directives'
+            )
+            or []
+        )
+    )
+
+    accepted_directives = set(
+        str(value).upper()
+        for value in (
+            spec.get(
+                'allowed_directives'
+            )
+            or []
+        )
+    )
+
+    if isinstance(
+        documented_directives,
+        dict,
+    ):
+        public_directives = sorted(
+            str(value).upper()
+            for value in documented_directives
+        )
+    else:
+        public_directives = sorted(
+            accepted_directives
+            - internal_directives
+        )
+
     lines = [
         'FORGE HELP ' + name,
         '',
@@ -822,6 +1038,42 @@ def _help(
                 readme,
             ])
 
+        if isinstance(
+            documented_directives,
+            dict,
+        ):
+            lines.extend([
+                '',
+                'DIRECTIVES',
+            ])
+
+            if documented_directives:
+                for directive_name in sorted(
+                    documented_directives
+                ):
+                    description = str(
+                        documented_directives[
+                            directive_name
+                        ]
+                        or ''
+                    ).strip()
+
+                    lines.append(
+                        (
+                            '%s: %s'
+                            % (
+                                str(
+                                    directive_name
+                                ).upper(),
+                                description,
+                            )
+                        )
+                    )
+            else:
+                lines.append(
+                    '-'
+                )
+
         lines.extend([
             '',
             'SPEC',
@@ -839,14 +1091,27 @@ def _help(
                 )
                 or '-'
             ),
-            'directives: '
+            'accepted directives: '
             + (
                 ', '.join(
                     sorted(
-                        spec.get(
-                            'allowed_directives'
-                        )
-                        or []
+                        accepted_directives
+                    )
+                )
+                or '-'
+            ),
+            'public directives: '
+            + (
+                ', '.join(
+                    public_directives
+                )
+                or '-'
+            ),
+            'internal plumbing: '
+            + (
+                ', '.join(
+                    sorted(
+                        internal_directives
                     )
                 )
                 or '-'
@@ -863,26 +1128,20 @@ def _help(
                 '',
                 'EXAMPLE',
             ])
-            lines.extend(
-                str(x)
-                for x in examples
-            )
 
-        directives = sorted(
-            spec.get(
-                'allowed_directives'
+            lines.extend(
+                str(value)
+                for value in examples
             )
-            or []
-        )
 
         lines.extend([
             '',
             'DIRECTIVES',
             (
                 ', '.join(
-                    directives
+                    public_directives
                 )
-                if directives
+                if public_directives
                 else '-'
             ),
         ])
@@ -892,14 +1151,22 @@ def _help(
         'Help for '
         + name
     )
+
     result['preview'] = '\n'.join(
         lines
     ).rstrip()
+
     result['data'] = {
         'op': name,
         'mode': mode,
         'manifest': manifest or {},
         'contract_issues': issues,
+        'public_directives': (
+            public_directives
+        ),
+        'internal_directives': sorted(
+            internal_directives
+        ),
     }
 
 

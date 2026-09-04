@@ -9,7 +9,7 @@ Current policy:
 - aliases are command shortcuts, not macro expansion inside real bundles
 - only a one-line submitted bundle can expand as an alias
 - real op names always win
-- aliases are loaded from forge/aliases.json
+- aliases are loaded from the resolved <forge_home>/aliases.json
 """
 
 import json

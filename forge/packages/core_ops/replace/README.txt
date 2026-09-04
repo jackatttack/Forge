@@ -2,7 +2,7 @@
 
 ## Summary
 
-REPLACE is the reboot unified surgical replacement op.
+REPLACE changes existing code or text with a narrowly specified replacement.
 
 It replaces an AST target, an explicit file line range, or an exact old/new text block while recording recovery metadata for DIFF and REVERT.
 
@@ -86,6 +86,18 @@ Common target shapes:
     REPLACE app.py::@SETTING
     REPLACE app.py::SomeClass.@SETTING
 
+The target forms mean:
+
+- `main` selects one module-level function or class named `main`
+- `SomeClass.method` selects one method in that class
+- `SomeClass.*` selects the complete class definition, not every method as
+  separate replacements
+- `@SETTING` selects one module-level assignment
+- `SomeClass.@SETTING` selects one assignment in the class body
+
+Use `READ file.py` with `TARGETS: yes` and copy the returned target exactly.
+Do not guess an AST target shape.
+
 ## Explicit line range replacement
 
 Use this when replacing a known file slice after inspecting numbered lines.
@@ -124,6 +136,9 @@ For many edits in one file, prefer AST targets or exact OLD/NEW blocks when poss
 
 Use this when line numbers are awkward but the current text can be copied exactly.
 
+OLD blocks are matched literally. REPLACE has no fuzzy block mode; whitespace
+and blank lines must match the current file exactly.
+
 For repeated blocks, choose deliberately:
 
     REPLACE docs/example.txt
@@ -139,6 +154,7 @@ To replace every exact match:
 
     REPLACE docs/example.txt
     ALL: yes
+    CONFIRM: yes
     BEGIN_OLD
     old exact text
     END_OLD
@@ -146,14 +162,15 @@ To replace every exact match:
     new exact text
     END_NEW
 
-Use ALL: yes carefully.
+`ALL: yes` requires `CONFIRM: yes`. Use it only when every exact match is
+intentionally in scope.
 
 ## Directives
 
 - LINES: start-end — replace an explicit inclusive line range in a plain file.
 - OCCURRENCE: N — in exact block mode, replace the Nth matching OLD block.
 - ALL: yes — in exact block mode, replace every matching OLD block.
-- CONFIRM: yes — used when the core guard requires explicit confirmation.
+- CONFIRM: yes — required with ALL: yes and when the core guard requires it.
 
 ## Blocks
 

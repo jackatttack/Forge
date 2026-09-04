@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# SEARCH reboot op.
+# SEARCH operation.
 #
 # Find text in files under a project-relative file or directory.
 # Supports explicit QUERY plus readable inline forms:
@@ -111,6 +111,63 @@ HELP = {
         'CALLS: expand_bundle',
         'FILTER: forge/core',
     ],
+    'directives': {
+        'ACTIVE_ONLY': (
+            'With yes, exclude common archive, reference, and '
+            'staging paths.'
+        ),
+        'ASSIGNS': (
+            'In AST mode, find assignments to this name.'
+        ),
+        'CALLS': (
+            'In AST mode, find calls to this function or method name.'
+        ),
+        'CASE': (
+            'With yes, make matching case-sensitive.'
+        ),
+        'CONTEXT': (
+            'Number of neighbouring lines shown around text hits.'
+        ),
+        'DEFINES': (
+            'In AST mode, find function, method, or class definitions.'
+        ),
+        'EXCLUDE': (
+            'Comma-separated path substrings to exclude.'
+        ),
+        'EXT': (
+            'Comma-separated file extensions, or all. Defaults are '
+            'narrow and reported in the result scope.'
+        ),
+        'FILTER': (
+            'Include only paths containing this substring.'
+        ),
+        'IMPORTS': (
+            'In AST mode, find imports of this module.'
+        ),
+        'LIMIT': (
+            'Maximum matches returned; the default is 80.'
+        ),
+        'MATCH': (
+            'Matching mode: exact, fuzzy, regex, or ast.'
+        ),
+        'QUERY': (
+            'Explicit text query; useful when shortcut syntax '
+            'would be ambiguous.'
+        ),
+    },
+    'common_failures': [
+        'Concluding text is absent without checking skipped extensions.',
+        'Using text search when Python structure is the real question.',
+        'Using MATCH: ast without an AST selector.',
+        'Searching an unnecessarily broad tree without path filters.',
+    ],
+    'safe_usage': [
+        'Prefer SEARCH path FOR text for ordinary text searches.',
+        'Read the result scope before treating zero hits as evidence.',
+        'Use explicit AST selectors for structural Python searches.',
+        'Inspect a returned file or AST target with READ.',
+    ],
+    'related_ops': ['MAP', 'READ'],
 }
 
 

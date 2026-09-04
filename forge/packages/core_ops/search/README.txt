@@ -2,7 +2,7 @@
 
 ## Summary
 
-SEARCH is the reboot search op.
+SEARCH locates text or Python structure in project files.
 
 Use it for orientation before reading or editing. It supports normal text search
 and AST-powered structural search for Python code.
@@ -19,8 +19,9 @@ AST search answers:
 
     Where is this function/import/call/assignment structurally present?
 
-SEARCH is a locator, not a dependency graph engine. Future dependency graph work
-belongs in a separate op.
+SEARCH is a locator, not a dependency graph engine. Use
+`MAP file.py` with `MODE: relationships` for reverse imports and statically
+resolved callers.
 
 ## Which mode should I use?
 
@@ -51,6 +52,10 @@ Path-first shortcut:
 Query-first shortcut:
 
     SEARCH package contract IN forge
+
+Prefer the path-first form, `SEARCH path FOR text`, for ordinary searches.
+Use `QUERY` when the text is long, awkward, or contains syntax words such as
+`IN` or `FOR`.
 
 Single-file search:
 
@@ -190,19 +195,30 @@ Search a broad tree but deliberately skip noisy areas:
 
 ## Directives
 
-- QUERY: text — explicit text query. In MATCH: ast, it can act like DEFINES, but prefer explicit AST directives.
-- MATCH: exact, fuzzy, regex, or ast.
-- EXT: .py,.txt — restrict file extensions. SEARCH always filters by extension: when EXT is omitted, text search reads only .py, .txt, and .md, and AST search reads only .py. Use EXT: all to search every file type.
-- LIMIT: N — cap matches. Default: 80.
-- CASE: yes — use case-sensitive matching.
-- CONTEXT: N — show neighbouring lines for text search.
-- FILTER: text — include only matched paths containing this substring.
-- EXCLUDE: text,text — exclude matched paths containing any listed substring.
-- ACTIVE_ONLY: yes — exclude common archive/reference/staging paths such as archive/, old workspaces, public release staging, and packed/.
-- DEFINES: name — AST search for function, method, or class definitions.
-- CALLS: name — AST search for function/method calls.
-- IMPORTS: module — AST search for import sites.
-- ASSIGNS: name — AST search for assignments.
+### Matching
+
+- `QUERY: text` supplies an explicit query when shortcut syntax is awkward.
+- `MATCH: exact|fuzzy|regex|ast` selects the matching model.
+- `CASE: yes` enables case-sensitive matching.
+- `CONTEXT: N` adds neighbouring lines to text-search hits.
+
+### Scope
+
+- `EXT: .py,.txt` restricts extensions; see “What a search did not read”.
+- `LIMIT: N` caps returned matches; default `80`.
+- `FILTER: text` includes only paths containing one substring.
+- `EXCLUDE: text,text` excludes paths containing any listed substring.
+- `ACTIVE_ONLY: yes` skips common archive, reference, and staging paths.
+
+### Python AST selectors
+
+- `DEFINES: name` finds function, method, or class definitions.
+- `CALLS: name` finds function or method calls.
+- `IMPORTS: module` finds import sites.
+- `ASSIGNS: name` finds assignments.
+
+Use AST selectors with `MATCH: ast`. Prefer them over using `QUERY` as an
+implicit definition search.
 
 ## What a search did not read
 
@@ -248,7 +264,8 @@ It does not yet know:
 - import cycles
 - full call graphs
 
-Those belong in a future dependency-focused op.
+Use MAP relationship mode when reverse imports or statically resolved callers
+are the real question.
 
 ## Notes for LLMs
 
@@ -263,5 +280,4 @@ Those belong in a future dependency-focused op.
 - SEARCH suggests next READ/MAP commands for high-value hits when possible.
 - After SEARCH finds candidates, use READ on the specific file or AST target.
 - SEARCH is read-only. It should not touch files or create snapshots.
-- Check the skip lines before concluding text is absent. Zero hits with files skipped by extension means the search never looked, not that the text is missing.
-- Use EXT: all when searching for anything in .yml, .json, .toml, .cfg, or another non-default file type, including workflow and configuration files.
+- Treat the dedicated result-scope lines as evidence about what SEARCH actually inspected.

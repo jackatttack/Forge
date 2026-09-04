@@ -1,23 +1,15 @@
-INSERT is the reboot unified insertion op.
+# INSERT
 
-Purpose
+## Summary
+
 INSERT adds code or text without removing existing content.
 
-It consolidates the old split insertion family into one predictable surface:
+The target shape chooses between syntax-aware Python insertion and verbatim
+plain-file insertion.
 
-- AST sibling insertion
-- AST body insertion
-- AST anchor-based insertion
-- plain text file line insertion
+## Decision guide
 
-The goal is to avoid remembering separate ops such as INSERT_BEFORE, INSERT_AFTER, INSERT_INTO, APPEND_INTO, PREPEND_INTO, and INSERT_FILE_LINE.
-
-Core rule
-Use one op. Make the destination explicit with the target shape and directives.
-
-Decision guide
-
-Use this pattern when adding a new helper function, class, or sibling code block near existing Python code:
+Add a sibling function or class beside an existing Python target:
 
     INSERT app.py::existing_function
     POSITION: after
@@ -28,7 +20,7 @@ Use this pattern when adding a new helper function, class, or sibling code block
         return True
     END_BODY
 
-Use this pattern when adding code inside an existing function or method:
+Add code inside a function, method, class, or other body-owning target:
 
     INSERT app.py::main
     POSITION: end
@@ -36,7 +28,7 @@ Use this pattern when adding code inside an existing function or method:
     print("done")
     END_BODY
 
-Use this pattern when adding code under a specific line such as an if, loop, or try block:
+Add code relative to a line inside one resolved AST target:
 
     INSERT app.py::main
     ANCHOR: if ready:
@@ -46,7 +38,7 @@ Use this pattern when adding code under a specific line such as an if, loop, or 
     run()
     END_BODY
 
-Use this pattern for plain text files or deliberately inspected flat-file edits:
+Add text at an inspected line in a plain file:
 
     INSERT docs/example.txt
     LINE: 4
@@ -55,7 +47,7 @@ Use this pattern for plain text files or deliberately inspected flat-file edits:
     new line
     END_BODY
 
-Whitespace
+## Whitespace
 
 The two insertion families treat the body differently, because they have
 different jobs.
@@ -90,9 +82,9 @@ That lands indented inside main, not at column zero.
 INDENT applies only to anchored AST insertion. It has no effect on
 plain-file insertion, where the body is already verbatim.
 
-Target shapes
+## Target shapes
 
-1. AST sibling insertion
+### AST sibling insertion
 
     INSERT file.py::target
     POSITION: before
@@ -102,9 +94,10 @@ or:
     INSERT file.py::target
     POSITION: after
 
-This inserts before or after the resolved AST target. It is usually the safest way to add a new top-level helper function or class.
+This inserts before or after the complete resolved target. It is usually the
+safest way to add a top-level helper or class.
 
-2. AST body insertion
+### AST body insertion
 
     INSERT file.py::function_name
     POSITION: start
@@ -114,19 +107,10 @@ or:
     INSERT file.py::function_name
     POSITION: end
 
-This inserts inside the resolved function, method, class, or body-owning target.
+This inserts inside the resolved function, method, class, or other body-owning
+target.
 
-3. AST anchored insertion
-
-    INSERT file.py::target
-    ANCHOR: some existing line
-    POSITION: before
-    INDENT: same
-    BEGIN_BODY
-    inserted_code()
-    END_BODY
-
-or:
+### AST anchored insertion
 
     INSERT file.py::target
     ANCHOR: if ready:
@@ -136,9 +120,9 @@ or:
     inserted_code()
     END_BODY
 
-ANCHOR searches only inside the resolved AST target. This keeps the edit narrow.
+ANCHOR searches only inside the resolved AST target, keeping the edit narrow.
 
-4. Plain file line insertion
+### Plain-file line insertion
 
     INSERT docs/file.txt
     LINE: 12
@@ -147,116 +131,71 @@ ANCHOR searches only inside the resolved AST target. This keeps the edit narrow.
     inserted text
     END_BODY
 
-Plain file insertion requires LINE because there is no AST target to anchor against.
+Plain-file insertion requires `LINE` because it does not perform anchor
+resolution.
 
-Directives
+## Directives
 
-POSITION:
-- before
-- after
-- start
-- end
+### Placement
 
-For AST targets:
-- before inserts before the resolved AST target
-- after inserts after the resolved AST target
-- start inserts near the beginning of the resolved AST target body
-- end inserts near the end of the resolved AST target body
+- `POSITION: before|after` works with AST siblings, AST anchors, and plain
+  file lines.
+- `POSITION: start|end` inserts inside an AST body.
+- `LINE: N` is a one-based line number and is required for plain files.
 
-For plain files:
-- only before and after are valid
-- LINE: N is required
+### Anchored AST insertion
 
-ANCHOR:
-- optional for AST targets
-- searches inside the resolved AST target only
-- requires POSITION before or after
-- failure must not write
-- failure produces SKIPPED_ANCHOR_MISMATCH
+- `ANCHOR: text` searches inside the resolved AST target.
+- `MATCH: exact|fuzzy` controls anchor matching; default `exact`.
+- `INDENT: auto|same|child` controls placement indentation; default `auto`.
+- `EXPECT: N` requires exactly N anchor matches; default `1`.
+- `OCCURRENCE: N` selects the Nth match; default `1`.
 
-INDENT:
-- auto
-- same
-- child
+Repeated anchors require both count and selection:
 
-Use INDENT: auto by default.
-Use INDENT: child when inserting under a block header such as if ready:.
-Use INDENT: same when inserting beside the anchor line.
+    INSERT app.py::main
+    ANCHOR: print("same")
+    POSITION: after
+    INDENT: same
+    EXPECT: 2
+    OCCURRENCE: 2
+    BEGIN_BODY
+    run_after_second_match()
+    END_BODY
 
-INDENT applies to anchored AST insertion only. Plain-file insertion
-writes the body verbatim, so there is no indent to compute.
+`OCCURRENCE: 2` alone fails when two anchors exist because the default
+`EXPECT: 1` still requires exactly one match.
 
-MATCH:
-- exact
-- fuzzy
+### Protected targets
 
-Use exact unless whitespace drift is expected.
+`CONFIRM: yes` approves an intentional insertion only when Forge’s shared core
+guard identifies the target as protected. Inspect the target and create a
+BRANCH before confirming a core edit.
 
-OCCURRENCE:
-- selects which anchor match to use when repeated anchors are deliberate
-- default is 1
+## Refusals and recovery
 
-EXPECT:
-- requires an exact number of anchor matches
-- default is 1
-- this favours safety over guessing
+INSERT refuses invalid placement combinations, missing bodies, missing
+targets, unresolved or unexpectedly repeated anchors, and edits that would
+leave a Python file unable to compile.
 
-Result data
+Validation and anchor failures write nothing. Successful changes record
+before-state metadata for DIFF and REVERT.
 
-INSERT result previews now report:
+## Choosing the operation
 
-- mode
-- position
-- target span where available
-- insert line where available
-- inserted line count
-- anchor / indent / match / occurrence / expect where used
+Use INSERT when adding content.
 
-Useful visual modes include:
+Use REPLACE when changing content that already exists.
 
-- ast-before
-- ast-after
-- body-start
-- body-end
-- anchor-auto
-- anchor-same
-- anchor-child
-- line-before
-- line-after
+Use WRITE with `CONFIRM: overwrite` when intentionally replacing an entire
+existing file.
 
-Safety expectations
+## Notes for LLMs
 
-INSERT must:
-
-- reject missing body
-- reject missing target
-- reject bad POSITION
-- reject bad INDENT
-- reject bad MATCH
-- reject plain file insert without LINE
-- reject plain file POSITION: start/end
-- reject anchor plus POSITION: start/end
-- not write when validation fails
-- not write when anchor resolution fails
-- write plain-file bodies verbatim, preserving leading whitespace
-- record touched files for DIFF and REVERT
-- preserve recovery through REVERT
-
-Preferred usage
-
-Use INSERT when adding code or text.
-
-Use REPLACE when changing something that already exists.
-
-Use REPLACE with LINES when changing an explicit flat-file line range after READ.
-
-Notes for LLMs
-
-- Plain-file insertion is verbatim. Write the body at the exact indentation the file needs, including leading spaces on every line.
-- AST insertion re-aligns. Write the body at natural indentation and let Forge place it.
-- For YAML, Markdown, or any whitespace-significant file, count the leading spaces in the surrounding lines with READ before writing the body.
-- INDENT does nothing on plain-file insertion.
-
-Use WRITE with CONFIRM: overwrite when replacing a whole existing file.
-
-Avoid adding new split insertion ops unless a genuinely new insertion model appears.
+- READ the exact current target or line range before insertion.
+- Plain-file insertion is verbatim; reproduce every required leading space.
+- AST insertion re-aligns naturally written code to its destination.
+- For YAML, Markdown, and other whitespace-sensitive files, inspect adjacent
+  lines before constructing the body.
+- INDENT has no effect on plain-file insertion.
+- Set EXPECT and OCCURRENCE together when repeated anchors are deliberate.

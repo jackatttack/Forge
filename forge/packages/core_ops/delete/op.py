@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-DELETE reboot op.
+DELETE operation.
 
 Public deletion verb for Forge.
 
@@ -45,6 +45,37 @@ HELP = {
         'repeated exact text',
         'END_OLD',
     ],
+    'directives': {
+        'ALL': (
+            'With yes, delete every exact OLD match. '
+            'Requires CONFIRM: yes.'
+        ),
+        'CONFIRM': (
+            'Use yes with ALL or when the shared core guard '
+            'requires confirmation.'
+        ),
+        'LINES': (
+            'Inclusive start-end line range to delete.'
+        ),
+        'OCCURRENCE': (
+            'One-based exact OLD-block match to delete.'
+        ),
+    },
+    'common_failures': [
+        'The target does not exist or is a directory.',
+        'An AST target was supplied; AST deletion is not supported.',
+        'The exact OLD block matched zero or several times.',
+        'ALL: yes was supplied without CONFIRM: yes.',
+        'The deletion would leave invalid Python.',
+    ],
+    'safe_usage': [
+        'READ the exact target, range, or block first.',
+        'Use whole-file deletion only with an exact file path.',
+        'Treat OLD blocks as exact-only text.',
+        'Use ALL only when every match is intentionally in scope.',
+        'Use the returned run stamp with DIFF and REVERT for recovery.',
+    ],
+    'related_ops': ['READ', 'REPLACE', 'DIFF', 'REVERT'],
 }
 
 

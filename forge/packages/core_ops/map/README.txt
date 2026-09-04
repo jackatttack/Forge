@@ -59,7 +59,7 @@ Examples:
 
     MAP forge
 
-    MAP forge/forge.packages
+    MAP forge/forge/packages
     DEPTH: 2
 
     MAP forge/forge/packages/core_ops/map
@@ -134,7 +134,19 @@ Mode behaviour:
 
 Relationship mode is intentionally opt-in because it scans a wider project scope than normal file mapping.
 
+Worked relationship example:
+
+    MAP forge/forge/core/runner.py
+    MODE: relationships
+
+This scans the containing project scope and reports files that import
+`runner.py` plus statically resolved callers of its symbols. It is opt-in
+because the wider index is more expensive than an ordinary file map.
 Each mode shows only its relevant sections to keep output focused.
+Hide documentation snippets when only structure matters:
+
+    MAP forge/forge/packages/core_ops/map
+    DOCS: no
 
 ## Directives
 
@@ -169,7 +181,7 @@ Inspect just READ targets:
 
 Increase directory depth carefully:
 
-    MAP forge/forge.packages
+    MAP forge/forge/packages
     DEPTH: 2
     LIMIT: 120
 
@@ -206,7 +218,9 @@ It can show:
 - statically resolved external callers in relationship mode
 - self-filtering (won't suggest mapping a file from itself)
 
-Relationship resolution currently understands:
+### Relationship resolution
+
+Relationship mode currently understands:
 
 - same-file function calls
 - same-class `self.method(...)` and `cls.method(...)` calls

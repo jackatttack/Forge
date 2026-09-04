@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-COPY reboot op.
+COPY operation.
 
 Copy a project-relative text file from one path to another.
 
@@ -25,13 +25,13 @@ SPEC = {
     'name': 'COPY',
     'target_kind': 'file',
     'body_mode': 'forbidden',
-    'allowed_directives': set(['CONFIRM', 'TO', 'OVERWRITE']),
+    'allowed_directives': set(['TO', 'OVERWRITE']),
     'required_directives': set(['TO']),
 }
 
 
 HELP = {
-    'summary': 'Copy a project-relative file and record reversible destination metadata.',
+    'summary': 'Copy one project-relative text file to another project-relative path.',
     'minimal_example': [
         'COPY scratch/source.py',
         'TO: scratch/copy.py',
@@ -39,6 +39,31 @@ HELP = {
         'COPY scratch/source.py',
         'TO: scratch/existing.py',
         'OVERWRITE: yes',
+    ],
+    'directives': {
+        'TO': (
+            'Required destination path, relative to the project root.'
+        ),
+        'OVERWRITE': (
+            'With yes, replace an existing destination file deliberately.'
+        ),
+    },
+    'internal_directives': [],
+    'common_failures': [
+        'The source does not exist or is not a regular file.',
+        'The destination already exists and OVERWRITE: yes was omitted.',
+        'The source or destination escapes the project root.',
+        'The destination exists but is not a regular file.',
+    ],
+    'safe_usage': [
+        'READ an existing destination before overwriting it.',
+        'COPY handles one text file; it does not copy directories.',
+        'Verify a copy before deleting the source during a manual move.',
+    ],
+    'related_ops': [
+        'READ inspects the source or an existing destination.',
+        'DELETE removes the source after a verified manual move.',
+        'REVERT restores or removes the destination using recorded metadata.',
     ],
 }
 

@@ -27,12 +27,37 @@ SPEC = {
 
 
 HELP = {
-    'summary': 'Execute a Python file under the project root and capture stdout/stderr.',
+    'summary': 'Execute a project-relative Python file in-process and capture its output.',
     'minimal_example': [
         'RUN smoke.py',
         '',
         'RUN tools/check.py',
-        'ARGS: --quick',
+        'ARGS: --quick "two words"',
+    ],
+    'directives': {
+        'ARGS': (
+            'Optional command-line arguments parsed with shell-like quoting.'
+        ),
+        'CONFIRM': (
+            'Explicitly permits execution when the script path is protected by the core guard.'
+        ),
+    },
+    'internal_directives': [],
+    'common_failures': [
+        'The target is missing, outside the project root, or not a .py file.',
+        'The script raises an exception.',
+        'The script exits with a non-zero SystemExit code.',
+    ],
+    'safe_usage': [
+        'READ unfamiliar scripts before executing them.',
+        'Do not run Forge entrypoints from inside an active Forge run.',
+        'Keep script output bounded because RUN has no output truncation.',
+        'Remember that in-process execution is not a security boundary.',
+    ],
+    'related_ops': [
+        'READ inspects a script before execution.',
+        'MAP locates likely project entrypoints.',
+        'BRANCH checkpoints files before a script that may mutate them.',
     ],
 }
 

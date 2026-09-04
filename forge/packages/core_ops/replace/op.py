@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-REPLACE reboot op.
+REPLACE operation.
 
-Unified replacement op for the reboot.
+Unified replacement operation for files and AST targets.
 
 Supported shapes:
 
@@ -78,6 +78,37 @@ HELP = {
         'new exact text',
         'END_NEW',
     ],
+    'directives': {
+        'ALL': (
+            'With yes, replace every exact OLD match. '
+            'Requires CONFIRM: yes.'
+        ),
+        'CONFIRM': (
+            'Use yes for an intentional replace-all operation or '
+            'when the shared core guard requires confirmation.'
+        ),
+        'LINES': (
+            'Inclusive start-end range for plain-file replacement.'
+        ),
+        'OCCURRENCE': (
+            'One-based exact OLD-block match to replace.'
+        ),
+    },
+    'common_failures': [
+        'A plain-file target has neither LINES nor OLD/NEW blocks.',
+        'The OLD block differs from current text or whitespace.',
+        'OLD matched repeatedly without OCCURRENCE or ALL.',
+        'ALL: yes was supplied without CONFIRM: yes.',
+        'A Python replacement would not compile.',
+    ],
+    'safe_usage': [
+        'READ the exact current target or range first.',
+        'Prefer AST targets for whole Python definitions.',
+        'Apply later line ranges first when editing one file repeatedly.',
+        'Treat OLD blocks as exact-only text.',
+        'Use ALL only when every match is intentionally in scope.',
+    ],
+    'related_ops': ['READ', 'INSERT', 'WRITE', 'DIFF', 'REVERT'],
 }
 
 
@@ -282,6 +313,22 @@ def validate(parsed_op):
     is_ast = '::' in target
     has_lines = 'LINES' in directives
     has_block = _has_block_pair(parsed_op)
+    replace_all = _parse_bool(
+        directives.get('ALL')
+    )
+
+    if replace_all:
+        if not has_block:
+            errors.append(
+                'REPLACE ALL: yes is only valid with BEGIN_OLD/BEGIN_NEW'
+            )
+        elif str(
+            directives.get('CONFIRM')
+            or ''
+        ).strip().lower() != 'yes':
+            errors.append(
+                'REPLACE ALL: yes requires CONFIRM: yes'
+            )
 
     if is_ast or has_lines:
         if not body:

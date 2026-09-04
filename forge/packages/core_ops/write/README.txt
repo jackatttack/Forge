@@ -1,9 +1,9 @@
-WRITE
-=====
+# WRITE
 
-WRITE is Forge's complete-file writing verb.
+## Summary
 
-Use WRITE for complete-file creation and deliberate full-file replacement.
+WRITE creates a complete file or deliberately replaces an existing file in
+full.
 
 Create a new file:
 
@@ -12,7 +12,7 @@ Create a new file:
     hello
     END_BODY
 
-Overwrite an existing file deliberately:
+Overwrite a different existing file:
 
     WRITE scratch/example.txt
     CONFIRM: overwrite
@@ -20,16 +20,40 @@ Overwrite an existing file deliberately:
     replacement
     END_BODY
 
-Rules:
+The overwrite value is the literal word `overwrite`. `CONFIRM: yes` is not a
+substitute for full-file replacement.
+
+## Directives
+
+- `CONFIRM: overwrite` permits replacement of a different existing file.
+- `ALLOW_BROKEN: yes` bypasses Python compilation for a deliberately invalid
+  fixture.
+
+For example, a parser test may intentionally need invalid Python:
+
+    WRITE tests/fixtures/broken_syntax.py
+    ALLOW_BROKEN: yes
+    BEGIN_BODY
+    def deliberately_broken(
+    END_BODY
+
+Do not use `ALLOW_BROKEN` merely to get past an unexpected compile failure.
+Fix ordinary Python source instead.
+
+## Rules
 
 - a missing target file is created
-- an existing file with identical requested content is left unchanged
-- an existing file with different content requires CONFIRM: overwrite
+- identical existing content is left unchanged without confirmation
+- different existing content requires `CONFIRM: overwrite`
 - directories cannot be overwritten
-- paths must stay inside project_root
-- Python writes compile before touching disk
-- ALLOW_BROKEN: yes explicitly bypasses the compile guard
-- successful mutations record touched metadata for DIFF and REVERT
+- paths must remain inside the project root
+- Python content compiles before disk mutation unless explicitly bypassed
+- successful changes record recovery metadata for DIFF and REVERT
 
-Use REPLACE for surgical changes inside an existing file.
-Use INSERT to add code or text without replacing the whole file.
+## Choosing the operation
+
+Use WRITE when supplying the complete intended file.
+
+Use REPLACE for a surgical change inside an existing file.
+
+Use INSERT when adding content without replacing the whole file.

@@ -1,59 +1,134 @@
 FORGE
 =====
 
-FORGE is Forge's self-inspection and control-plane verb.
+FORGE is the read-only entry point for understanding Forge itself.
 
-It provides Forge self-inspection, help, health checks, configuration, and stored run history.
+Use it to discover operations, learn bundle syntax, inspect configuration,
+check package health, and recover stored run information.
 
-Public language:
+## Which help do I want?
 
-    FORGE
-    FORGE ops
+Quick orientation:
 
-First-boot orientation:
+    FORGE help WRITE
 
-    FORGE boot
+This shows the operation's purpose, a compact example, and its public
+directives.
 
-`FORGE boot` returns the same canonical portable guide exposed by
-`forge.first_boot_text()` and `python -m forge --first-boot`.
+Complete reference:
 
-Bundle syntax:
+    FORGE help WRITE full
+
+This shows the operation's full guide, worked examples, limits, public
+directives, and parser contract.
+
+Package health:
+
+    FORGE help WRITE contract
+
+This checks whether the installed operation package is structurally sound and
+whether its structured directive documentation agrees with its parser
+contract. It is a health check, not usage documentation.
+
+## After a parse failure
+
+Read the returned parser error first.
+
+If the overall bundle grammar is unclear, use:
 
     FORGE bundle
 
-`FORGE bundle` returns the command-language grammar: what a bundle may
-contain at command level, how blocks work, and what causes a parse
-failure. It is exposed the same three ways, through
-`forge.bundle_syntax_text()` and `python -m forge --bundle-syntax`.
+If one operation's syntax or directives are unclear, use:
 
-Use `FORGE boot` to learn the loop. Use `FORGE bundle` to learn the
-syntax. Use `FORGE help <OP>` to learn one operation.
+    FORGE help <OP> full
 
-All installed powers:
+`FORGE bundle` explains command-level lines, directives, body blocks, and why
+the complete bundle must parse before any operation executes.
+
+## Discover operations
+
+List the stable public language:
+
+    FORGE ops
+
+Include installed local extensions:
 
     FORGE ops all
 
-Help:
+Use `ops all` only when an extension is relevant. The public list is the normal
+starting point.
 
-    FORGE help WRITE
-    FORGE help WRITE full
-    FORGE help WRITE contract
+## First-boot orientation
 
-Health:
+    FORGE boot
+
+This returns Forge's portable first-boot guide: the clipboard loop, inspection
+order, recovery model, and standard working style.
+
+## Bundle syntax
+
+    FORGE bundle
+
+This returns the grammar understood by the currently installed parser.
+
+## Health
+
+Check every installed operation package:
 
     FORGE audit
 
-Runtime configuration/context:
+The audit reports missing package resources, invalid manifests, broken SPEC or
+HELP metadata, and structured directive-documentation drift.
+
+## Runtime configuration
 
     FORGE config
 
-Stored run history:
+This shows the resolved project root, Forge home, artifact storage, alias
+registry, and host environment. It never prints credentials.
+
+## Stored runs
+
+List the ten most recent runs in the current Forge mode:
 
     FORGE runs
+
+Choose another maximum:
+
+    FORGE runs
+    LIMIT: 25
+
+Inspect the newest stored packet:
+
     FORGE runs latest
+
+Inspect one artifact from a known run:
+
     FORGE runs show <stamp>
     FORGE runs show <stamp> packet
+    FORGE runs show <stamp> surface
     FORGE runs show <stamp> bundle
     FORGE runs show <stamp> json
 
-FORGE is read-only in this milestone.
+`latest` returns the newest packet and any stored human-facing surface.
+`show` requires an explicit run stamp.
+
+## Limits
+
+FORGE does not change project files or configuration.
+
+`FORGE help <OP> contract` checks package structure and structured help
+metadata. It does not prove that every prose sentence or example is correct.
+
+Run history is mode-specific. A development run lists development history, not
+history stored under another Forge mode.
+
+## Notes for LLMs
+
+Use quick help for orientation and full help before writing unfamiliar syntax.
+
+Do not use contract mode to infer operation behaviour; it answers whether the
+package is healthy, not how the operation works.
+
+After `FAILED_PARSE`, prefer the exact parser error, `FORGE bundle`, and the
+relevant operation help over guessed directives.

@@ -19,10 +19,9 @@ An adapter may provide:
 
 The portable runtime remains unchanged.
 
-Current adapters:
+Current adapter:
 
     pythonista/
-    pythonide/
 
-Environment-specific behaviour belongs here rather than being branched or
-special-cased inside the portable Forge core.
+Future environments can be added as siblings rather than branching or
+special-casing the Forge core.

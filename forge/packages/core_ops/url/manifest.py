@@ -5,5 +5,5 @@ MANIFEST = {
     'version': '0.1.0',
     'op': 'URL',
     'kind': 'core-op',
-    'summary': 'URL fetches, probes, downloads, or parses HTTP resources from inside the reboot.',
+    'summary': 'Fetch, probe, download, or parse HTTP resources.',
 }

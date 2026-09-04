@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-DIFF reboot op.
+DIFF operation.
 
 Shows the stored change for a run, then shows current disk drift when the file
 has changed again since the run was stored.
@@ -32,6 +32,15 @@ HELP = {
         '',
         'DIFF 20260511_120000',
         'MODE: full',
+    ],
+    'directives': {
+        'MODE': (
+            'Output detail: compact or full. '
+            'The default is compact.'
+        ),
+    },
+    'internal_directives': [
+        'ARGS',
     ],
     'common_failures': [
         'Using DIFF when the run packet already contains enough information.',

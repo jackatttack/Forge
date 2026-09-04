@@ -51,6 +51,12 @@ Use full mode only when you need line-by-line detail.
 
 Full mode can be verbose. Prefer compact mode unless the exact changed lines matter.
 
+## Directives
+
+- `MODE: compact|full` controls the amount of detail. Compact is the default.
+- `current`, `latest`, and an explicit run stamp are positional subjects, not
+  `ARGS` directives that need to be written separately.
+
 ## Common workflows
 
 Review changes made earlier in the same bundle:
@@ -77,4 +83,4 @@ Inspect a specific run in full detail:
 - Use DIFF when it improves review confidence.
 - Prefer compact mode by default.
 - Use MODE: full only for risky code edits, suspicious drift, or exact line inspection.
-- After changing Forge core behaviour, still run smoke checks and AUDIT.
+- After changing Forge core behaviour, still run smoke checks and `FORGE audit`.

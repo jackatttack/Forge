@@ -44,6 +44,24 @@ HELP = {
         'MAP forge/forge/core/runner.py',
         'MODE: relationships',
     ],
+    'directives': {
+        'DEPTH': (
+            'Directory depth from 1 to 5; '
+            'the default is 1.'
+        ),
+        'DOCS': (
+            'Include README and docstring hints; '
+            'the default is yes.'
+        ),
+        'LIMIT': (
+            'Maximum listed rows; '
+            'the default is 80.'
+        ),
+        'MODE': (
+            'Choose auto, targets, imports, '
+            'or relationships.'
+        ),
+    },
     'common_failures': [
         'Missing target path.',
         'Using MAP when full source content is needed. Use READ for contents.',

@@ -4,9 +4,9 @@ ALIAS custom op.
 
 Manage local Forge aliases.
 
-This op stores aliases in forge/aliases.json and provides list/show/add/remove
-commands. One-line alias expansion is handled by forge.core.preparse before the
-normal bundle parser runs.
+This operation stores aliases in aliases.json under the resolved Forge home and
+provides list/show/add/remove commands. One-line alias expansion is handled by
+forge.core.preparse before the normal bundle parser runs.
 """
 
 import json
@@ -17,7 +17,7 @@ SPEC = {
     'name': 'ALIAS',
     'target_kind': 'none',
     'body_mode': 'optional',
-    'allowed_directives': set(['ARGS', 'HINTS', 'DESCRIPTION', 'PATH_HINTS']),
+    'allowed_directives': set(['ARGS', 'HINTS', 'DESCRIPTION']),
     'required_directives': set(),
 }
 
@@ -26,7 +26,7 @@ HELP = {
     'summary': 'Manage local Forge aliases and one-line command shortcuts.',
     'subject': [
         'No subject required. Use same-line args, e.g. ALIAS list or ALIAS show boot.',
-        'ARGS overrides same-line args when provided by the parser.',
+        'ARGS carries those same-line arguments through the parser.',
     ],
     'minimal_example': [
         'ALIAS list',
@@ -46,6 +46,18 @@ HELP = {
         'END_BODY',
         '',
         'ALIAS remove boot',
+    ],
+    'directives': {
+        'DESCRIPTION': (
+            'Human-readable text displayed by ALIAS show.'
+        ),
+        'HINTS': (
+            'Space-separated descriptive labels displayed by '
+            'ALIAS list and ALIAS show.'
+        ),
+    },
+    'internal_directives': [
+        'ARGS',
     ],
     'common_failures': [
         'Missing subcommand.',
@@ -215,7 +227,6 @@ def _set_alias(
     tag=None,
     args=None,
     description=None,
-    path_hints=False,
     environment=None,
 ):
     aliases = _load_aliases(
@@ -232,9 +243,6 @@ def _set_alias(
             or ''
         ),
     }
-
-    if path_hints:
-        entry['path_hints'] = True
 
     aliases[name] = entry
 
@@ -357,16 +365,6 @@ def execute(ctx, parsed_op, result):
         directives.get('DESCRIPTION')
         or ''
     ).strip()
-
-    path_hints = str(
-        directives.get('PATH_HINTS')
-        or ''
-    ).strip().lower() in (
-        'yes',
-        'true',
-        '1',
-        'on',
-    )
 
     body = str(
         (parsed_op or {}).get('body')
@@ -645,7 +643,6 @@ def execute(ctx, parsed_op, result):
             tag=tag,
             args=hints,
             description=desc,
-            path_hints=path_hints,
             environment=environment,
         )
 

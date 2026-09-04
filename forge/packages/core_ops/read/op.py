@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-READ reboot op.
+READ operation.
 
 Public read-only inspection verb for Forge.
 
@@ -23,7 +23,7 @@ SPEC = {
 }
 
 HELP = {
-    'summary': 'Read a file, directory, AST target, anchored slice, or Python target list.',
+    'summary': 'Read a file, line range, AST target, anchored slice, or Python target list.',
     'minimal_example': [
         'READ app.py',
         '',
@@ -43,11 +43,43 @@ HELP = {
         'ANCHOR: if ready:',
         'MATCH: fuzzy',
         'CONTEXT: 6',
-        '',
-        'READ docs',
-        'DEPTH: 3',
-        'FILES: yes',
     ],
+    'directives': {
+        'ANCHOR': (
+            'Read around the first matching line.'
+        ),
+        'CONTEXT': (
+            'Lines shown on either side of ANCHOR; '
+            'the default is 10.'
+        ),
+        'DOCS': (
+            'Include docstring hints with TARGETS: yes; '
+            'the default is yes.'
+        ),
+        'LINES': (
+            'Inclusive line range written as start-end.'
+        ),
+        'MATCH': (
+            'Use exact or fuzzy ANCHOR matching; '
+            'the default is exact.'
+        ),
+        'TARGETS': (
+            'List readable Python AST targets instead '
+            'of source content.'
+        ),
+    },
+    'common_failures': [
+        'Passing a directory. Use MAP for directory structure.',
+        'Using an AST target that does not exist in the current file.',
+        'Using ANCHOR text that does not match the current file.',
+        'Combining inspection modes that describe different targets.',
+    ],
+    'safe_usage': [
+        'Use READ when the exact file or Python target is already known.',
+        'Prefer a relevant range or AST target over dumping a large file.',
+        'Use MAP when structure is unclear and SEARCH when location is unclear.',
+    ],
+    'related_ops': ['MAP', 'SEARCH', 'INSERT', 'REPLACE', 'DELETE'],
 }
 
 

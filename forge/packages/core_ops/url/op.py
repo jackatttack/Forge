@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-URL reboot op.
+URL HTTP access op.
 
-HTTP client for the reboot harness.
+HTTP client for Portable Forge.
 
 V1 supports:
 - fetch: GET text content
@@ -25,7 +25,6 @@ SPEC = {
     'target_kind': 'url',
     'body_mode': 'forbidden',
     'allowed_directives': set([
-        'CONFIRM',
         'DEST',
         'FOLLOW_REDIRECTS',
         'HEADERS',
@@ -52,6 +51,33 @@ HELP = {
         'MODE: download',
         'DEST: downloads/file.txt',
     ],
+    'directives': {
+        'DEST': (
+            'Project-relative output path required by MODE: download.'
+        ),
+        'FOLLOW_REDIRECTS': (
+            'Follow HTTP redirects with yes/no; the default is yes.'
+        ),
+        'HEADERS': (
+            'One HTTP header written as Name=value. Never place '
+            'credentials, cookies, API keys, or tokens here.'
+        ),
+        'JPATH': (
+            'Dotted dictionary keys and numeric list indexes used '
+            'to select part of a JSON response.'
+        ),
+        'MODE': (
+            'Request mode: fetch, probe, json, or download. '
+            'The default is fetch.'
+        ),
+        'STRIP': (
+            'Fetch cleanup: markdown, plain, or no. '
+            'The default is markdown.'
+        ),
+        'TIMEOUT': (
+            'Positive request timeout in seconds. The default is 20.'
+        ),
+    },
     'common_failures': [
         'URL missing scheme.',
         'Unsupported MODE.',
@@ -64,8 +90,10 @@ HELP = {
         'Use MODE: probe before fetching unknown endpoints.',
         'Use STRIP: markdown for compact LLM-readable pages.',
         'Use TIMEOUT to avoid slow requests blocking the loop too long.',
+        'Never put credentials or tokens in HEADERS because bundles are stored.',
         'Use download mode only for files you intentionally want on disk.',
     ],
+    'related_ops': ['READ'],
 }
 
 
@@ -73,7 +101,7 @@ HINTS = {
     '_max_hints': 1,
     'target': {
         'message': 'URL needs a full http:// or https:// target.',
-        'why': 'The reboot URL op must know which external resource to request.',
+        'why': 'URL needs an explicit external resource to make the request.',
         'example': ['URL https://example.com', 'MODE: fetch'],
         'next': ['Add the full URL on the op line.', 'Use MODE: probe first if unsure.'],
     },
@@ -193,7 +221,7 @@ def _build_opener(follow_redirects):
 
 def _request(url, method, headers, timeout, follow_redirects):
     req = urllib.request.Request(url, method=method)
-    req.add_header('User-Agent', 'Forge-Reboot-URL/0.1')
+    req.add_header('User-Agent', 'Portable-Forge-URL/0.1')
     for key, value in headers.items():
         req.add_header(key, value)
 

@@ -12,7 +12,6 @@ SPEC = {
     'body_mode': 'forbidden',
     'allowed_directives': set([
         'ARGS',
-        'CONFIRM',
     ]),
     'required_directives': set(),
 }
@@ -21,8 +20,29 @@ SPEC = {
 HELP = {
     'summary': 'Restore project files to their pre-run state using a stored Forge run.',
     'minimal_example': [
+        'FORGE runs latest',
+        '',
+        'DIFF 20260831_120000',
+        '',
         'REVERT 20260831_120000',
     ],
+    'directives': {},
+    'internal_directives': [
+        'ARGS',
+    ],
+    'common_failures': [
+        'Omitting the explicit stored-run stamp.',
+        'Passing latest instead of the stamp reported by FORGE runs latest.',
+        'Expecting REVERT to restore only one file from a multi-file run.',
+        'Assuming REVERT refuses when the current disk has drifted.',
+    ],
+    'safe_usage': [
+        'Inspect the target run with DIFF <stamp> before recovering.',
+        'Preserve newer work separately before reverting a drifted file.',
+        'Treat REVERT as a whole-run recovery operation.',
+        'Check a failed result because restoration may have been partial.',
+    ],
+    'related_ops': ['BRANCH', 'DIFF', 'FORGE'],
 }
 
 

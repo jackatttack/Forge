@@ -48,6 +48,29 @@ HELP = {
         'replacement',
         'END_BODY',
     ],
+    'directives': {
+        'ALLOW_BROKEN': (
+            'With yes, bypass Python compilation only for a '
+            'deliberately invalid fixture.'
+        ),
+        'CONFIRM': (
+            'Use the exact value overwrite to replace a different '
+            'existing file in full.'
+        ),
+    },
+    'common_failures': [
+        'No complete body was supplied.',
+        'An existing file differs and CONFIRM: overwrite is missing.',
+        'The target is a directory or escapes the project root.',
+        'Python compilation failed.',
+    ],
+    'safe_usage': [
+        'Use WRITE for complete-file content only.',
+        'Use CONFIRM: overwrite, not CONFIRM: yes, for full replacement.',
+        'Use ALLOW_BROKEN only for deliberate invalid test fixtures.',
+        'Prefer REPLACE for surgical changes to existing files.',
+    ],
+    'related_ops': ['READ', 'REPLACE', 'INSERT', 'DIFF', 'REVERT'],
 }
 
 

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-BRANCH reboot op.
+BRANCH checkpoint op.
 
 Named filesystem checkpoints for the Forge.
 
@@ -22,7 +22,7 @@ SPEC = {
     'name': 'BRANCH',
     'target_kind': 'none',
     'body_mode': 'optional',
-    'allowed_directives': set(['ARGS', 'CONFIRM']),
+    'allowed_directives': set(['ARGS']),
     'required_directives': set(),
 }
 
@@ -40,6 +40,23 @@ HELP = {
         '',
         'BRANCH delete before_big_change',
     ],
+    'directives': {},
+    'internal_directives': [
+        'ARGS',
+    ],
+    'common_failures': [
+        'Creating a branch without a BEGIN_BODY path list.',
+        'Using an unsafe name or a path that escapes the project root.',
+        'Assuming restore deletes files created after the checkpoint.',
+        'Assuming restore checks whether captured files have since drifted.',
+    ],
+    'safe_usage': [
+        'List each file or directory to capture on its own body line.',
+        'Create the checkpoint before starting the risky sequence.',
+        'Treat restore as an overwrite of captured files only.',
+        'Keep the returned standalone restore script for disaster recovery.',
+    ],
+    'related_ops': ['DIFF', 'REVERT'],
 }
 
 

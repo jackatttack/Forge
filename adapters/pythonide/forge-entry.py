@@ -9,7 +9,7 @@ Workflow:
 3. Forge executes against the current working directory.
 4. The canonical return packet is copied back to the clipboard.
 
-When Rich is available, forge_live_ui.py provides the terminal renderer.
+When Rich is available, forge_live_ui.py provides the live dashboard.
 """
 
 import os
@@ -22,10 +22,6 @@ import forge
 MODE = "dev"
 STORE_RUN = True
 
-# The Rich renderer is the normal PythonIDE Forge interface.
-# Enable this only when debugging the clipboard bridge itself.
-SHOW_BRIDGE_PREAMBLE = False
-
 PROJECT_ROOT = os.getcwd()
 FORGE_HOME = os.path.join(
     PROJECT_ROOT,
@@ -34,7 +30,7 @@ FORGE_HOME = os.path.join(
 
 
 class PlainProgress:
-    """Small fallback when the Rich PythonIDE renderer is unavailable."""
+    """Small fallback when the Rich PythonIDE dashboard is unavailable."""
 
     def __call__(self, event):
         name = str(
@@ -117,11 +113,10 @@ def make_progress():
 
 
 def main():
-    if SHOW_BRIDGE_PREAMBLE:
-        print("=== FORGE CLIPBOARD BRIDGE ===")
-        print("Project root:", PROJECT_ROOT)
-        print("Forge home:  ", FORGE_HOME)
-        print()
+    print("=== FORGE CLIPBOARD BRIDGE ===")
+    print("Project root:", PROJECT_ROOT)
+    print("Forge home:  ", FORGE_HOME)
+    print()
 
     try:
         bundle = clipboard.get()
@@ -154,14 +149,13 @@ def main():
         )
         return
 
-    if SHOW_BRIDGE_PREAMBLE:
-        print(
-            "Clipboard input: {} characters".format(
-                len(bundle)
-            )
+    print(
+        "Clipboard input: {} characters".format(
+            len(bundle)
         )
-        print("Running Forge...")
-        print()
+    )
+    print("Running Forge...")
+    print()
 
     try:
         os.makedirs(
