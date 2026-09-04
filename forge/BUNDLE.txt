@@ -7,6 +7,29 @@ Forge parses the whole bundle before executing any of it. If any line is
 malformed, nothing runs.
 
 
+OPTIONAL MARKDOWN FENCE
+-----------------------
+
+A complete submission may be wrapped in one Markdown code fence:
+
+    ```forge
+    MAP projects
+    DEPTH: 2
+    ```
+
+The label may be omitted or may be `forge`, `text`, or `plaintext`.
+
+The fence is only a clipboard container. After it is removed, the complete
+contents still pass through Forge's normal strict parser.
+
+Forge does not search surrounding prose for a bundle. Text before or after the
+fence, an unsupported label such as `python`, an unclosed fence, multiple
+top-level fenced blocks, or malformed Forge syntax inside the fence causes the
+submission to be refused. Nothing runs.
+
+Fences written inside BEGIN_/END_ blocks remain literal body content.
+
+
 SHAPE
 -----
 

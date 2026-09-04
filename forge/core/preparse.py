@@ -6,6 +6,9 @@ This layer runs before Forge's normal bundle parser. It must stay small,
 boring, and explicit because mistakes here affect the language boundary.
 
 Current policy:
+- one whole-submission Markdown fence may wrap a bundle
+- accepted fence labels are blank, forge, text, or plaintext
+- prose outside a fence is never discarded
 - aliases are command shortcuts, not macro expansion inside real bundles
 - only a one-line submitted bundle can expand as an alias
 - real op names always win
@@ -15,6 +18,61 @@ Current policy:
 import json
 import os
 import re
+
+
+_ALLOWED_FENCE_LABELS = set([
+    '',
+    'forge',
+    'text',
+    'plaintext',
+])
+
+
+def unwrap_fenced_bundle(bundle_text):
+    """
+    Return (inner_text, label) for one whole-submission Markdown fence.
+
+    This deliberately does not search for a bundle inside surrounding prose.
+    Returning None leaves the original text for the strict parser to reject.
+    """
+    stripped = str(
+        bundle_text
+        or ''
+    ).strip()
+
+    lines = stripped.splitlines()
+
+    if len(lines) < 3:
+        return None
+
+    opening = lines[0].strip()
+    closing = lines[-1].strip()
+
+    if not opening.startswith(
+        '```'
+    ):
+        return None
+
+    label = opening[
+        3:
+    ].strip().lower()
+
+    if label not in _ALLOWED_FENCE_LABELS:
+        return None
+
+    if closing != '```':
+        return None
+
+    inner = '\n'.join(
+        lines[
+            1:-1
+        ]
+    )
+
+    if not inner.strip():
+        return None
+
+    return inner, label
 
 
 def aliases_path(project_root=None, environment=None):
@@ -178,27 +236,43 @@ def expand_bundle(
     report is a small dict suitable for adding to the run object. Empty report
     means no expansion happened.
     """
+    working_text = bundle_text
+    report = {}
+
+    fenced = unwrap_fenced_bundle(
+        bundle_text
+    )
+
+    if fenced is not None:
+        working_text, label = fenced
+        report[
+            'unwrapped_markdown_fence'
+        ] = (
+            label
+            or 'plain'
+        )
+
     expanded = try_expand_alias(
-        bundle_text,
+        working_text,
         project_root=project_root,
         environment=environment,
     )
 
     if expanded is None:
         return (
-            bundle_text,
-            {},
+            working_text,
+            report,
         )
 
     original = str(
-        bundle_text
+        working_text
         or ''
     ).strip()
 
-    report = {
+    report.update({
         'expanded_from_alias': original,
         'expanded_bundle': expanded,
-    }
+    })
 
     return (
         expanded,

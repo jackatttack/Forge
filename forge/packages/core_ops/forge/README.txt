@@ -71,6 +71,10 @@ order, recovery model, and standard working style.
 
 This returns the grammar understood by the currently installed parser.
 
+A complete copied bundle may optionally be wrapped in one Markdown fence using
+no label, `forge`, `text`, or `plaintext`. Forge unwraps only the whole
+submission; it never searches surrounding chat prose for executable content.
+
 ## Health
 
 Check every installed operation package:
