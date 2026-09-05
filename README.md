@@ -3,8 +3,7 @@
 **Your code is somewhere the AI can't reach. Forge fixes that with the clipboard.**
 
 You're coding with ChatGPT or Claude. The chat can't see your files — it's on an
-iPhone, a locked-down work machine, an air-gapped box, or just a normal laptop
-where you'd rather not hand an agent the keys.
+iPhone, a locked-down work machine, or an air-gapped box.
 
 So you copy and paste. Describe the file, paste the code, get a suggestion back,
 find the file, paste it in, run it, copy the error, paste that back. Repeat.
@@ -29,34 +28,46 @@ RUN tests/test_billing.py
 
 You read it. If you're happy, you run Forge.
 
-Forge hands back a **packet**:
+Forge hands back a **packet**.
+
+For the README demo we ran the same idea in a disposable
+`scratch/readme_demo/` folder. This is a shortened excerpt from the real failing
+Forge packet:
 
 ```
 === FORGE RUN ===
-Run: 20260905_141203
+Run: 20260905_192043
 Mode: dev
-Status: APPLIED
+Status: FAILED
+
+Errors:
+- FAILED_RUNTIME | RUN :: Script exited with code 1
 
 Ops:
-- APPLIED | READ    | billing.py :: 84 lines
-- APPLIED | REPLACE | billing.py::calculate_total :: 6 lines -> 2 lines
-- FAILED  | RUN     | tests/test_billing.py :: exit 1
+- APPLIED | READ | scratch/readme_demo/billing.py :: Lines 1-10
+- APPLIED | REPLACE | scratch/readme_demo/billing.py::calculate_total :: Replaced scratch/readme_demo/billing.py::calculate_total lines 6-10
+- FAILED_RUNTIME | RUN | scratch/readme_demo/tests/test_billing.py :: Script exited with code 1
 
-=== OUTPUT ===
-FAILED tests/test_billing.py::test_discount
+Changed files:
+- scratch/readme_demo/billing.py — modified · 10 -> 7 lines
+
+=== PREVIEW ===
+...
 AttributeError: 'Item' object has no attribute 'price'
 
 === FORGE SUMMARY ===
-Status: APPLIED
-Ops: 2 applied - 0 skipped - 1 failed
+Status: FAILED
+Ops: 2 applied · 0 skipped · 1 failed
 Changed: 1 file
+Packet: 2.3 KB
+Errors: 1
 ```
 
 You paste that back into the chat.
 
-The assistant now knows the edit landed, knows the test failed, and knows
-exactly why — because Forge read your actual file and ran your actual test. It
-isn't guessing from your description. It isn't claiming the change worked.
+The assistant now knows the edit landed and has the real test failure to reason
+from — because Forge read your actual file and ran your actual test. It isn't
+guessing from your description. It isn't claiming the change worked.
 
 That's Forge. A bundle goes one way, a packet comes back, and the packet is
 ground truth.
@@ -68,8 +79,8 @@ a picture of your project that slowly stops matching the project. The model
 says "I've updated the function" when nothing was updated. It patches a file
 whose contents it last saw twenty messages ago.
 
-Forge removes the guessing. Every claim about your code gets checked against
-your code.
+Forge removes the guessing. Claims about what Forge read, changed, or ran are
+checked against the real project and reported in the packet.
 
 A failed packet is as useful as a successful one — the next turn starts from a
 real traceback instead of a hypothesis.
@@ -91,6 +102,46 @@ If anything, you see more of the change than before. `DIFF` shows you what
 actually landed, and the packet reports every mutation. A paste-and-pray loop
 gives you less visibility, not more.
 
+## What a session looks like
+
+One round trip is the unit. A working session is several of them, and it goes
+best inspect-first:
+
+```
+MAP path/to/area
+
+SEARCH path/to/area FOR "thing_to_find"
+
+READ path/to/file.py
+
+REPLACE path/to/file.py::target
+BEGIN_BODY
+...
+END_BODY
+
+RUN relevant_test.py
+
+DIFF current
+```
+
+The pattern matters more than the exact operations:
+
+```
+inspect
+    ->
+make a small grounded change
+    ->
+run or verify it
+    ->
+read the packet
+    ->
+decide what happens next
+```
+
+The early ops don't mutate your project — `MAP`, `SEARCH`, and `READ` are
+read-only. Letting the assistant look before it edits is what keeps the rest of
+the session grounded.
+
 ## When you'd reach for it
 
 Forge is worth it when the code lives somewhere an agent can't go:
@@ -98,8 +149,8 @@ Forge is worth it when the code lives somewhere an agent can't go:
 - Pythonista on iOS — the original reason Forge exists
 - machines where you can't install a coding agent
 - air-gapped or restricted environments
-- any setup where you want the AI to have eyes on the code but no hands on the
-  keyboard
+- any setup where you want the AI to have eyes on the code but no hands on
+  the keyboard
 
 If you're already running Claude Code or Cursor against a normal repo on a
 normal laptop, you probably don't need Forge.
@@ -119,62 +170,63 @@ Fifteen operations, deliberately:
 The model doesn't have to memorise them. `FORGE ops` lists them; `FORGE help
 REPLACE` explains one. The installed runtime is the documentation.
 
-## Getting started
-
-Copy `FORGE boot` to your clipboard, run Forge, and paste the result into a new
-chat. That text teaches the model the protocol and asks it to begin with a
-read-only look around. From there the loop is just: bundle out, packet back.
-
-Install instructions below.
+Host environments can add their own extensions without expanding the portable
+core.
 
 ## Pythonista: one-copy install
 
-Pythonista is where Forge started, and it remains one of the cleanest examples
-of the clipboard loop.
+Pythonista is where Forge started, and it remains the cleanest example of the
+clipboard loop.
 
-For a clean Pythonista installation, create any temporary Python script, paste
-the following code into it, and run it once:
+Create any temporary Python script, paste the following into it, and run it
+once:
 
-    import urllib.request
+```
+import urllib.request
 
-    url = (
-        'https://raw.githubusercontent.com/'
-        'jackatttack/Forge/main/bootstrap/pythonista.py'
-    )
+url = (
+    'https://raw.githubusercontent.com/'
+    'jackatttack/Forge/main/bootstrap/pythonista.py'
+)
 
-    with urllib.request.urlopen(url) as response:
-        source = response.read()
+with urllib.request.urlopen(url) as response:
+    source = response.read()
 
-    exec(
-        compile(
-            source,
-            'forge_bootstrap.py',
-            'exec',
-        ),
-        {
-            '__name__': '__main__',
-            '__file__': 'forge_bootstrap.py',
-        },
-    )
+exec(
+    compile(
+        source,
+        'forge_bootstrap.py',
+        'exec',
+    ),
+    {
+        '__name__': '__main__',
+        '__file__': 'forge_bootstrap.py',
+    },
+)
+```
 
 That is the whole bootstrap.
 
 It installs Portable Forge into `~/Documents/site-packages-3/forge` and creates:
 
-    ~/Documents/forge_entry.py
+```
+~/Documents/forge_entry.py
+```
 
 The Pythonista console UI is packaged inside Forge at
 `forge.adapters.pythonista.console_ui`; no separate root renderer is required.
 
 On first install, `forge_entry.py` opens in Pythonista ready to use.
 
-### Start a new AI session
+### Starting a new AI session
 
 Forge can teach the model how to use Forge.
 
 Copy this onto the clipboard:
 
-    FORGE boot
+```
+FORGE boot
+```
 
 Run `forge_entry.py`, then paste the returned `FORGE FIRST BOOT` text into
 ChatGPT, Claude, or another LLM.
@@ -182,28 +234,29 @@ ChatGPT, Claude, or another LLM.
 That guide tells the model how the Forge loop works and asks it to begin with
 a small read-only orientation bundle:
 
-    MAP .
-    DEPTH: 2
+```
+MAP .
+DEPTH: 2
 
-    FORGE ops
+FORGE ops
+```
 
 The model gives you that bundle. Run it with `forge_entry.py` and paste the
 returned packet back into the conversation.
 
 From there, the normal loop is simply:
 
-    1. The model gives you a Forge bundle.
-    2. Run `forge_entry.py`.
-    3. Forge works against your Pythonista Documents folder.
-    4. The result goes back onto the clipboard.
-    5. Paste it into the conversation.
-    6. Repeat.
+```
+1. The model gives you a Forge bundle.
+2. Run `forge_entry.py`.
+3. Forge works against your Pythonista Documents folder.
+4. The result goes back onto the clipboard.
+5. Paste it into the conversation.
+6. Repeat.
+```
 
-No special AI integration is required. `FORGE boot` gives a new conversation
-the protocol it needs, and the returned run packets keep the conversation
-grounded in what actually happened on your machine.
-
-That is the workflow Forge was originally built to make tighter.
+No special AI integration is required. If the model can produce text and read
+the text you return, it can work through Forge.
 
 ## Other ways to run Forge
 
@@ -211,22 +264,28 @@ The clipboard loop is only one host.
 
 Forge can also run from a terminal:
 
-    python -m forge bundle.txt
+```
+python -m forge bundle.txt
+```
 
 or from stdin:
 
-    python -m forge < bundle.txt
+```
+python -m forge < bundle.txt
+```
 
 It can also be embedded in another Python program:
 
-    import forge
+```
+import forge
 
-    run = forge.run_text(
-        bundle,
-        project_root="/path/to/project",
-    )
+run = forge.run_text(
+    bundle,
+    project_root="/path/to/project",
+)
 
-    result = forge.render_standard(run)
+result = forge.render_standard(run)
+```
 
 That means a clipboard launcher, terminal, editor extension, GUI, web view, or
 another transport can all sit around the same portable runtime.
@@ -237,36 +296,48 @@ another transport can all sit around the same portable runtime.
 
 Forge is distributed as:
 
-    portable-forge
+```
+portable-forge
+```
 
 Install it with:
 
-    pip install portable-forge
+```
+pip install portable-forge
+```
 
 The Python import remains:
 
-    import forge
+```
+import forge
+```
 
 ### Local checkout
 
 Portable Forge includes a standard-library-only installer:
 
-    python install.py --source .
+```
+python install.py --source .
+```
 
 ### GitHub source
 
-Install from the stable v0.1.1 release:
+Install from the stable v0.1.2 release:
 
-    python install.py --github jackatttack/Forge --ref v0.1.1
+```
+python install.py --github jackatttack/Forge --ref v0.1.2
+```
 
 Or deliberately install the current development branch:
 
-    python install.py --github jackatttack/Forge --ref main
+```
+python install.py --github jackatttack/Forge --ref main
+```
 
-The installer protects existing Python packages from accidental namespace collisions.
+The installer protects existing Python packages from accidental namespace
+collisions.
 
-For the full installation guide, see
-[docs/INSTALLING.md](docs/INSTALLING.md).
+For the full installation guide, see [docs/INSTALLING.md](docs/INSTALLING.md).
 
 ## Safety model
 
@@ -285,8 +356,8 @@ For the full model, see [docs/SAFETY.md](docs/SAFETY.md).
 Forge itself does not depend on Pythonista, a clipboard API, a UI toolkit, or
 a particular operating system.
 
-Environment-specific behaviour lives in small host adapters around the
-portable runtime.
+Environment-specific behaviour lives in small host adapters around the portable
+runtime.
 
 The central rule is:
 
@@ -299,11 +370,13 @@ For the architecture and host contract, see
 
 The intended Python API is deliberately small:
 
-    forge.run_text(...)
-    forge.render_standard(...)
-    forge.make_environment(...)
-    forge.standard_environment(...)
-    forge.first_boot_text()
+```
+forge.run_text(...)
+forge.render_standard(...)
+forge.make_environment(...)
+forge.standard_environment(...)
+forge.first_boot_text()
+```
 
 Most users should never need to import `forge.core` or `forge.packages`
 directly.
@@ -312,9 +385,7 @@ For embedding examples, see [docs/EMBEDDING.md](docs/EMBEDDING.md).
 
 ## Learn more
 
-The README is the front door.
-
-The deeper technical material lives in the docs:
+The README is the front door. The deeper technical material lives in the docs:
 
 - [How Forge works](docs/HOW_FORGE_WORKS.md)
 - [Installing Forge](docs/INSTALLING.md)
@@ -324,11 +395,13 @@ The deeper technical material lives in the docs:
 
 The installed runtime is also part of the documentation:
 
-    FORGE ops
+```
+FORGE ops
 
-    FORGE help <OP>
+FORGE help <OP>
 
-    FORGE help <OP> full
+FORGE help <OP> full
+```
 
 ## Project status
 
