@@ -28,11 +28,7 @@ RUN tests/test_billing.py
 
 You read it. If you're happy, you run Forge.
 
-Forge hands back a **packet**.
-
-For the README demo we ran the same idea in a disposable
-`scratch/readme_demo/` folder. This is a shortened excerpt from the real failing
-Forge packet:
+Forge hands back a **packet** (abridged here):
 
 ```
 === FORGE RUN ===
@@ -44,12 +40,12 @@ Errors:
 - FAILED_RUNTIME | RUN :: Script exited with code 1
 
 Ops:
-- APPLIED | READ | scratch/readme_demo/billing.py :: Lines 1-10
-- APPLIED | REPLACE | scratch/readme_demo/billing.py::calculate_total :: Replaced scratch/readme_demo/billing.py::calculate_total lines 6-10
-- FAILED_RUNTIME | RUN | scratch/readme_demo/tests/test_billing.py :: Script exited with code 1
+- APPLIED | READ | billing.py :: Lines 1-10
+- APPLIED | REPLACE | billing.py::calculate_total :: Replaced billing.py::calculate_total lines 6-10
+- FAILED_RUNTIME | RUN | tests/test_billing.py :: Script exited with code 1
 
 Changed files:
-- scratch/readme_demo/billing.py — modified · 10 -> 7 lines
+- billing.py — modified · 10 -> 7 lines
 
 === PREVIEW ===
 ...
@@ -62,6 +58,9 @@ Changed: 1 file
 Packet: 2.3 KB
 Errors: 1
 ```
+
+The run status is `FAILED` because the test failed; the edit itself applied
+successfully, and `Changed files` confirms that `billing.py` changed.
 
 You paste that back into the chat.
 
@@ -129,7 +128,7 @@ The pattern matters more than the exact operations:
 ```
 inspect
     ->
-make a small grounded change
+make a small targeted change
     ->
 run or verify it
     ->
@@ -172,6 +171,9 @@ REPLACE` explains one. The installed runtime is the documentation.
 
 Host environments can add their own extensions without expanding the portable
 core.
+
+Not using Pythonista? Skip to [Other ways to run Forge](#other-ways-to-run-forge)
+or [Installation options](#installation-options).
 
 ## Pythonista: one-copy install
 
