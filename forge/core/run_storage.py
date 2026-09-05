@@ -396,47 +396,50 @@ def _json_safe(obj, _seen=None):
 
 
 def _collect_touched(run):
-    touched = []
+    """Keep each path's initial state and its final recorded state.
 
-    for item in run.get('touched_files') or []:
-        if isinstance(item, dict):
-            touched.append(dict(item))
+    The run-level list is chronological and authoritative. Result-only
+    records supplement paths absent from it, without replaying the duplicate
+    records normally present on both the run and its operation results.
+    """
+    items = [
+        dict(item) for item in run.get('touched_files') or []
+        if isinstance(item, dict)
+    ]
 
+    def relative_path(item):
+        value = str(item.get('rel') or item.get('file') or '').strip()
+        return os.path.normpath(value) if value else ''
+
+    run_paths = {relative_path(item) for item in items}
     for result in run.get('results') or []:
         for item in result.get('touched') or []:
-            if isinstance(item, dict):
-                touched.append(dict(item))
+            if isinstance(item, dict) and relative_path(item) not in run_paths:
+                items.append(dict(item))
 
-    out = []
-    seen = set()
-    for item in touched:
-        rel = str(item.get('rel') or item.get('file') or '').strip()
+    combined = {}
+    order = []
+    for item in items:
+        rel = relative_path(item)
         if not rel:
             continue
-        key = rel
-        if key in seen:
-            continue
-        seen.add(key)
+        if rel not in combined:
+            order.append(rel)
+            combined[rel] = {
+                'rel': rel,
+                'kind': item.get('kind') or 'file',
+                'existed_before': bool(item.get('existed_before')),
+                'before': item.get('before') or '',
+            }
 
-        existed = bool(item.get('existed_before'))
-        before = item.get('before')
-        if before is None:
-            before = ''
-        after = item.get('after')
-        if after is None:
-            after = ''
+        entry = combined[rel]
+        entry['after'] = item.get('after') or ''
+        # Missing metadata stays unknown; do not guess absence from "".
+        entry['existed_after'] = item.get('existed_after')
+        entry['before_sha'] = _sha(entry['before'])
+        entry['after_sha'] = _sha(entry['after'])
 
-        out.append({
-            'rel': rel,
-            'kind': item.get('kind') or 'file',
-            'existed_before': existed,
-            'before': before,
-            'after': after,
-            'before_sha': _sha(before),
-            'after_sha': _sha(after),
-        })
-
-    return out
+    return [combined[rel] for rel in order]
 
 MAX_STORED_RUNS = 100
 
@@ -624,6 +627,7 @@ def write_run(run, environment=None):
                 item.get('existed_before')
             ),
             'snapshot_rel': snapshot_rel,
+            'existed_after': item.get('existed_after'),
             'before_sha': (
                 item.get('before_sha')
                 or _sha(
@@ -834,158 +838,30 @@ def read_manifest(
 
 
 def revert_run(
-    project_root,
-    stamp,
-    mode='dev',
-    environment=None,
+    project_root, stamp, mode='dev', environment=None,
+    on_change=None, report=None,
 ):
-    manifest, err = read_manifest(
+    """Recover a stored run only when all recorded states still match.
+
+    The optional callback receives each completed file change. The report
+    exposes partial completion without changing the historical tuple return.
+    """
+    from .recovery import restore_manifest
+
+    manifest, error = read_manifest(
+        project_root, stamp, mode=mode, environment=environment,
+    )
+    if error:
+        if report is not None:
+            report['status'] = 'FAILED_RECOVERY'
+        return False, error
+
+    return restore_manifest(
         project_root,
-        stamp,
-        mode=mode,
-        environment=environment,
-    )
-
-    if err:
-        return False, err
-
-    touched = (
-        manifest.get('touched')
-        or []
-    )
-
-    restored = 0
-    deleted = 0
-    failed = []
-
-    run_dir = _run_dir(
-        project_root,
-        stamp,
-        mode=(
-            manifest.get('mode')
-            or mode
+        _run_dir(
+            project_root, stamp, mode=mode, environment=environment,
         ),
-        environment=environment,
-    )
-
-    for item in touched:
-        rel = item.get('rel') or ''
-
-        if not rel:
-            continue
-
-        target = os.path.abspath(
-            os.path.join(
-                project_root,
-                rel,
-            )
-        )
-
-        root_real = os.path.realpath(
-            os.path.abspath(
-                project_root
-            )
-        )
-
-        target_real = os.path.realpath(
-            target
-        )
-
-        if not (
-            target_real == root_real
-            or target_real.startswith(
-                root_real + os.sep
-            )
-        ):
-            failed.append(
-                rel
-                + ': escapes project root'
-            )
-            continue
-
-        try:
-            if not item.get(
-                'existed_before'
-            ):
-                if os.path.isdir(
-                    target
-                ):
-                    shutil.rmtree(
-                        target
-                    )
-                    deleted += 1
-                elif os.path.exists(
-                    target
-                ):
-                    os.remove(
-                        target
-                    )
-                    deleted += 1
-                else:
-                    deleted += 1
-
-                continue
-
-            snapshot_rel = (
-                item.get(
-                    'snapshot_rel'
-                )
-                or ''
-            )
-
-            if snapshot_rel:
-                before = _read(
-                    os.path.join(
-                        run_dir,
-                        snapshot_rel,
-                    )
-                )
-            else:
-                before = (
-                    item.get('before')
-                    or ''
-                )
-
-            _write(
-                target,
-                before,
-            )
-
-            restored += 1
-
-        except Exception as e:
-            failed.append(
-                '%s: %s: %s'
-                % (
-                    rel,
-                    type(e).__name__,
-                    e,
-                )
-            )
-
-    if failed:
-        return (
-            False,
-            (
-                'Revert completed with errors. '
-                'Restored %d, deleted %d, failed %d. %s'
-            )
-            % (
-                restored,
-                deleted,
-                len(failed),
-                '; '.join(
-                    failed[:3]
-                ),
-            ),
-        )
-
-    return (
-        True,
-        'Reverted run %s (restored %d, deleted %d).'
-        % (
-            stamp,
-            restored,
-            deleted,
-        ),
+        manifest,
+        on_change=on_change,
+        report=report,
     )

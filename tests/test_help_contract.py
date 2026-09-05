@@ -533,29 +533,17 @@ class ForgeHelpRendering(ForgeCase):
         )
 
     def test_revert_full_help_explains_drift_and_stamp_rules(self):
-        preview = self.help_preview(
-            'FORGE help REVERT full'
-        )
-
-        self.assertIn(
+        preview = self.help_preview('FORGE help REVERT full')
+        for expected in (
             '`latest` is not resolved as shorthand',
-            preview,
-        )
-
-        self.assertIn(
-            'overwrites it with the older before-snapshot.',
-            preview,
-        )
-
-        self.assertIn(
+            'recovery is refused before mutation',
             'Recovery is not transactional',
-            preview,
-        )
-
-        self.assertIn(
+            'REVERT never recursively deletes a directory',
+            'without explicit existence metadata are refused',
+            'its stamp can itself be reverted',
             'internal plumbing: ARGS',
-            preview,
-        )
+        ):
+            self.assertIn(expected, preview)
     def test_url_contract_and_security_documentation(self):
         contract = self.help_preview(
             'FORGE help URL contract'

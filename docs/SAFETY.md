@@ -58,6 +58,15 @@ source.
 
 Forge stores mutation information for retained runs.
 
+REVERT checks all target states and recovery snapshots before changing files.
+It refuses newer contents, unexpected existence or file types, symlinks, and
+records missing explicit existence metadata. Successful recovery changes are
+tracked, so a stored REVERT run can itself be reverted.
+
+Recovery stops on an execution error and reports any completed changes. It is
+not a multi-file transaction or crash-safe journal. Run storage still happens
+after execution; interruption before storage can lose recovery information.
+
 Useful recovery operations include:
 
     DIFF

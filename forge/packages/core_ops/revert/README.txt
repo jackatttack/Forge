@@ -2,23 +2,21 @@
 
 ## Summary
 
-REVERT restores project files to their pre-run state using the recovery
-snapshots stored with one completed Forge run.
+REVERT restores project files to their pre-run state using recovery data
+stored with one completed Forge run.
 
-It is a whole-run recovery operation. It cannot restore only one chosen file
-from a run that touched several files.
+It checks every target and snapshot before changing project files. Current
+contents and existence must match the selected run's recorded final state.
 
 ## Choose the run
 
-Find the latest stored stamp:
+Find a stored stamp and inspect its changes:
 
     FORGE runs latest
 
-Inspect it before recovery:
-
     DIFF 20260831_120000
 
-Then revert the explicit stamp:
+Recover using the explicit stamp:
 
     REVERT 20260831_120000
 
@@ -27,35 +25,57 @@ use `FORGE runs latest` to discover the stamp first.
 
 ## Recovery rules
 
-For every path recorded as touched by the selected run:
+- All recorded paths are checked before restoration begins.
+- Files that existed before the selected run are restored from verified text.
+- Files created by the selected run are removed only if they still match.
+- Empty files and absent files are distinct states.
+- Directories, symlinks, escaping paths and damaged snapshots are refused.
+- REVERT never recursively deletes a directory.
+- Multiple edits of one path retain its original and final recorded states.
 
-- if the path existed before the run, its previous text snapshot is restored
-- if it did not exist before the run, the current file or directory is deleted
-- all recorded paths are processed; there is no per-file selector
+Current file has drifted: recovery is refused before mutation. Inspect the
+selected run and reconcile newer work explicitly; there is no force option.
 
-This reverses the selected run’s recorded filesystem effects.
+A repeated REVERT will normally refuse because the first recovery changed
+the recorded final state. Inspect its result instead of blindly retrying.
 
-## Drift and partial recovery
+## Older records
 
-REVERT does not compare the current file with the run’s after-snapshot before
-writing. If the file changed again after the selected run, REVERT still
-overwrites it with the older before-snapshot.
+Recovery records without explicit existence metadata are refused. Older
+records cannot reliably distinguish deletion from writing an empty file.
+Their snapshots remain available for inspection and deliberate manual recovery.
 
-Use `DIFF <stamp>` first. DIFF reports whether the current disk has drifted so
-newer work can be preserved before recovery.
+Extensions that supply their own touched-file dictionaries must include
+existed_before and existed_after as booleans, plus before and after text.
+The shared touched_file helper supplies this metadata. Whole-file deletion
+must explicitly pass existed_after=False.
 
-Recovery is not transactional across all files. REVERT continues after an
-individual failure and then reports how many files were restored, deleted, or
-failed. A failed REVERT may therefore have applied part of the recovery.
+## Partial recovery and recovery of a REVERT
 
-Although the REVERT command may appear in stored run history, the restoration
-performed by `revert_run` does not create new before-snapshots for those
-writes. Do not rely on undoing a REVERT with another REVERT.
+Recovery is not transactional across all files.
+
+After preflight, each target is checked again immediately before installation.
+Restored text is staged beside its destination and installed with os.replace.
+Deletion removes only a checked ordinary file.
+
+If an I/O failure or intervening change is detected, recovery stops. Earlier
+completed changes are recorded and included in the returned run. After that
+run is stored successfully, its stamp can itself be reverted.
+
+This does not provide process isolation, a lock against concurrent writers,
+or crash-safe journaling. Another writer can still race the final check.
+A process termination or failure to persist the run can prevent recovery of
+its completed changes.
+
+Recovery restores recorded UTF-8 text and existence, not historical ownership,
+timestamps, permissions or original byte encodings. Existing destination
+permission bits are preserved when replacing a file; recreated files use
+the staging file's permissions.
 
 ## Directives
 
 REVERT has no user-written directives. The run stamp is written on the
-operation line. `ARGS` is internal parser plumbing for that positional stamp.
+operation line. ARGS is internal parser plumbing for that positional stamp.
 
 ## BRANCH versus REVERT
 
@@ -63,3 +83,5 @@ Use REVERT when one recorded Forge run should be reversed.
 
 Use BRANCH before a risky sequence spanning several runs, or when you want an
 explicit checkpoint of selected files and a standalone recovery script.
+BRANCH restore has its own overwrite semantics; these REVERT checks do not
+change BRANCH behaviour.

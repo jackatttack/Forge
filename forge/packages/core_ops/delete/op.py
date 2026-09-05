@@ -231,7 +231,9 @@ def _execute_file_delete(ctx, target, result):
     before = read_text(abs_path)
     os.remove(abs_path)
 
-    touched = touched_file(target, before, '', existed_before=True)
+    touched = touched_file(
+        target, before, '', existed_before=True, existed_after=False,
+    )
     record_touched(ctx, result, touched)
 
     result['status'] = 'APPLIED'

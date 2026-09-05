@@ -34,11 +34,13 @@ HELP = {
         'Omitting the explicit stored-run stamp.',
         'Passing latest instead of the stamp reported by FORGE runs latest.',
         'Expecting REVERT to restore only one file from a multi-file run.',
-        'Assuming REVERT refuses when the current disk has drifted.',
+        'Current contents, existence, or file type differ from the recorded final state.',
+        'An older record lacks explicit existence metadata.',
+        'A recovery snapshot is missing or fails its checksum.',
     ],
     'safe_usage': [
         'Inspect the target run with DIFF <stamp> before recovering.',
-        'Preserve newer work separately before reverting a drifted file.',
+        'REVERT refuses drift; inspect and reconcile newer work explicitly.',
         'Treat REVERT as a whole-run recovery operation.',
         'Check a failed result because restoration may have been partial.',
     ],
@@ -89,58 +91,32 @@ def validate(parsed_op):
 
 def execute(ctx, parsed_op, result):
     from forge.core.environment import path_from_ctx
+    from forge.core.file_safety import record_touched
     from forge.core.run_storage import revert_run
 
-    environment = (
-        (ctx or {}).get(
-            'environment'
-        )
-        or {}
-    )
-
-    project_root = path_from_ctx(
-        ctx,
-        'project_root',
-    )
-
-    run_mode = str(
-        (
-            (
-                (ctx or {}).get(
-                    'run'
-                )
-                or {}
-            ).get(
-                'mode'
-            )
-            or 'dev'
-        )
-    )
-
+    environment = ctx.get('environment') or {}
+    run = ctx.get('run') or {}
     args = (
-        (
-            parsed_op.get(
-                'directives'
-            )
-            or {}
-        ).get('ARGS')
-        or parsed_op.get(
-            'target'
-        )
+        (parsed_op.get('directives') or {}).get('ARGS')
+        or parsed_op.get('target')
         or ''
     ).strip()
 
-    ok, msg = revert_run(
-        project_root,
+    report = {}
+    result['data'] = report
+
+    def record_change(change):
+        record_touched(ctx, result, change)
+
+    ok, message = revert_run(
+        path_from_ctx(ctx, 'project_root'),
         args,
-        mode=run_mode,
+        mode=run.get('mode') or 'dev',
         environment=environment,
+        on_change=record_change,
+        report=report,
     )
-
-    result['status'] = (
-        'APPLIED'
-        if ok
-        else 'FAILED_IO'
+    result['status'] = 'APPLIED' if ok else (
+        report.get('status') or 'FAILED_RECOVERY'
     )
-
-    result['message'] = msg
+    result['message'] = message

@@ -76,17 +76,23 @@ def checked_write(path, text):
     write_text(path, text)
 
 
-def touched_file(rel, before, after, existed_before=True):
+def touched_file(
+    rel, before, after, existed_before=True, existed_after=True,
+):
+    """Describe a text-file change, including absence versus empty content."""
     return {
         'rel': rel,
         'before': before or '',
         'after': after or '',
         'existed_before': bool(existed_before),
+        'existed_after': bool(existed_after),
         'kind': 'file',
     }
 
 
 def record_touched(ctx, result, touched):
-    result['touched'] = [touched]
-    run = (ctx or {}).get('run') or {}
-    run.setdefault('touched_files', []).append(touched)
+    """Append a completed change to both operation and run records."""
+    result.setdefault('touched', []).append(touched)
+    run = (ctx or {}).get('run')
+    if run is not None:
+        run.setdefault('touched_files', []).append(touched)
