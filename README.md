@@ -1,172 +1,131 @@
 # Forge
 
-**A better copy-paste loop for coding with AI.**
+**Your code is somewhere the AI can't reach. Forge fixes that with the clipboard.**
 
-If you regularly copy code out of ChatGPT, Claude, or another AI and paste it
-into a local project, Forge was made for that workflow.
+You're coding with ChatGPT or Claude. The chat can't see your files — it's on an
+iPhone, a locked-down work machine, an air-gapped box, or just a normal laptop
+where you'd rather not hand an agent the keys.
 
-Forge turns copy and paste into a small coding protocol.
+So you copy and paste. Describe the file, paste the code, get a suggestion back,
+find the file, paste it in, run it, copy the error, paste that back. Repeat.
 
-Instead of passing loose snippets back and forth, the AI can send you a plain
-text **Forge bundle** that asks your local environment to inspect files, search
-code, make edits, run programs, or show what changed.
+Forge replaces that with two blobs of text.
 
-You run that bundle locally.
+## One round trip
 
-Forge does the work and returns a structured **run packet** showing exactly
-what happened.
+The assistant sends you a **bundle** — ordinary text on your clipboard:
 
-Copy that packet back into the chat and the AI now has real information about
-the code on your device.
+```
+READ billing.py
 
-**The packet is ground truth.**
+REPLACE billing.py::calculate_total
+BEGIN_BODY
+def calculate_total(items):
+    return sum(item.price for item in items)
+END_BODY
 
-At its simplest:
+RUN tests/test_billing.py
+```
 
-    chat
-      |
-      | copy Forge bundle
-      v
-    Forge on your device
-      |
-      | inspect / edit / run
-      v
-    Forge run packet
-      |
-      | copy back
-      v
-    chat
+You read it. If you're happy, you run Forge.
 
-For a clipboard-driven environment such as Pythonista:
+Forge hands back a **packet**:
 
-**Python + clipboard + chat + Forge gives you a robust local coding loop.**
+```
+=== FORGE RUN ===
+Run: 20260905_141203
+Mode: dev
+Status: APPLIED
 
+Ops:
+- APPLIED | READ    | billing.py :: 84 lines
+- APPLIED | REPLACE | billing.py::calculate_total :: 6 lines -> 2 lines
+- FAILED  | RUN     | tests/test_billing.py :: exit 1
 
-## Why Forge exists
+=== OUTPUT ===
+FAILED tests/test_billing.py::test_discount
+AttributeError: 'Item' object has no attribute 'price'
 
-Coding with an AI in a normal chat window is useful, but the manual loop gets
-old quickly:
+=== FORGE SUMMARY ===
+Status: APPLIED
+Ops: 2 applied - 0 skipped - 1 failed
+Changed: 1 file
+```
 
-    ask -> copy code -> find file -> paste -> run -> copy result -> paste back
+You paste that back into the chat.
 
-Then repeat.
+The assistant now knows the edit landed, knows the test failed, and knows
+exactly why — because Forge read your actual file and ran your actual test. It
+isn't guessing from your description. It isn't claiming the change worked.
 
-Forge tightens that loop.
+That's Forge. A bundle goes one way, a packet comes back, and the packet is
+ground truth.
 
-Instead of copying loose code fragments, you can copy a small set of explicit
-operations:
+## Why this matters
 
-    READ app.py
+The failure mode of long copy-paste sessions is drift. The conversation builds
+a picture of your project that slowly stops matching the project. The model
+says "I've updated the function" when nothing was updated. It patches a file
+whose contents it last saw twenty messages ago.
 
-    REPLACE app.py::calculate_total
-    BEGIN_BODY
-    def calculate_total(items):
-        return sum(item.price for item in items)
-    END_BODY
+Forge removes the guessing. Every claim about your code gets checked against
+your code.
 
-    RUN tests.py
+A failed packet is as useful as a successful one — the next turn starts from a
+real traceback instead of a hypothesis.
 
-Forge performs those operations locally and tells the chat what actually
-happened.
+## You stay in the loop
 
-So the loop becomes:
+Forge is not an agent. Nothing runs on your machine because a model suggested
+it.
 
-    chat -> copy bundle -> Forge -> copy packet -> chat
+The bundle arrives as plain text and sits there until you act. You read it.
+You can edit it before running it — swap the loop for a vector operation,
+simplify the approach, drop the ops you don't want. That is exactly the moment
+where copy-paste teaches you something, and Forge keeps it.
 
-That means less file hunting, less repeated context explaining, and fewer
-moments where the conversation and the real project silently drift apart.
+What Forge takes away is the tedious part: hunting for the file, matching
+indentation, pasting into the wrong place, re-typing the error message.
 
+If anything, you see more of the change than before. `DIFF` shows you what
+actually landed, and the packet reports every mutation. A paste-and-pray loop
+gives you less visibility, not more.
 
-## Give the chat eyes into your environment
+## When you'd reach for it
 
-Forge is not only about writing code.
+Forge is worth it when the code lives somewhere an agent can't go:
 
-It gives an AI conversation a simple way to inspect an environment it cannot
-normally see.
+- Pythonista on iOS — the original reason Forge exists
+- machines where you can't install a coding agent
+- air-gapped or restricted environments
+- any setup where you want the AI to have eyes on the code but no hands on the
+  keyboard
 
-For example:
+If you're already running Claude Code or Cursor against a normal repo on a
+normal laptop, you probably don't need Forge.
 
-    MAP .
+## The vocabulary
 
-    SEARCH . FOR "calculate_total"
+Fifteen operations, deliberately:
 
-    READ app.py
+| Area                | Operations                                     |
+| ------------------- | ---------------------------------------------- |
+| Forge itself        | `FORGE`                                        |
+| Inspect             | `MAP`, `READ`, `SEARCH`                        |
+| Edit                | `WRITE`, `REPLACE`, `INSERT`, `DELETE`, `COPY` |
+| Execute and recover | `RUN`, `DIFF`, `REVERT`, `BRANCH`              |
+| Utilities           | `URL`, `ALIAS`                                 |
 
-You copy the bundle, run Forge, and paste the resulting packet back.
+The model doesn't have to memorise them. `FORGE ops` lists them; `FORGE help
+REPLACE` explains one. The installed runtime is the documentation.
 
-The AI can now reason from the real project structure and real file contents
-instead of relying on your description of them.
+## Getting started
 
-In a clipboard-based setup, the clipboard becomes a tiny text tool channel
-between the chat and your machine.
+Copy `FORGE boot` to your clipboard, run Forge, and paste the result into a new
+chat. That text teaches the model the protocol and asks it to begin with a
+read-only look around. From there the loop is just: bundle out, packet back.
 
-No special tool integration from the AI provider is required.
-
-If the model can produce text and understand the text you return, it can work
-through Forge.
-
-
-## The idea in 60 seconds
-
-The assistant proposes a Forge bundle.
-
-You decide whether to run it.
-
-Forge parses the whole bundle first, validates it, executes it against the
-local project, records what happened, and produces a deterministic run packet.
-
-That packet is what makes the copy-paste loop robust.
-
-The chat does not have to guess whether a file changed or whether some code
-actually ran. Forge reports the result.
-
-    The assistant proposes.
-    The user runs.
-    Forge reports.
-    The packet confirms.
-
-
-## A first Forge loop
-
-Suppose the AI has no idea what is in your project yet.
-
-It might start with:
-
-    MAP .
-    DEPTH: 2
-
-    FORGE ops
-
-Save that bundle to a file and run:
-
-    python -m forge bundle.txt
-
-Forge returns something shaped like:
-
-    === FORGE RUN ===
-    Run: 20260831_123456
-    Mode: dev
-    Status: APPLIED
-
-    Ops:
-    - APPLIED | MAP | . :: directory mapped
-    - APPLIED | FORGE | ? :: 15 public op(s)
-
-    === PREVIEW ===
-    ...
-
-    === FORGE SUMMARY ===
-    Status: APPLIED
-    Ops: 2 applied - 0 skipped - 0 failed
-    Changed: 0 files
-
-Paste that packet back into the chat.
-
-The assistant now has grounded information about the environment and can decide
-what to inspect next.
-
-Nothing changed merely because the assistant suggested it.
-
+Install instructions below.
 
 ## Pythonista: one-copy install
 
@@ -246,131 +205,6 @@ grounded in what actually happened on your machine.
 
 That is the workflow Forge was originally built to make tighter.
 
-
-## What Forge can do
-
-Forge can:
-
-- inspect directory structure;
-- read files;
-- search projects;
-- create and edit text files;
-- make targeted Python edits;
-- copy and delete project content;
-- run local Python code;
-- show what changed;
-- record and recover changes;
-- create filesystem checkpoints;
-- work with URLs;
-- provide reusable aliases.
-
-The model does not need to memorise the command language.
-
-Ask the installed runtime:
-
-    FORGE ops
-
-For help with one operation:
-
-    FORGE help WRITE
-
-For deeper help:
-
-    FORGE help WRITE full
-
-
-## The public Forge language
-
-Portable Forge deliberately keeps its normal vocabulary small.
-
-| Area | Operations |
-| --- | --- |
-| Forge itself | `FORGE` |
-| Inspect | `MAP`, `READ`, `SEARCH` |
-| Edit | `WRITE`, `REPLACE`, `INSERT`, `DELETE`, `COPY` |
-| Execute and recover | `RUN`, `DIFF`, `REVERT`, `BRANCH` |
-| Utilities | `URL`, `ALIAS` |
-
-That is 15 public operations.
-
-Host environments can add their own extensions without expanding the portable
-core.
-
-Detailed syntax belongs to the installed help system rather than this README.
-
-
-## A typical working session
-
-A good Forge session is inspect-first:
-
-    MAP path/to/area
-
-    SEARCH path/to/area FOR "thing_to_find"
-
-    READ path/to/file.py
-
-    REPLACE path/to/file.py::target
-    BEGIN_BODY
-    ...
-    END_BODY
-
-    RUN relevant_test.py
-
-    DIFF current
-
-The pattern matters more than the exact operation:
-
-    inspect
-        ->
-    make a small grounded change
-        ->
-    run or verify it
-        ->
-    inspect the packet
-        ->
-    decide what happens next
-
-
-## The packet is the contract
-
-Forge separates execution from claims about execution.
-
-An AI can suggest anything it wants.
-
-Until you run the bundle, nothing has happened locally.
-
-After the run, the packet records the result.
-
-Successful packets confirm what Forge actually did.
-
-Failed packets are useful too: they give the next turn concrete evidence
-instead of forcing the assistant to guess.
-
-That makes long copy-paste sessions much less fragile.
-
-
-## What Forge is - and what it is not
-
-Forge is a local execution protocol and runtime.
-
-It is not tied to a particular AI company.
-
-It is not tied to a particular editor.
-
-It does not require the AI provider to expose tool calling, filesystem access,
-or a coding-agent API.
-
-The AI produces ordinary text.
-
-The user chooses whether to run it.
-
-Forge executes it locally and returns ordinary text.
-
-Forge does not need to replace your chat app.
-
-It sits between the chat you already use and the code you already have.
-
-
 ## Other ways to run Forge
 
 The clipboard loop is only one host.
@@ -397,7 +231,6 @@ It can also be embedded in another Python program:
 That means a clipboard launcher, terminal, editor extension, GUI, web view, or
 another transport can all sit around the same portable runtime.
 
-
 ## Installation options
 
 ### PyPI
@@ -414,13 +247,11 @@ The Python import remains:
 
     import forge
 
-
 ### Local checkout
 
 Portable Forge includes a standard-library-only installer:
 
     python install.py --source .
-
 
 ### GitHub source
 
@@ -437,7 +268,6 @@ The installer protects existing Python packages from accidental namespace collis
 For the full installation guide, see
 [docs/INSTALLING.md](docs/INSTALLING.md).
 
-
 ## Safety model
 
 Forge can edit and execute local project code, so its boundaries are explicit.
@@ -449,7 +279,6 @@ recorded where appropriate.
 The user or host still decides when a bundle is actually run.
 
 For the full model, see [docs/SAFETY.md](docs/SAFETY.md).
-
 
 ## Portable core and host adapters
 
@@ -466,20 +295,6 @@ The central rule is:
 For the architecture and host contract, see
 [docs/HOST_ADAPTERS.md](docs/HOST_ADAPTERS.md).
 
-
-## Pythonista
-
-Pythonista is the original Forge host and the reason the clipboard workflow
-exists.
-
-Its adapter provides clipboard input/output and richer console presentation
-around the portable core.
-
-The one-copy bootstrap above is the recommended starting point.
-
-See [adapters/pythonista/](adapters/pythonista/) for the host-specific layer.
-
-
 ## Public Python API
 
 The intended Python API is deliberately small:
@@ -494,7 +309,6 @@ Most users should never need to import `forge.core` or `forge.packages`
 directly.
 
 For embedding examples, see [docs/EMBEDDING.md](docs/EMBEDDING.md).
-
 
 ## Learn more
 
@@ -516,7 +330,6 @@ The installed runtime is also part of the documentation:
 
     FORGE help <OP> full
 
-
 ## Project status
 
 Forge is an early portable project built out of a real daily AI coding
@@ -528,7 +341,6 @@ different Python environments and host interfaces.
 
 The API, adapters, packaging, and presentation may continue to evolve before a
 stable 1.0 release.
-
 
 ## License
 
