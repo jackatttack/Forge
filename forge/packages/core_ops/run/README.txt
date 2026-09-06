@@ -27,13 +27,18 @@ subprocess or sandbox.
 During execution:
 
 - `__name__` is `__main__`
+- a temporary `sys.modules['__main__']` holds the executing script
 - `__file__` is the absolute script path
+- `sys.exit()` raises standard `SystemExit`, including on hosts that replace it
 - the project root becomes the working directory
 - the script directory and project root are available on `sys.path`
 - stdout and stderr are redirected into the result
 
-Afterwards, Forge restores the previous working directory, `sys.argv`, and
-`sys.path`.
+Afterwards, Forge restores the previous working directory, `sys.argv`,
+`sys.path`, `sys.exit`, and the previous `__main__` module registration.
+
+These temporary changes are process-wide. RUN is intended for sequential
+execution; it does not isolate other threads from the temporary script state.
 
 That restoration is deliberately limited. Imported modules remain in
 `sys.modules`, environment-variable changes remain, and other mutations to
@@ -42,12 +47,21 @@ process isolation or a security boundary.
 
 ## Exit and exception rules
 
-Normal completion and `SystemExit(0)` produce an applied result.
+Normal completion, `sys.exit()`, and `SystemExit(0)` produce an applied result.
 
-A non-zero `SystemExit` produces `FAILED_RUNTIME` with that exit code.
+A non-zero integer exit code produces `FAILED_RUNTIME` with that exit code.
+A non-integer exit value produces exit code 1 and is written to captured stderr.
+Boolean exit values are normalised to integer 0 or 1.
 
-Any other uncaught exception produces exit code 1 and writes its traceback to
-captured stderr.
+An uncaught `KeyboardInterrupt` produces `FAILED_RUNTIME` with exit code 130
+and a traceback in captured stderr.
+
+Other uncaught Python exceptions, including other `BaseException` subclasses,
+produce exit code 1 and a traceback in captured stderr.
+
+These handlers apply while Python can unwind the execution boundary. They
+cannot recover from process termination, native crashes, or a script that
+never returns.
 
 ## Output size
 

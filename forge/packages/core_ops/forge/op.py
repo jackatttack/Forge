@@ -39,6 +39,44 @@ from forge.core.run_storage import (
 )
 
 
+MAX_RUN_PREVIEW_BYTES = 256 * 1024
+
+
+def _bounded_run_preview(text, limit=MAX_RUN_PREVIEW_BYTES):
+    """
+    Bound interactive stored-run output without altering the stored artifact.
+
+    The limit is byte-based so one enormous line or binary-derived text cannot
+    expand a FORGE runs response into a multi-megabyte canonical packet.
+    """
+    text = str(
+        text
+        or ''
+    )
+
+    raw = text.encode(
+        'utf-8'
+    )
+
+    if len(raw) <= limit:
+        return text.rstrip()
+
+    shown = raw[:limit].decode(
+        'utf-8',
+        errors='ignore',
+    )
+
+    return (
+        shown.rstrip()
+        + '\n\n'
+        + '[TRUNCATED - %d bytes total; first %d bytes shown]'
+        % (
+            len(raw),
+            limit,
+        )
+    )
+
+
 SPEC = {
     'name': 'FORGE',
     'target_kind': 'none',
@@ -1587,9 +1625,11 @@ def _runs(
             'Latest run: '
             + stamp
         )
-        result['preview'] = '\n'.join(
-            lines
-        ).rstrip()
+        result['preview'] = _bounded_run_preview(
+            '\n'.join(
+                lines
+            )
+        )
         result['data'] = {
             'stamp': stamp,
         }
@@ -1664,8 +1704,8 @@ def _runs(
                 kind,
             )
         )
-        result['preview'] = (
-            text.rstrip()
+        result['preview'] = _bounded_run_preview(
+            text
         )
         result['data'] = {
             'stamp': stamp,

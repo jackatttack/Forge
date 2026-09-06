@@ -10,6 +10,7 @@ import io
 import os
 import sys
 import traceback
+import types
 
 from forge.core.file_safety import safe_target
 
@@ -136,6 +137,10 @@ def _split_args(raw):
         return raw.split()
 
 
+def _script_exit(code=None):
+    """Give scripts standard exit semantics even when the host replaces sys.exit."""
+    raise SystemExit(code)
+
 def _exit_code_from_system_exit(exc):
     code = exc.code
 
@@ -146,7 +151,7 @@ def _exit_code_from_system_exit(exc):
         code,
         int,
     ):
-        return code
+        return int(code)
 
     return 1
 
@@ -265,6 +270,9 @@ def execute(ctx, parsed_op, result):
     old_argv = sys.argv[:]
     old_cwd = os.getcwd()
     old_path = sys.path[:]
+    old_exit = sys.exit
+    missing_main = object()
+    old_main = sys.modules.get('__main__', missing_main)
 
     script_dir = os.path.dirname(
         abs_path
@@ -278,14 +286,21 @@ def execute(ctx, parsed_op, result):
         )
     )
 
-    ns = {
-        '__name__': '__main__',
+    # Discovery and imports of __main__ must see the executing script.
+    script_module = types.ModuleType('__main__')
+    ns = script_module.__dict__
+    ns.update({
         '__file__': abs_path,
         '__package__': None,
+        '__spec__': None,
         '__builtins__': __builtins__,
-    }
+    })
 
     try:
+        sys.modules['__main__'] = script_module
+        # Some hosts turn sys.exit into KeyboardInterrupt. Preserve the
+        # script's requested exit code by providing standard semantics here.
+        sys.exit = _script_exit
         sys.argv = argv
         os.chdir(root)
 
@@ -320,24 +335,29 @@ def execute(ctx, parsed_op, result):
                 )
 
     except SystemExit as e:
-        exit_code = (
-            _exit_code_from_system_exit(
-                e
-            )
-        )
+        exit_code = _exit_code_from_system_exit(e)
+        if e.code is not None and not isinstance(e.code, int):
+            print(str(e.code), file=stderr_buffer)
 
-    except Exception:
+    except KeyboardInterrupt:
+        exit_code = 130
+        traceback.print_exc(file=stderr_buffer)
+
+    except BaseException:
+        # This is the script execution boundary. Even GeneratorExit or a
+        # custom BaseException must become an observable script failure.
         exit_code = 1
-        traceback.print_exc(
-            file=stderr_buffer
-        )
+        traceback.print_exc(file=stderr_buffer)
 
     finally:
+        sys.exit = old_exit
+        if old_main is missing_main:
+            sys.modules.pop('__main__', None)
+        else:
+            sys.modules['__main__'] = old_main
         sys.argv = old_argv
-        os.chdir(
-            old_cwd
-        )
         sys.path[:] = old_path
+        os.chdir(old_cwd)
 
     stdout_text = (
         stdout_buffer.getvalue()

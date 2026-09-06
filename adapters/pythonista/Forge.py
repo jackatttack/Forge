@@ -34,9 +34,28 @@ def get_bundle_text():
     )
 
 
+def _clipboard_safe_text(text):
+    """
+    Return text Pythonista's clipboard bridge can safely accept.
+
+    Pythonista rejects strings containing literal NUL characters. Preserve the
+    information visibly instead of allowing one bad run artifact to crash the
+    launcher after Forge has already completed the run.
+    """
+    return str(
+        text
+        or ''
+    ).replace(
+        '\x00',
+        r'\x00',
+    )
+
+
 def set_result_text(text):
     clipboard.set(
-        text
+        _clipboard_safe_text(
+            text
+        )
     )
 
 
