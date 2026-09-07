@@ -62,8 +62,33 @@ starting point.
 
     FORGE boot
 
-This returns Forge's portable first-boot guide: the clipboard loop, inspection
-order, recovery model, and standard working style.
+This returns a compact portable first-boot guide: essential operating rules
+and pointers to focused workflow documentation.
+
+## Workflow documentation
+
+Browse the small catalogue:
+
+    FORGE docs
+
+Read one guide:
+
+    FORGE docs edit
+
+Find guidance when its name is unknown:
+
+    FORGE search docs undo a change
+
+Search returns at most three relevance-ranked guides with summaries and
+retrieval commands. Exact guide names and titles rank first. Queries are
+plain text, limited to 240 characters; LIMIT applies only to stored runs.
+
+Available guides cover inspection, editing, recovery, workflow and human-owned
+code. They ship with the installed Forge version and work offline, without
+MEMORY or other local extensions. Search creates no disk cache.
+
+These guides explain decisions and cross-operation workflows. Operation syntax
+remains in FORGE help <OP>; bundle grammar remains in FORGE bundle.
 
 ## Bundle syntax
 

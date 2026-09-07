@@ -1,0 +1,39 @@
+WORKFLOW — Keep the human, the bundle and the evidence in step
+============================================================
+
+The assistant proposes a plain-text bundle. The user runs it locally. Forge
+returns a packet. Read the packet before claiming results or choosing the
+next dependent action.
+
+Return executable bundles in one clean, copyable code block. Keep chat prose
+outside it. Inside document bodies, prefer indented code examples so nested
+Markdown fences do not collide with the outer chat fence.
+
+Resolve the active task before gathering extensive context. Keep each bundle
+purposeful: batch independent operations when useful, then wait where the
+next decision depends on their results.
+
+Forge parses the complete bundle before executing it. If a patch adds new
+Forge syntax, install the patch in one run and exercise that syntax in a
+later run. A long-running host may also need its normal reload or restart
+procedure before updated modules are active.
+
+RUN executes Python in the current process. Imports and other process state
+can affect tests. When testing a development checkout from an installed Forge
+host, verify which code was imported and use the project's isolation runner
+when provided. Do not recursively RUN the active Forge launcher.
+
+Use focused tests for meaningful changes. After changing Forge operation
+packages, use FORGE audit against the intended runtime. Audit checks package
+contracts; passing it does not prove the new behaviour.
+
+At a useful stopping point, record what changed, what was verified and what
+remains in the project's handoff document. Discover optional continuity
+extensions when needed; portable workflows must work without MEMORY.
+
+Next commands:
+
+    FORGE docs inspect
+    FORGE help RUN full
+    FORGE audit
+    FORGE ops all

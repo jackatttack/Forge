@@ -90,7 +90,7 @@ SPEC = {
 
 
 HELP = {
-    'summary': 'Inspect Forge itself: public language, help, health, configuration, and stored runs.',
+    'summary': 'Inspect Forge itself: operations, help, workflow docs, health, configuration, and stored runs.',
     'minimal_example': [
         'FORGE',
         '',
@@ -101,6 +101,10 @@ HELP = {
         'FORGE help WRITE full',
         '',
         'FORGE bundle',
+        '',
+        'FORGE docs',
+        '',
+        'FORGE search docs undo a change',
         '',
         'FORGE audit',
         '',
@@ -127,6 +131,7 @@ HINTS = {
         'example': [
             'FORGE ops',
             'FORGE boot',
+            'FORGE docs',
             'FORGE bundle',
             'FORGE help WRITE',
             'FORGE audit',
@@ -185,6 +190,11 @@ def _usage():
         'Orientation:',
         '  FORGE boot',
         '',
+        'Workflow documentation:',
+        '  FORGE docs',
+        '  FORGE docs <name>',
+        '  FORGE search docs <query>',
+        '',
         'Bundle syntax:',
         '  FORGE bundle',
         '',
@@ -220,6 +230,51 @@ def _boot(result):
     result['data'] = {
         'mode': 'boot',
     }
+
+def _docs(result, args, searching=False):
+    """Retrieve portable guides or return a compact documentation search."""
+    from forge import docs
+
+    args = args.strip()
+    if searching:
+        try:
+            hits = docs.search(args)
+        except ValueError as error:
+            result['status'] = 'FAILED_PARSE'
+            result['message'] = str(error)
+            result['preview'] = 'Usage: FORGE search docs <query>'
+            return
+        result['status'] = 'APPLIED'
+        result['message'] = '%d documentation result(s)' % len(hits)
+        result['preview'] = docs.search_text(args, hits)
+        result['data'] = {'mode': 'docs-search', 'query': args, 'guides': hits}
+        return
+
+    if not args:
+        result['status'] = 'APPLIED'
+        result['message'] = 'documentation catalogue'
+        result['preview'] = docs.catalogue_text()
+        result['data'] = {'mode': 'docs', 'guides': docs.catalogue()}
+        return
+
+    if len(args.split()) != 1:
+        result['status'] = 'FAILED_PARSE'
+        result['message'] = 'FORGE docs accepts one guide name'
+        result['preview'] = 'Use FORGE search docs <query> to search by intent.'
+        return
+
+    try:
+        text = docs.read_guide(args)
+    except KeyError:
+        result['status'] = 'FAILED_NOT_FOUND'
+        result['message'] = 'Unknown documentation guide: ' + args
+        result['preview'] = docs.catalogue_text()
+        return
+
+    result['status'] = 'APPLIED'
+    result['message'] = 'documentation guide: ' + args.lower()
+    result['preview'] = text.rstrip()
+    result['data'] = {'mode': 'docs', 'guide': args.lower()}
 
 
 def _bundle_syntax(result):
@@ -1745,6 +1800,19 @@ def execute(ctx, parsed_op, result):
     rest = ' '.join(
         parts[1:]
     ).strip()
+
+    if command == 'docs':
+        _docs(result, rest)
+        return
+
+    if command == 'search':
+        subject, separator, query = rest.partition(' ')
+        if subject.lower() != 'docs':
+            result['status'] = 'FAILED_PARSE'
+            result['message'] = 'Usage: FORGE search docs <query>'
+            return
+        _docs(result, query, searching=True)
+        return
 
     if command == 'boot':
         if rest:

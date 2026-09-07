@@ -1,0 +1,36 @@
+INSPECT — Find the smallest useful piece of evidence
+==================================================
+
+Choose inspection from what is unknown:
+
+- Structure unclear: MAP the relevant project, directory or Python file.
+- Location unclear: SEARCH the narrowest useful directory.
+- Target known: READ the relevant file range or Python target.
+- Operation syntax unclear: FORGE help <OP>.
+- Bundle grammar unclear: FORGE bundle.
+
+Do not automatically run MAP, SEARCH and READ for every task. Reuse current
+evidence when it still answers the question. A workspace map gives orientation;
+it does not establish a file's contents.
+
+SEARCH finds candidates. READ the exact candidate before changing it when
+its current contents matter. Prefer a function, class or bounded line range
+over a large source dump.
+
+Scope searches deliberately. Start with the active project or a known file.
+Expand only when the narrower search does not resolve the uncertainty.
+Large workspaces can contain dependencies, generated files and binary data.
+
+Batch independent inspections into one bundle when their targets are already
+known. If one result determines the next target, wait for that result.
+
+Before substantial project work, inspect applicable project instructions and
+current handoff or control documents when present. Treat old summaries as
+orientation; current files and returned packets establish current state.
+
+Next commands:
+
+    FORGE help MAP
+    FORGE help SEARCH
+    FORGE help READ
+    FORGE docs edit

@@ -1,0 +1,34 @@
+HUMAN-OWNED CODE — Make changes people can understand and extend
+=============================================================
+
+Write code for its owner to understand, modify, learn from and safely extend.
+
+Prefer clear domain names and complete names over unexplained abbreviations.
+Make important functions read top-to-bottom as a story of what the program
+does. Keep each important decision in one authoritative location.
+
+Put genuinely editable settings, mappings and policies in obvious labelled
+sections when useful. Separate those choices from safety invariants and
+internal machinery. Avoid duplicating configuration across code and prose.
+
+Use docstrings to explain purpose, contracts, side effects, failure behaviour
+and non-obvious design choices. Use comments mainly to explain why. Avoid
+documentation that merely repeats the surrounding code.
+
+Prefer predictable structure, observable decisions and useful errors.
+Examples should demonstrate actual supported behaviour. Do not hide failures
+behind success-shaped output.
+
+Apply these principles proportionately. A small change should not trigger
+unrelated refactoring, elaborate abstractions or a new configuration system.
+Choose the simplest structure that makes the real task clear.
+
+Respect the project's runtime requirements. Portable Forge must not depend on
+a particular host's UI, clipboard modules or personal extensions. Host-specific
+integration belongs at the adapter or extension boundary. For Pythonista
+projects, preserve Pythonista compatibility and verify on the device.
+
+Next commands:
+
+    FORGE docs edit
+    FORGE docs workflow

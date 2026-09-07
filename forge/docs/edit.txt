@@ -1,0 +1,40 @@
+EDIT — Choose and verify a precise mutation
+==========================================
+
+Understand the affected code and inspect enough current content to ground the
+edit. A matching anchor proves a location, not the correctness of a change.
+
+Choose the operation that expresses your intent:
+
+- REPLACE changes existing content: a whole Python target, an inspected line
+  range, or an exact OLD/NEW text block.
+- INSERT adds content without replacing existing content.
+- DELETE removes a file or precise existing content.
+- WRITE creates a whole file or deliberately replaces one.
+- COPY copies a file to another path.
+
+Prefer a Python target for a whole function or class. Use exact text when the
+current text is known and the intended match is unambiguous. Use line ranges
+only against inspected content. Do not broaden a replacement to every match
+merely to overcome ambiguity.
+
+Operations execute in order. Earlier edits can move lines, change anchors or
+remove targets needed by later edits. For independent ranges in the same file,
+working from the bottom upwards preserves earlier line numbers. Dependent
+edits still need to follow their actual dependency order.
+
+Keep changes proportionate. Create a BRANCH checkpoint before genuinely risky
+work. Recovery does not replace understanding the proposed change.
+
+After mutation, read every operation result. Use DIFF when reviewing recorded
+changes matters and RUN relevant tests where possible. Compilation catches
+syntax errors; it does not establish correct behaviour.
+
+Next commands:
+
+    FORGE help REPLACE full
+
+For another edit type, use FORGE help <OP> full with its name.
+
+    FORGE docs recover
+    FORGE docs workflow

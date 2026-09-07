@@ -1,0 +1,40 @@
+RECOVER — Respond to the failure that actually occurred
+======================================================
+
+Read the overall status, operation results, errors, hints, stdout/stderr,
+changed files and preview before deciding what to do next.
+
+A bundle rejected during initial parsing executes no operations. An execution
+failure can occur after earlier operations have applied. Check the individual
+results and changed files; do not assume automatic rollback.
+
+Choose the next step from the reported failure:
+
+- Unknown grammar or directives: read the parser error, FORGE bundle and the
+  relevant operation help before retrying.
+- Missing file or target: inspect the path or structure.
+- Ambiguous match: inspect the candidates and choose the intended target.
+- Anchor mismatch: read the current content before constructing a new edit.
+- Compile failure: correct the proposed Python using the reported error.
+- Runtime failure: inspect captured output and any recorded changes.
+
+Make the smallest correction supported by that evidence. Avoid blindly
+resending a partially applied bundle: earlier operations may already have
+changed its assumptions.
+
+Use FORGE runs to locate stored runs. Prefer a known stamp when inspecting
+the particular run that failed:
+
+    FORGE runs show <stamp>
+
+Use DIFF to review recorded changes. REVERT restores recorded file mutations
+from a run; BRANCH restores an explicit filesystem checkpoint. Inspect their
+contracts before recovery. Do not assume either can undo arbitrary effects
+of executed Python, network actions or local extensions.
+
+Next commands:
+
+    FORGE help REVERT full
+    FORGE help BRANCH full
+    FORGE help DIFF
+    FORGE help FORGE full
