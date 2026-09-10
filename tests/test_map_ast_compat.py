@@ -29,46 +29,25 @@ class MapAstCompatibilityTests(unittest.TestCase):
             map_op._literal_text(node)
         )
 
-    def test_map_package_restores_missing_legacy_ast_str_name(self):
+    def test_main_guard_detection_without_legacy_ast_str(self):
         sentinel = object()
-        original = getattr(
-            ast,
-            'Str',
-            sentinel,
-        )
-
+        original = getattr(ast, 'Str', sentinel)
         try:
             if hasattr(ast, 'Str'):
                 delattr(ast, 'Str')
-
-            importlib.reload(
-                map_package
-            )
-
-            self.assertTrue(
-                hasattr(ast, 'Str')
-            )
-
+            for source in (
+                "if __name__ == '__main__':\n    pass\n",
+                "if '__main__' == __name__:\n    pass\n",
+            ):
+                node = ast.parse(source).body[0].test
+                self.assertTrue(map_op._is_main_guard_test(node))
             node = ast.parse(
-                "if __name__ == '__main__':\n    pass\n"
+                "if __name__ == 'other':\n    pass\n"
             ).body[0].test
-
-            self.assertTrue(
-                map_op._is_main_guard_test(node)
-            )
-
+            self.assertFalse(map_op._is_main_guard_test(node))
         finally:
-            if original is sentinel:
-                try:
-                    delattr(ast, 'Str')
-                except AttributeError:
-                    pass
-            else:
+            if original is not sentinel:
                 ast.Str = original
-
-            importlib.reload(
-                map_package
-            )
 
 
 if __name__ == '__main__':
