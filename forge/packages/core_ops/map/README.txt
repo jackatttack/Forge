@@ -37,14 +37,26 @@ MAP auto-detects the target:
 
 ## Directory maps
 
-Directory maps show:
+Directory maps show one indented hierarchy. Each entry appears once beneath
+its parent. Directory names end with /.
 
-- file and directory counts
-- Python file count
-- README/doc hints
-- evidence-ranked likely Python entrypoints
-- child folders/files
-- suggested next MAP/READ commands
+Root entries receive display priority. At deeper levels, entries are selected
+one per parent per round, then rendered beneath their parents. A large early
+folder cannot consume the entire budget before other displayed folders get
+a turn.
+
+Counts describe displayed entries, not recursive filesystem totals.
+Collapsed directories report the number of immediate entries hidden by
+depth or limit. These are not recursive counts. Filtered entries are counted
+at their parent. Unreadable directories are marked explicitly; symbolic
+links are listed but never followed.
+
+DEPTH: 0 lists immediate children. DEPTH: 1 also lists their children.
+The maximum is 5. LIMIT caps displayed entries, excluding the root row and
+headers. If even root entries exceed LIMIT, the root reports the omission.
+
+Directory maps do not read source files, rank entrypoints, or suggest reads.
+DOCS affects file maps only. Map a smaller directory to inspect its contents.
 
 Directory maps are source-focused by default. They skip common noisy folders such as:
 
@@ -68,7 +80,7 @@ Good use cases:
 
 - starting work in an unfamiliar project
 - understanding package layout
-- finding likely entry files
+- locating files by their place in the hierarchy
 - choosing a smaller target before READ
 
 ## Python file maps
@@ -151,9 +163,9 @@ Hide documentation snippets when only structure matters:
 ## Directives
 
 - MODE: auto, targets, imports, or relationships.
-- DEPTH: N — directory depth. Default: 1. Maximum: 5.
-- LIMIT: N — cap listed rows. Default: 80.
-- DOCS: yes/no — include README/docstring snippets. Default: yes.
+- DEPTH: N — directory expansion depth, 0 to 5. Default: 1.
+- LIMIT: N — cap listed entries. Default: 80.
+- DOCS: yes/no — include documentation snippets in file maps. Default: yes.
 
 ## Common workflows
 
@@ -210,7 +222,7 @@ It can show:
 
 - directory structure
 - README/doc hints
-- evidence-ranked likely Python entrypoints
+- balanced directory listings with explicit collapsed contents
 - Python imports with local path resolution
 - AST targets
 - large-file summaries

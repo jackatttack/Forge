@@ -46,16 +46,17 @@ HELP = {
     ],
     'directives': {
         'DEPTH': (
-            'Directory depth from 1 to 5; '
-            'the default is 1.'
+            'Directory expansion depth from 0 to 5; default 1. '
+            'Zero lists immediate children; each increment expands one level.'
         ),
         'DOCS': (
-            'Include README and docstring hints; '
-            'the default is yes.'
+            'Include documentation hints in file maps; default yes. '
+            'Directory maps list names only.'
         ),
         'LIMIT': (
-            'Maximum listed rows; '
-            'the default is 80.'
+            'Maximum listed entries; default 80. Directory maps prioritise '
+            'root entries, then share remaining space across folders. '
+            'Headers and the root row are outside this budget.'
         ),
         'MODE': (
             'Choose auto, targets, imports, '
@@ -972,24 +973,13 @@ def _entrypoint_path_context(
 
 
 def _literal_text(node):
-    if isinstance(
-        node,
-        ast.Str,
-    ):
-        return node.s
-
-    value = getattr(
-        node,
-        'value',
-        None,
-    )
-
-    if isinstance(
-        value,
-        str,
-    ):
+    """Read string literals without requiring the legacy ast.Str alias."""
+    value = getattr(node, 'value', None)
+    if isinstance(value, str):
         return value
-
+    legacy_str = getattr(ast, 'Str', None)
+    if legacy_str is not None and isinstance(node, legacy_str):
+        return node.s
     return None
 
 
@@ -2513,265 +2503,128 @@ def _render_python_file(root, abs_path, target, mode, docs, limit):
 
 
 def _render_directory(root, abs_path, target, mode, depth, docs, limit):
-    rel = _rel(root, abs_path)
-
-    noise_dirs = set([
+    """Select entries fairly, then render each once under its parent."""
+    noise_dirs = {
         '.git', '__pycache__', '.pytest_cache', '.mypy_cache',
         'patch_runs', 'script_snapshots', 'build', 'dist',
         'node_modules', '.venv', 'venv',
         'site-packages', 'site-packages-2', 'site-packages-3',
         'artifacts', 'snapshots',
-    ])
-    noise_files = set([
-        '.DS_Store', 'crash_log.txt', 'crash_trail.json',
-    ])
+    }
+    noise_files = {'.DS_Store', 'crash_log.txt', 'crash_trail.json'}
 
-    def visible_walk(base, max_depth):
-        base = os.path.abspath(base)
-        for dirpath, dirnames, filenames in os.walk(base):
-            level = max(0, dirpath.rstrip(os.sep).count(os.sep) - base.rstrip(os.sep).count(os.sep))
-            if level > max_depth:
-                dirnames[:] = []
-                continue
+    def make_node(path, name, is_dir, level):
+        return {
+            'path': path, 'name': name, 'directory': is_dir,
+            'level': level, 'children': [], 'selected': [],
+            'filtered': 0, 'error': '', 'link': os.path.islink(path),
+        }
 
-            dirnames[:] = sorted([d for d in dirnames if d not in noise_dirs and not d.startswith('.')])
-            filenames = sorted([f for f in filenames if f not in noise_files and not f.startswith('.')])
-            yield dirpath, dirnames, filenames
+    def inspect(node):
+        # Do not follow directory links, including a requested link target.
+        if node['link']:
+            return
+        try:
+            with os.scandir(node['path']) as entries:
+                children = []
+                for entry in entries:
+                    is_dir = entry.is_dir(follow_symlinks=False)
+                    if (entry.name.startswith('.')
+                            or entry.name in noise_files
+                            or (is_dir and entry.name in noise_dirs)):
+                        node['filtered'] += 1
+                        continue
+                    children.append(make_node(
+                        entry.path, entry.name, is_dir, node['level'] + 1,
+                    ))
+            node['children'] = sorted(
+                children,
+                key=lambda child: (
+                    not child['directory'],
+                    child['name'].casefold(),
+                    child['name'],
+                ),
+            )
+        except OSError as exc:
+            node['error'] = type(exc).__name__
 
-            if level >= max_depth:
-                dirnames[:] = []
+    base = make_node(abs_path, _rel(root, abs_path), True, -1)
+    inspect(base)
+    parents = [base]
+    selected = []
 
-    total_files = 0
-    total_dirs = 0
-    py_files = []
-    skipped_noise = []
+    # Root entries first. At each deeper level, take one child per
+    # parent per round so a large early folder cannot use all space.
+    for level in range(depth + 1):
+        offsets = [0] * len(parents)
+        next_parents = []
+        while len(selected) < limit:
+            progress = False
+            for index, parent in enumerate(parents):
+                offset = offsets[index]
+                if offset >= len(parent['children']):
+                    continue
+                child = parent['children'][offset]
+                offsets[index] += 1
+                parent['selected'].append(child)
+                selected.append(child)
+                progress = True
+                if child['directory']:
+                    inspect(child)
+                    next_parents.append(child)
+                if len(selected) >= limit:
+                    break
+            if not progress:
+                break
+        parents = next_parents
+        if not parents or len(selected) >= limit:
+            break
 
-    for dirpath, dirnames, filenames in visible_walk(abs_path, depth):
-        total_dirs += len(dirnames)
-        total_files += len(filenames)
-        for name in filenames:
-            full = os.path.join(dirpath, name)
-            if _is_python(full):
-                py_files.append(full)
-
-    try:
-        for name in sorted(os.listdir(abs_path)):
-            if name in noise_dirs or name in noise_files:
-                skipped_noise.append(name)
-    except Exception:
-        skipped_noise = []
-
+    files = sum(not node['directory'] for node in selected)
+    dirs = sum(node['directory'] for node in selected)
+    py_files = sum(
+        not node['directory'] and _is_python(node['path'])
+        for node in selected
+    )
     lines = [
         'MAP %s' % target,
         'TYPE=directory',
-        'path: ' + rel,
+        'path: ' + _rel(root, abs_path),
         'depth: %d' % depth,
         'view: source-focused',
-        'files: %d' % total_files,
-        'dirs: %d' % total_dirs,
-        'python files: %d' % len(py_files),
+        'count scope: displayed entries only',
+        'files: %d' % files,
+        'dirs: %d' % dirs,
+        'python files: %d' % py_files,
+        '',
+        'Structure:',
     ]
 
-    if skipped_noise:
-        lines.append('noise skipped: ' + ', '.join(skipped_noise[:8]))
+    def notes(node):
+        parts = []
+        if node['link']:
+            parts.append('symlink; not followed')
+        if node['error']:
+            parts.append('unreadable: ' + node['error'])
+        hidden = len(node['children']) - len(node['selected'])
+        if hidden:
+            reason = 'depth' if node['level'] >= depth else 'limit'
+            parts.append('+%d more; %s' % (hidden, reason))
+        if node['filtered']:
+            parts.append('%d filtered' % node['filtered'])
+        if (node['directory'] and not node['children']
+                and not node['filtered'] and not node['error']
+                and not node['link']):
+            parts.append('empty')
+        return '  [' + '; '.join(parts) + ']' if parts else ''
 
-    readme = _find_readme(abs_path)
-    project_hints = _read_project_hints(root, readme) if readme and docs else {'entrypoints': []}
+    def render(node, indent):
+        suffix = '/' if node['directory'] else ''
+        lines.append('  ' * indent + node['name'] + suffix + notes(node))
+        for child in node['selected']:
+            render(child, indent + 1)
 
-    ranked_entrypoints = _rank_entrypoints(
-        root,
-        abs_path,
-        py_files,
-        (
-            readme
-            if docs
-            else None
-        ),
-        project_hints,
-    )
-
-    entrypoint_paths = set(
-        row.get('path')
-        for row in ranked_entrypoints
-        if row.get('path')
-    )
-
-    if readme:
-        lines.append('')
-        lines.append('README:')
-        hint = _read_doc_hint(readme) if docs else ''
-        if hint:
-            lines.append('- %s — %s' % (_rel(root, readme), hint))
-        else:
-            lines.append('- %s' % _rel(root, readme))
-
-    if project_hints.get('entrypoints'):
-        lines.append('')
-        lines.append('Project hints:')
-        for rel_entry in project_hints.get('entrypoints')[:5]:
-            lines.append('- entrypoint: %s' % rel_entry)
-
-    if ranked_entrypoints:
-        lines.append('')
-        lines.append('Likely entrypoints:')
-
-        entrypoint_cap = min(
-            10,
-            limit,
-        )
-
-        for row in ranked_entrypoints[
-            :entrypoint_cap
-        ]:
-            reasons = ', '.join(
-                row.get(
-                    'reasons'
-                )
-                or []
-            )
-
-            if reasons:
-                lines.append(
-                    '- %s — %s'
-                    % (
-                        row.get(
-                            'rel'
-                        ),
-                        reasons,
-                    )
-                )
-            else:
-                lines.append(
-                    '- '
-                    + row.get(
-                        'rel'
-                    )
-                )
-
-        overflow = (
-            len(
-                ranked_entrypoints
-            )
-            - entrypoint_cap
-        )
-
-        if overflow > 0:
-            lines.append(
-                '- ... %d more candidate(s)'
-                % overflow
-            )
-
-    lines.append('')
-    lines.append('Structure:')
-
-    emitted = 0
-    for dirpath, dirnames, filenames in visible_walk(abs_path, depth):
-        indent_level = max(0, dirpath.rstrip(os.sep).count(os.sep) - abs_path.rstrip(os.sep).count(os.sep))
-        pad = '  ' * indent_level
-
-        if dirpath != abs_path:
-            lines.append('%s%s/' % (pad, os.path.basename(dirpath)))
-
-        child_pad = '  ' * (indent_level + 1)
-
-        for dirname in dirnames:
-            if emitted >= limit:
-                break
-            lines.append('%s%s/' % (child_pad, dirname))
-            emitted += 1
-
-        for filename in filenames:
-            if emitted >= limit:
-                break
-            full = os.path.join(dirpath, filename)
-            marker = ''
-            if filename in _README_NAMES or filename.lower().startswith('readme'):
-                marker = ' · readme'
-            elif _is_python(full):
-                if full in entrypoint_paths:
-                    marker = ' · py · entry'
-                else:
-                    marker = ' · py'
-            lines.append('%s%s%s' % (child_pad, filename, marker))
-            emitted += 1
-
-        if emitted >= limit:
-            lines.append('... limit reached')
-            break
-
-    lines.append('')
-    lines.append('Suggested next steps:')
-
-    if readme:
-        lines.append('- READ %s' % _rel(root, readme))
-
-    suggested = []
-    seen_suggested = set()
-
-    def add_suggestion(rel_path):
-        rel_path = str(rel_path or '').strip()
-        if not rel_path or rel_path in seen_suggested:
-            return
-        seen_suggested.add(rel_path)
-        suggested.append(rel_path)
-
-    # One entrypoint ranking drives the first source suggestions.
-    #
-    # Keep this section intentionally small. MAP already reports the total
-    # Python-file count and structure above; hundreds of hidden suggestions
-    # add packet noise without helping the next decision.
-    suggestion_cap = min(
-        8,
-        limit,
-    )
-
-    for row in ranked_entrypoints:
-        if len(
-            suggested
-        ) >= suggestion_cap:
-            break
-
-        add_suggestion(
-            row.get(
-                'rel'
-            )
-        )
-
-    if len(
-        suggested
-    ) < suggestion_cap:
-        ranked_py = sorted(
-            py_files,
-            key=lambda path: (
-                _source_suggestion_key(
-                    abs_path,
-                    path,
-                )
-            ),
-        )
-
-        for path in ranked_py:
-            if len(
-                suggested
-            ) >= suggestion_cap:
-                break
-
-            add_suggestion(
-                _rel(
-                    root,
-                    path,
-                )
-            )
-
-    for rel_path in suggested:
-        lines.append(
-            '- MAP %s'
-            % rel_path
-        )
-
-    if not readme and not ranked_entrypoints and not py_files:
-        lines.append('- READ %s' % rel)
-
+    render(base, 0)
     return lines
 
 
