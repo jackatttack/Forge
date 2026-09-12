@@ -98,6 +98,24 @@ The target forms mean:
 Use `READ file.py` with `TARGETS: yes` and copy the returned target exactly.
 Do not guess an AST target shape.
 
+AST replacement is source-span precise when Python provides exact node position
+metadata. Forge replaces the resolved syntax node rather than blindly replacing
+its whole source lines. Syntax outside that node remains untouched, including
+adjacent statements on the same line and trailing comments.
+
+For example, replacing `@LEFT` here:
+
+    LEFT = 1; RIGHT = 2
+
+changes only `LEFT = 1`. Likewise, replacing `@SETTING` here:
+
+    SETTING = 10  # keep this explanation
+
+preserves the trailing comment.
+
+Forge retains its established line-range fallback when exact end-position
+metadata is unavailable.
+
 ## Explicit line range replacement
 
 Use this when replacing a known file slice after inspecting numbered lines.
@@ -239,6 +257,7 @@ Full-file replacement is deliberately handled by WRITE with CONFIRM: overwrite b
 
 - Inspect first. Use READ before REPLACE unless the user supplied exact current text.
 - Prefer AST mode for whole functions, methods, classes, and assignments.
+- AST mode preserves source text outside the resolved syntax node, including neighbouring same-line statements and trailing comments.
 - Prefer REPLACE + LINES for small flat-file edits after READ.
 - For multiple LINES edits in the same file, apply later line numbers first.
 - Prefer BEGIN_OLD / BEGIN_NEW when line numbers are awkward but exact current text is known.

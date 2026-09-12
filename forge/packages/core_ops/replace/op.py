@@ -36,7 +36,7 @@ from forge.core.file_safety import (
     touched_file,
     write_text,
 )
-from forge.core.source_edit import replace_line_range
+from forge.core.source_edit import replace_line_range, replace_source_span
 
 
 SPEC = {
@@ -48,7 +48,7 @@ SPEC = {
 }
 
 HELP = {
-    'summary': 'Replace an AST target, explicit file range, or exact old/new block.',
+    'summary': 'Surgically replace an AST target, explicit file range, or exact old/new block.',
     'minimal_example': [
         'READ app.py',
         'TARGETS: yes',
@@ -103,7 +103,8 @@ HELP = {
     ],
     'safe_usage': [
         'READ the exact current target or range first.',
-        'Prefer AST targets for whole Python definitions.',
+        'Prefer AST targets for whole Python definitions and assignments.',
+        'AST replacement preserves surrounding syntax outside the resolved node span, including adjacent same-line statements and trailing comments.',
         'Apply later line ranges first when editing one file repeatedly.',
         'Treat OLD blocks as exact-only text.',
         'Use ALL only when every match is intentionally in scope.',
@@ -381,13 +382,24 @@ def _execute_ast(ctx, parsed_op, result):
     file_abs = resolved.get('file_abs')
     before = read_text(file_abs)
 
+    start_offset = resolved.get('start_offset')
+    end_offset = resolved.get('end_offset')
+
     try:
-        after = replace_line_range(
-            before,
-            int(resolved.get('start') or 1),
-            int(resolved.get('end') or 1),
-            body,
-        )
+        if start_offset is not None and end_offset is not None:
+            after = replace_source_span(
+                before,
+                start_offset,
+                end_offset,
+                body,
+            )
+        else:
+            after = replace_line_range(
+                before,
+                int(resolved.get('start') or 1),
+                int(resolved.get('end') or 1),
+                body,
+            )
     except Exception as e:
         result['status'] = 'FAILED_RUNTIME'
         result['message'] = type(e).__name__ + ': ' + str(e)

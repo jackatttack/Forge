@@ -2,8 +2,8 @@
 """
 Small source editing helpers for Forge.
 
-Keep this boring and testable. AST ops should resolve exact line ranges first,
-then use these helpers for text replacement/insertion.
+Keep this boring and testable. AST ops should resolve precise source locations
+first, then use these helpers for text replacement/insertion.
 """
 
 import textwrap
@@ -46,6 +46,58 @@ def replace_line_range(source_text, start_line, end_line, new_body):
         new_lines = ['\n']
 
     return ''.join(before) + ''.join(new_lines) + ''.join(after)
+
+
+def replace_source_span(source_text, start_offset, end_offset, new_body):
+    """
+    Replace an exact [start_offset, end_offset) character span.
+
+    AST node offsets begin at the first syntax token, after any indentation.
+    The existing indentation therefore already remains in source_text before
+    start_offset. Only later replacement lines need the target's base indent
+    re-applied.
+    """
+    source_text = source_text or ''
+
+    try:
+        start_offset = int(start_offset)
+        end_offset = int(end_offset)
+    except Exception:
+        raise ValueError('Source span offsets must be integers')
+
+    if (
+        start_offset < 0
+        or end_offset < start_offset
+        or end_offset > len(source_text)
+    ):
+        raise ValueError(
+            'Invalid source span %d-%d for %d-character source'
+            % (start_offset, end_offset, len(source_text))
+        )
+
+    line_start = source_text.rfind('\n', 0, start_offset) + 1
+    line_prefix = source_text[line_start:start_offset]
+    indent = line_indent(line_prefix)
+
+    block = textwrap.dedent((new_body or '').strip('\n'))
+    block_lines = block.splitlines()
+
+    if not block_lines:
+        replacement = ''
+    else:
+        rebuilt = [block_lines[0]]
+        for line in block_lines[1:]:
+            if line.strip():
+                rebuilt.append(indent + line)
+            else:
+                rebuilt.append('')
+        replacement = '\n'.join(rebuilt)
+
+    return (
+        source_text[:start_offset]
+        + replacement
+        + source_text[end_offset:]
+    )
 
 
 def insert_after_line(

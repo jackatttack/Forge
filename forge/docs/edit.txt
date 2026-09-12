@@ -13,10 +13,12 @@ Choose the operation that expresses your intent:
 - WRITE creates a whole file or deliberately replaces one.
 - COPY copies a file to another path.
 
-Prefer a Python target for a whole function or class. Use exact text when the
-current text is known and the intended match is unambiguous. Use line ranges
-only against inspected content. Do not broaden a replacement to every match
-merely to overcome ambiguity.
+Prefer a Python target for a whole function, class, method, or assignment.
+AST-target replacement preserves source text outside the resolved syntax node,
+including neighbouring same-line statements and trailing comments. Use exact
+text when the current text is known and the intended match is unambiguous. Use
+line ranges only against inspected content. Do not broaden a replacement to
+every match merely to overcome ambiguity.
 
 Operations execute in order. Earlier edits can move lines, change anchors or
 remove targets needed by later edits. For independent ranges in the same file,

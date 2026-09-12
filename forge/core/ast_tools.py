@@ -85,6 +85,79 @@ def end_lineno(node):
     return best
 
 
+def _byte_col_to_char_col(line, byte_col):
+    """
+    Convert an AST UTF-8 byte column to a Python string character column.
+
+    CPython records col_offset/end_col_offset as UTF-8 byte offsets, so using
+    them directly as string indexes is wrong when non-ASCII text appears
+    earlier on the same line.
+    """
+    try:
+        byte_col = int(byte_col)
+        prefix = line.encode('utf-8')[:byte_col]
+        return len(prefix.decode('utf-8'))
+    except Exception:
+        return None
+
+
+def node_source_offsets(source_text, node):
+    """
+    Return the exact [start, end) character offsets for node when available.
+
+    Python 3.8+ normally supplies end_lineno/end_col_offset. Keep this helper
+    defensive because those attributes are optional AST metadata and Forge can
+    safely fall back to its established line-range behaviour if absent.
+    """
+    start_line = getattr(node, 'lineno', None)
+    start_col = getattr(node, 'col_offset', None)
+    end_line = getattr(node, 'end_lineno', None)
+    end_col = getattr(node, 'end_col_offset', None)
+
+    if None in (start_line, start_col, end_line, end_col):
+        return None, None
+
+    lines = (source_text or '').splitlines(True)
+
+    try:
+        start_line = int(start_line)
+        end_line = int(end_line)
+    except Exception:
+        return None, None
+
+    if (
+        start_line < 1
+        or end_line < start_line
+        or start_line > len(lines)
+        or end_line > len(lines)
+    ):
+        return None, None
+
+    start_char_col = _byte_col_to_char_col(
+        lines[start_line - 1],
+        start_col,
+    )
+    end_char_col = _byte_col_to_char_col(
+        lines[end_line - 1],
+        end_col,
+    )
+
+    if start_char_col is None or end_char_col is None:
+        return None, None
+
+    start_offset = sum(
+        len(line) for line in lines[:start_line - 1]
+    ) + start_char_col
+    end_offset = sum(
+        len(line) for line in lines[:end_line - 1]
+    ) + end_char_col
+
+    if start_offset < 0 or end_offset < start_offset:
+        return None, None
+
+    return start_offset, end_offset
+
+
 def range_text(node):
     start = getattr(node, 'lineno', 1)
     end = end_lineno(node)
@@ -207,6 +280,7 @@ def resolve_ast_target(project_root, target_ref, default_file=None):
     target_name = parsed.get('target_name')
 
     def found(node, kind):
+        start_offset, end_offset = node_source_offsets(src, node)
         return {
             'ok': True,
             'file_abs': file_abs,
@@ -216,6 +290,8 @@ def resolve_ast_target(project_root, target_ref, default_file=None):
             'kind': kind,
             'start': getattr(node, 'lineno', 1),
             'end': end_lineno(node),
+            'start_offset': start_offset,
+            'end_offset': end_offset,
             'source_text': src,
         }
 
