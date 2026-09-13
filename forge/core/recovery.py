@@ -92,6 +92,13 @@ def _prepare(project_root, run_directory, manifest):
     if not isinstance(touched, list):
         raise RecoveryRefused('Manifest has no valid touched-file list')
 
+    # Roots recorded at write time. Absent in manifests written before
+    # named roots existed, which is correct: those runs only ever touched
+    # the project root.
+    recorded_roots = manifest.get('roots')
+    if not isinstance(recorded_roots, dict):
+        recorded_roots = {}
+
     plan = []
     seen = set()
     for item in touched:
@@ -99,7 +106,22 @@ def _prepare(project_root, run_directory, manifest):
             raise RecoveryRefused('Only recorded ordinary files can be recovered')
 
         relative = item.get('rel')
-        current = _state(project_root, relative)
+
+        root_name = item.get('root')
+        if root_name is not None and not isinstance(root_name, str):
+            raise RecoveryRefused('Recorded root name must be text: ' + str(relative))
+
+        if root_name:
+            entry_root = recorded_roots.get(root_name)
+            if not isinstance(entry_root, str) or not entry_root:
+                raise RecoveryRefused(
+                    'Recorded root %r is missing from the manifest; this run '
+                    'cannot be recovered safely' % root_name
+                )
+        else:
+            entry_root = project_root
+
+        current = _state(entry_root, relative)
         path, exists, text, identity = current
         if path in seen:
             raise RecoveryRefused('Duplicate recovery target: ' + relative)
@@ -138,6 +160,8 @@ def _prepare(project_root, run_directory, manifest):
 
         plan.append({
             'relative': relative,
+            'root': entry_root,
+            'root_name': root_name or '',
             'current': current,
             'restore_exists': existed_before,
             'restore_text': before,
@@ -146,7 +170,8 @@ def _prepare(project_root, run_directory, manifest):
 
 
 def _recheck(project_root, entry):
-    current = _state(project_root, entry['relative'])
+    """Confirm the target has not changed, against its own recorded root."""
+    current = _state(entry.get('root') or project_root, entry['relative'])
     if current != entry['current']:
         raise RecoveryRefused(
             'Target changed during recovery: ' + entry['relative']
@@ -190,6 +215,7 @@ def _install(project_root, entry):
         desired_text,
         existed_before=exists,
         existed_after=desired_exists,
+        root=entry.get('root_name') or '',
     )
 
 

@@ -401,6 +401,9 @@ def _collect_touched(run):
     The run-level list is chronological and authoritative. Result-only
     records supplement paths absent from it, without replaying the duplicate
     records normally present on both the run and its operation results.
+
+    Entries are keyed by (root, path) rather than path alone, because the
+    same relative path in two different roots is two different files.
     """
     items = [
         dict(item) for item in run.get('touched_files') or []
@@ -411,35 +414,40 @@ def _collect_touched(run):
         value = str(item.get('rel') or item.get('file') or '').strip()
         return os.path.normpath(value) if value else ''
 
-    run_paths = {relative_path(item) for item in items}
+    def identity(item):
+        return (str(item.get('root') or ''), relative_path(item))
+
+    run_paths = {identity(item) for item in items}
     for result in run.get('results') or []:
         for item in result.get('touched') or []:
-            if isinstance(item, dict) and relative_path(item) not in run_paths:
+            if isinstance(item, dict) and identity(item) not in run_paths:
                 items.append(dict(item))
 
     combined = {}
     order = []
     for item in items:
-        rel = relative_path(item)
+        key = identity(item)
+        root_name, rel = key
         if not rel:
             continue
-        if rel not in combined:
-            order.append(rel)
-            combined[rel] = {
+        if key not in combined:
+            order.append(key)
+            combined[key] = {
                 'rel': rel,
+                'root': root_name,
                 'kind': item.get('kind') or 'file',
                 'existed_before': bool(item.get('existed_before')),
                 'before': item.get('before') or '',
             }
 
-        entry = combined[rel]
+        entry = combined[key]
         entry['after'] = item.get('after') or ''
         # Missing metadata stays unknown; do not guess absence from "".
         entry['existed_after'] = item.get('existed_after')
         entry['before_sha'] = _sha(entry['before'])
         entry['after_sha'] = _sha(entry['after'])
 
-    return [combined[rel] for rel in order]
+    return [combined[key] for key in order]
 
 MAX_STORED_RUNS = 100
 
@@ -603,11 +611,18 @@ def write_run(run, environment=None):
 
     for item in touched:
         rel = item.get('rel') or ''
+        root_name = str(
+            item.get('root')
+            or ''
+        )
         snapshot_rel = ''
 
         if item.get('existed_before'):
+            # Snapshots are namespaced by root name so the same relative
+            # path in two different roots cannot collide.
             snapshot_rel = os.path.join(
                 'snapshots',
+                root_name or '_project',
                 rel,
             )
 
@@ -622,6 +637,7 @@ def write_run(run, environment=None):
 
         manifest_touched.append({
             'rel': rel,
+            'root': root_name,
             'kind': item.get('kind') or 'file',
             'existed_before': bool(
                 item.get('existed_before')
@@ -656,6 +672,14 @@ def write_run(run, environment=None):
         'stamp': stamp,
         'mode': mode,
         'root': project_root,
+
+        # Absolute paths for every configured named root, recorded so
+        # recovery resolves a path against the tree it was written to
+        # even if configuration has changed since.
+        'roots': dict(
+            environment.get('roots')
+            or {}
+        ),
         'status': (
             run.get('status')
             or 'UNKNOWN'

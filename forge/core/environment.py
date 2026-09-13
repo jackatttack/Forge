@@ -32,6 +32,7 @@ def make_environment(
     storage=None,
     features=None,
     config_path=None,
+    roots=None,
 ):
     """Build one normalised environment dictionary."""
     project_root = _required_path(
@@ -103,6 +104,24 @@ def make_environment(
             'Forge environment features must be a dict'
         )
 
+    # Additional named roots, as {name: absolute_path}. Empty unless the
+    # user configured one, so path resolution stays project_root-only by
+    # default.
+    named_roots = roots or {}
+
+    if not isinstance(
+        named_roots,
+        dict,
+    ):
+        raise ValueError(
+            'Forge environment roots must be a dict'
+        )
+
+    named_roots = {
+        str(name): os.path.abspath(str(value))
+        for name, value in named_roots.items()
+    }
+
     resolved_config_path = str(
         config_path
         or ''
@@ -123,6 +142,7 @@ def make_environment(
         'ops_root': ops_root,
         'storage_root': storage_root,
         'aliases_path': aliases_path,
+        'roots': named_roots,
         'storage': dict(
             storage_settings
         ),
@@ -145,6 +165,7 @@ def normalise_environment(
     storage=None,
     features=None,
     config_path=None,
+    roots=None,
 ):
     """Return one complete environment from explicit supplied facts."""
     source = dict(
@@ -212,7 +233,29 @@ def normalise_environment(
             features
         )
 
+    root_settings = dict(
+        source.get(
+            'roots'
+        )
+        or {}
+    )
+
+    if roots:
+        if not isinstance(
+            roots,
+            dict,
+        ):
+            raise ValueError(
+                'Forge environment roots must be a dict'
+            )
+
+        root_settings.update(
+            roots
+        )
+
     return make_environment(
+        roots=root_settings,
+
         project_root=(
             project_root
             or source.get(

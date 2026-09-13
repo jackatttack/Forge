@@ -17,7 +17,7 @@ import re
 import urllib.error
 import urllib.request
 
-from forge.core.file_safety import safe_target
+from forge.core.file_safety import safe_target, split_root_prefix
 
 
 SPEC = {
@@ -361,8 +361,10 @@ def execute(ctx, parsed_op, result):
                 f.write(data)
 
             text = 'Downloaded %d bytes -> %s' % (len(data), dest_rel)
+            dest_root, dest_relative = split_root_prefix(dest_rel)
             result['touched'] = [{
-                'rel': dest_rel,
+                'rel': dest_relative,
+                'root': dest_root or '',
                 'before': before,
                 'after': _decode(data),
                 'existed_before': bool(existed_before),

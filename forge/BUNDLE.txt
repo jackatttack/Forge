@@ -49,6 +49,24 @@ Only the first line is required. Separate operations with a blank line:
     DEPTH: 2
 
 
+PATHS
+-----
+
+Paths are relative to the project root:
+
+    READ projects/example/app.py
+
+A Forge home may configure additional named roots. A path opts in to one of
+them with a "name:" prefix:
+
+    READ icloud:tools/patcher.py
+
+Paths without a prefix always resolve against the project root. An unknown
+prefix fails the operation rather than falling back.
+
+Run `FORGE config` to see which roots are configured and reachable.
+
+
 COMMAND LEVEL
 -------------
 

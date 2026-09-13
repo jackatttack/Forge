@@ -335,10 +335,21 @@ def _read_targets(root, target, directives):
 
 
 def execute(ctx, parsed_op, result):
-    from forge.core.environment import path_from_ctx
-    root = path_from_ctx(ctx, 'project_root')
+    from forge.core.file_safety import resolve_root
+
     target = (parsed_op.get('target') or '').strip()
     directives = parsed_op.get('directives') or {}
+
+    # READ resolves its own paths rather than going through safe_target,
+    # so named-root prefixes have to be handled explicitly here. The
+    # remainder is what every helper below expects: a path relative to
+    # whichever root it resolved against.
+    root, target, root_error = resolve_root(ctx, target)
+
+    if root_error:
+        result['status'] = 'FAILED_NOT_FOUND'
+        result['message'] = root_error
+        return
 
     abs_target = os.path.abspath(os.path.join(root, target))
 

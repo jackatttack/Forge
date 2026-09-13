@@ -18,7 +18,7 @@ Recovery model:
 
 import os
 
-from forge.core.file_safety import safe_target, read_text, write_text, touched_file, record_touched
+from forge.core.file_safety import safe_target, read_text, write_text, touched_file, record_touched, split_root_prefix
 
 
 SPEC = {
@@ -187,7 +187,11 @@ def execute(ctx, parsed_op, result):
         result['message'] = '%s: %s' % (type(e).__name__, e)
         return
 
-    touched = touched_file(dest, before_dest, source_text, existed_before=bool(dest_existed))
+    dest_root, dest_rel = split_root_prefix(dest)
+    touched = touched_file(
+        dest_rel, before_dest, source_text,
+        existed_before=bool(dest_existed), root=dest_root or '',
+    )
     record_touched(ctx, result, touched)
 
     result['status'] = 'APPLIED'

@@ -33,6 +33,7 @@ from forge.core.file_safety import (
     read_text,
     record_touched,
     safe_target,
+    split_root_prefix,
     touched_file,
     write_text,
 )
@@ -420,7 +421,13 @@ def _execute_ast(ctx, parsed_op, result):
     except Exception:
         rel = resolved.get('file_ref') or target.split('::', 1)[0]
 
-    touched = touched_file(rel, before, after, existed_before=True)
+    # rel is already relative to the resolved root, so only the root name
+    # needs recording alongside it.
+    target_root, _ = split_root_prefix(target)
+    touched = touched_file(
+        rel, before, after, existed_before=True,
+        root=target_root or '',
+    )
     record_touched(ctx, result, touched)
 
     result['status'] = 'APPLIED'
@@ -507,7 +514,11 @@ def _execute_file_range(ctx, parsed_op, result):
         result['message'] = 'Could not write file: %s: %s' % (type(e).__name__, e)
         return
 
-    touched = touched_file(rel, before, after, existed_before=True)
+    rel_root, rel_path = split_root_prefix(rel)
+    touched = touched_file(
+        rel_path, before, after, existed_before=True,
+        root=rel_root or '',
+    )
     record_touched(ctx, result, touched)
 
     result['status'] = 'APPLIED'
@@ -585,7 +596,11 @@ def _execute_block(ctx, parsed_op, result):
             'File untouched.' % (e.lineno, e.msg)
         )
         return
-    touched = touched_file(target, before, after, existed_before=True)
+    target_root, target_rel = split_root_prefix(target)
+    touched = touched_file(
+        target_rel, before, after, existed_before=True,
+        root=target_root or '',
+    )
     record_touched(ctx, result, touched)
 
     result['status'] = 'APPLIED'

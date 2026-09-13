@@ -155,9 +155,24 @@ class RevertSafety(ForgeCase):
             + '\n\n'
             + replace_text('b.txt', 'original b', 'edited b')
         )
-        snapshot = os.path.join(
-            original['artifact_dir'], 'snapshots', 'b.txt',
+        # Take the snapshot location from the manifest rather than
+        # assuming a layout: snapshot paths are namespaced by root, and
+        # this test is about refusing a damaged snapshot, not about where
+        # snapshots happen to live.
+        manifest, error = run_storage.read_manifest(
+            self.project_root,
+            original['stamp'],
+            environment=original['environment'],
         )
+        self.assertIsNone(error)
+
+        snapshot_rel = ''
+        for item in manifest['touched']:
+            if item.get('rel') == 'b.txt':
+                snapshot_rel = item.get('snapshot_rel') or ''
+        self.assertTrue(snapshot_rel)
+
+        snapshot = os.path.join(original['artifact_dir'], snapshot_rel)
         with open(snapshot, 'w', encoding='utf-8') as handle:
             handle.write('damaged snapshot\n')
 

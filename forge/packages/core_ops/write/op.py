@@ -17,6 +17,7 @@ from forge.core.file_safety import (
     read_text,
     record_touched,
     safe_target,
+    split_root_prefix,
     touched_file,
     write_text,
 )
@@ -275,11 +276,14 @@ def execute(ctx, parsed_op, result):
         )
         return
 
+    root_name, relative = split_root_prefix(target)
+
     touched = touched_file(
-        target,
+        relative,
         before,
         body,
         existed_before=existed_before,
+        root=root_name or '',
     )
 
     record_touched(

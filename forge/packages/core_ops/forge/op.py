@@ -1516,6 +1516,61 @@ def _config(ctx, result):
             '  (none)'
         )
 
+    lines.append('')
+    lines.append(
+        'roots:'
+    )
+
+    roots = (
+        environment.get(
+            'roots'
+        )
+        or {}
+    )
+
+    if roots:
+        # Reachability is reported because a configured root can point at
+        # a path this process cannot see. That is worth knowing before a
+        # bundle fails against it rather than after.
+        for name in sorted(
+            roots
+        ):
+            path = str(
+                roots.get(name)
+                or ''
+            )
+
+            if not os.path.isdir(path):
+                state = 'MISSING'
+            elif not os.access(path, os.R_OK):
+                state = 'UNREADABLE'
+            elif not os.access(path, os.W_OK):
+                state = 'read-only'
+            else:
+                state = 'readable, writable'
+
+            lines.append(
+                '  %s: %s  [%s]'
+                % (
+                    name,
+                    path,
+                    state,
+                )
+            )
+
+        lines.append('')
+        lines.append(
+            '  Use a root with a "name:path" prefix, for example:'
+        )
+        lines.append(
+            '    READ %s:notes.txt'
+            % sorted(roots)[0]
+        )
+    else:
+        lines.append(
+            '  (none configured)'
+        )
+
     result['status'] = 'APPLIED'
     result['message'] = (
         'Resolved Forge context'

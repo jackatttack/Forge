@@ -34,6 +34,13 @@ DEFAULT_CONFIG = {
     },
 
     'features': {},
+
+    # Additional named filesystem roots, as {name: path}. Paths are
+    # resolved like other config paths: absolute paths are used as given,
+    # relative paths resolve against forge_home. Empty by default, so
+    # Forge resolves every path against project_root unless the user
+    # deliberately configures otherwise.
+    'roots': {},
 }
 
 
@@ -237,6 +244,57 @@ def _validate_features(features):
                 % str(name)
             )
 
+def _validate_roots(roots):
+    """
+    Validate the optional named-roots mapping.
+
+    Root names become a path prefix ("icloud:tools/app.py"), so a name
+    containing a separator or colon would be unparseable. Rejecting it
+    here gives a clear configuration error instead of a confusing
+    unknown-root failure later.
+    """
+    if not isinstance(
+        roots,
+        dict,
+    ):
+        raise ValueError(
+            'Forge config "roots" must be an object.'
+        )
+
+    for name, value in roots.items():
+        name = str(name)
+
+        if not name.strip():
+            raise ValueError(
+                'Forge config root names cannot be empty.'
+            )
+
+        if (
+            ':' in name
+            or '/' in name
+            or os.sep in name
+        ):
+            raise ValueError(
+                'Forge config root name %r cannot contain ":" or a path '
+                'separator.'
+                % name
+            )
+
+        if not isinstance(
+            value,
+            str,
+        ):
+            raise ValueError(
+                'Forge config root %r must be a string path.'
+                % name
+            )
+
+        if not value.strip():
+            raise ValueError(
+                'Forge config root %r cannot be empty.'
+                % name
+            )
+
 
 def normalise_config(config=None):
     """Merge supplied config over defaults and validate version 1."""
@@ -250,6 +308,7 @@ def normalise_config(config=None):
         'paths',
         'storage',
         'features',
+        'roots',
     }
 
     unknown = set(
@@ -292,6 +351,10 @@ def normalise_config(config=None):
 
     _validate_features(
         merged['features']
+    )
+
+    _validate_roots(
+        merged['roots']
     )
 
     return merged
@@ -436,4 +499,16 @@ def resolve_config(
                 'features'
             ]
         ),
+
+        # Named roots resolve like every other config path: absolute as
+        # given, relative against forge_home.
+        'roots': {
+            str(name): _resolve_path(
+                home,
+                value,
+            )
+            for name, value in config[
+                'roots'
+            ].items()
+        },
     }

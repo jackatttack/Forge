@@ -114,7 +114,40 @@ HELP metadata, and structured directive-documentation drift.
     FORGE config
 
 This shows the resolved project root, Forge home, artifact storage, alias
-registry, and host environment. It never prints credentials.
+registry, host environment, and any configured named roots. It never prints
+credentials.
+
+## Named roots
+
+By default every path in a bundle resolves against the project root.
+
+A Forge home may configure additional named roots in forge.json:
+
+    {
+      "config_version": 1,
+      "roots": {
+        "icloud": "/absolute/path/to/another/tree"
+      }
+    }
+
+A path then opts in to one of those roots with a "name:" prefix:
+
+    READ icloud:tools/patcher.py
+
+    COPY icloud:tools/patcher.py
+    TO: projects/example/patcher.py
+
+Paths without a prefix are unaffected and still resolve against the project
+root, so existing bundles keep working exactly as before.
+
+A root name cannot contain ":" or a path separator. An unknown prefix fails
+the operation rather than silently falling back to the project root.
+
+`FORGE config` lists each configured root with its resolved path and whether
+it is currently reachable, which is worth checking before working against one.
+
+Recovery records which root each changed file belonged to, so REVERT restores
+into the correct tree.
 
 ## Stored runs
 

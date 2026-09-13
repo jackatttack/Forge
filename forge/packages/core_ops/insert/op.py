@@ -33,7 +33,7 @@ smaller surface.
 import os
 
 from forge.core.ast_tools import resolve_ast_target, read_source
-from forge.core.file_safety import safe_target, read_text, write_text, touched_file, record_touched
+from forge.core.file_safety import safe_target, read_text, write_text, touched_file, record_touched, split_root_prefix
 from forge.core.source_edit import insert_after_line, line_indent
 
 
@@ -409,7 +409,11 @@ def _execute_plain_file(ctx, parsed_op, result):
             'File untouched.' % (e.lineno, e.msg)
         )
         return
-    touched = touched_file(target, before, after, existed_before=True)
+    target_root, target_rel = split_root_prefix(target)
+    touched = touched_file(
+        target_rel, before, after, existed_before=True,
+        root=target_root or '',
+    )
     record_touched(ctx, result, touched)
 
     mode = 'line-%s' % pos
@@ -547,7 +551,11 @@ def _execute_ast(ctx, parsed_op, result):
             'File untouched.' % (e.lineno, e.msg)
         )
         return
-    touched = touched_file(file_ref, before, after, existed_before=True)
+    file_root, file_rel = split_root_prefix(file_ref)
+    touched = touched_file(
+        file_rel, before, after, existed_before=True,
+        root=file_root or '',
+    )
     record_touched(ctx, result, touched)
 
     preview = [

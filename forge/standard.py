@@ -134,6 +134,9 @@ def standard_environment(
         features=resolved[
             'features'
         ],
+        roots=resolved[
+            'roots'
+        ],
         config_path=resolved[
             'config_path'
         ],

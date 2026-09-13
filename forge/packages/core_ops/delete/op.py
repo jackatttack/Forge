@@ -14,7 +14,7 @@ AST deletion can be added later once the semantics are proven.
 
 import os
 
-from forge.core.file_safety import read_text, record_touched, safe_target, touched_file, write_text
+from forge.core.file_safety import read_text, record_touched, safe_target, touched_file, write_text, split_root_prefix
 
 
 SPEC = {
@@ -231,8 +231,10 @@ def _execute_file_delete(ctx, target, result):
     before = read_text(abs_path)
     os.remove(abs_path)
 
+    target_root, target_rel = split_root_prefix(target)
     touched = touched_file(
-        target, before, '', existed_before=True, existed_after=False,
+        target_rel, before, '', existed_before=True, existed_after=False,
+        root=target_root or '',
     )
     record_touched(ctx, result, touched)
 
@@ -342,7 +344,11 @@ def _execute_block_delete(ctx, target, parsed_op, result):
         )
         return
 
-    touched = touched_file(target, before, after, existed_before=True)
+    target_root, target_rel = split_root_prefix(target)
+    touched = touched_file(
+        target_rel, before, after, existed_before=True,
+        root=target_root or '',
+    )
     record_touched(ctx, result, touched)
 
     result['status'] = 'APPLIED'
