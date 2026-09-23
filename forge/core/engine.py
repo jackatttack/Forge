@@ -121,6 +121,23 @@ def execute_ops(
         'last': None,
     }
 
+    # Hash every file a pinned op targets before anything runs, so each
+    # IF_VERSION pin is checked against the workspace the model read,
+    # not against edits made earlier in this same bundle. If the snapshot
+    # cannot be taken, check_pin falls back to hashing at check time.
+    from forge.core.file_versions import (
+        check_pin,
+        is_versioned_op,
+        note_version_after,
+        snapshot_pins,
+    )
+    from forge.core.bundle_controls import requests_stop_on_failure
+
+    try:
+        pin_snapshot = snapshot_pins(ctx, parsed_ops)
+    except Exception:
+        pin_snapshot = {}
+
     results = []
     stop_mutating = False
     stop_reason = ''
@@ -128,6 +145,23 @@ def execute_ops(
 
     def parsed_is_mutating(parsed_op):
         return is_mutating_op((parsed_op or {}).get('op'))
+
+    # Ops whose own failure does not stop later mutating ops.
+    continue_after_own_failure = ('RUN',)
+
+    def failure_blocks(parsed_op):
+        """
+        Return True when this op's failure should stop later mutating ops.
+
+        A failed RUN is an observation, not a half-applied edit: its exit
+        status and output are already in the packet, so later edits and
+        test runs still execute. A failed edit op (WRITE, REPLACE, ...)
+        still stops every mutating op after it, including RUN.
+        """
+        op = ((parsed_op or {}).get('op') or '').upper()
+        if requests_stop_on_failure(parsed_op):
+            return True
+        return parsed_is_mutating(parsed_op) and op not in continue_after_own_failure
 
     def parsed_can_continue_after_failure(parsed_op):
         """
@@ -249,7 +283,7 @@ def execute_ops(
                 total=total_ops,
                 started_at=started_at,
             )
-            if parsed_is_mutating(parsed_op):
+            if failure_blocks(parsed_op):
                 stop_mutating = True
                 stop_reason = '%s on %s' % (op_name, target or '?')
             ctx['last'] = result
@@ -274,11 +308,31 @@ def execute_ops(
                     total=total_ops,
                     started_at=started_at,
                 )
-                if parsed_is_mutating(parsed_op):
+                if failure_blocks(parsed_op):
                     stop_mutating = True
                     stop_reason = '%s on %s' % (op_name, target or '?')
                 ctx['last'] = result
                 continue
+
+        stale_message = check_pin(ctx, parsed_op, pin_snapshot)
+        if stale_message:
+            result['status'] = 'SKIPPED_STALE_READ'
+            result['message'] = stale_message
+            _finish_result(
+                run,
+                results,
+                mod,
+                result,
+                on_event=on_event,
+                index=index,
+                total=total_ops,
+                started_at=started_at,
+            )
+            if failure_blocks(parsed_op):
+                stop_mutating = True
+                stop_reason = '%s on %s' % (op_name, target or '?')
+            ctx['last'] = result
+            continue
 
         execute = getattr(mod, 'execute', None)
         if not callable(execute):
@@ -294,7 +348,7 @@ def execute_ops(
                 total=total_ops,
                 started_at=started_at,
             )
-            if parsed_is_mutating(parsed_op):
+            if failure_blocks(parsed_op):
                 stop_mutating = True
                 stop_reason = '%s on %s' % (op_name, target or '?')
             ctx['last'] = result
@@ -316,6 +370,23 @@ def execute_ops(
                     lines[-DEV_TRACEBACK_LINE_LIMIT:]
                 )
 
+        if result.get('status') == 'APPLIED':
+            # An op may declare check_expectations(parsed_op, result) to
+            # judge its own assertion directives, such as SEARCH EXPECT_HITS.
+            check_expectations = getattr(mod, 'check_expectations', None)
+            if callable(check_expectations):
+                try:
+                    check_expectations(parsed_op, result)
+                except Exception as e:
+                    result['status'] = 'FAILED_EXPECTATION'
+                    result['message'] = 'Expectation check raised: %s: %s' % (
+                        type(e).__name__,
+                        e,
+                    )
+
+        if result.get('status') == 'APPLIED' and is_versioned_op(op_name):
+            note_version_after(ctx, parsed_op, result)
+
         _finish_result(
             run,
             results,
@@ -327,7 +398,7 @@ def execute_ops(
             started_at=started_at,
         )
 
-        if result_failed(result) and parsed_is_mutating(parsed_op):
+        if result_failed(result) and failure_blocks(parsed_op):
             stop_mutating = True
             stop_reason = '%s on %s' % (op_name, target or '?')
 

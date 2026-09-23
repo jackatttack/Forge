@@ -250,17 +250,66 @@ def _generic_result_hint(
         lines
     )
 
+# Statuses Forge's engine produces for any op. Their hint does not depend
+# on which op carried them, so they live here rather than in each op table.
+ENGINE_STATUS_HINTS = {
+    'SKIPPED_AFTER_FAILURE': {
+        'message': 'Skipped because an earlier operation in this bundle failed.',
+        'why': (
+            'After a failed mutation, gate or assertion, Forge skips later '
+            'mutations and RUNs so nothing builds on a broken step.'
+        ),
+        'next': [
+            'Fix the first failure listed in Errors, then rerun this operation.',
+        ],
+    },
+    'SKIPPED_STALE_READ': {
+        'message': 'The file changed since the pinned version was seen.',
+        'why': (
+            'IF_VERSION refused the edit so it could not overwrite content '
+            'the model has not read. The file was not touched.'
+        ),
+        'next': [
+            'READ the file again and pin the version in the new header.',
+            'Check that the planned edit still fits the current content.',
+        ],
+    },
+}
+
+
+def _matching_hints(hints, haystack, max_hints):
+    """Render the op hints whose key appears in haystack, in table order."""
+    rendered = []
+    for key, hint in hints.items():
+        needle = str(key).lower()
+        if not needle or needle.startswith('_') or needle not in haystack:
+            continue
+        rendered.append(_render_hint(key, hint))
+        if len(rendered) >= max_hints:
+            break
+    return rendered
+
 
 def render_hints_for_result(
     op_module,
     result,
 ):
-    status = str(
-        (result or {}).get(
-            'status'
-        )
-        or ''
-    )
+    """
+    Return the recovery hint for a failed or skipped result, or ''.
+
+    Matching runs in tiers so the most specific evidence wins:
+
+    1. Engine statuses such as SKIPPED_AFTER_FAILURE use
+       ENGINE_STATUS_HINTS, whatever the op.
+    2. The op's HINTS keys are matched against the status and message,
+       which describe what actually went wrong.
+    3. Only if nothing matched there, the same keys are matched against
+       the preview too. Captured output such as test names or script
+       stdout can contain any word, so it must never outrank the message.
+
+    Within a tier, keys are tried in table order, up to _max_hints.
+    """
+    status = str((result or {}).get('status') or '')
 
     if status == 'APPLIED':
         return ''
@@ -270,91 +319,38 @@ def render_hints_for_result(
         result=result,
     )
 
-    hints = getattr(
-        op_module,
-        'HINTS',
-        {},
-    ) or {}
+    engine_hint = ENGINE_STATUS_HINTS.get(status)
+    if engine_hint:
+        return _append_help(
+            _render_hint(status, engine_hint),
+            op_name,
+        )
 
-    haystack = '\n'.join([
-        str(
-            (result or {}).get(
-                'op'
-            )
-            or ''
-        ),
-        str(
-            (result or {}).get(
-                'status'
-            )
-            or ''
-        ),
-        str(
-            (result or {}).get(
-                'message'
-            )
-            or ''
-        ),
-        str(
-            (result or {}).get(
-                'preview'
-            )
-            or ''
-        ),
-    ]).lower()
-
-    max_hints = hints.get(
-        '_max_hints',
-        1,
-    )
+    hints = getattr(op_module, 'HINTS', {}) or {}
 
     try:
-        max_hints = int(
-            max_hints
-        )
+        max_hints = int(hints.get('_max_hints', 1))
     except Exception:
         max_hints = 1
 
-    rendered = []
-    seen = set()
+    failure_text = '\n'.join([
+        status,
+        str((result or {}).get('message') or ''),
+    ]).lower()
 
-    for key, hint in hints.items():
-        if str(
-            key
-        ).startswith(
-            '_'
-        ):
-            continue
+    full_text = '\n'.join([
+        str((result or {}).get('op') or ''),
+        failure_text,
+        str((result or {}).get('preview') or ''),
+    ]).lower()
 
-        needle = str(
-            key
-        ).lower()
-
-        if (
-            needle
-            and needle in haystack
-            and needle not in seen
-        ):
-            rendered.append(
-                _render_hint(
-                    key,
-                    hint,
-                )
-            )
-
-            seen.add(
-                needle
-            )
-
-        if len(
-            rendered
-        ) >= max_hints:
-            break
+    rendered = (
+        _matching_hints(hints, failure_text, max_hints)
+        or _matching_hints(hints, full_text, max_hints)
+    )
 
     if rendered:
-        text = '\n\n'.join(
-            rendered
-        ).strip()
+        text = '\n\n'.join(rendered).strip()
     else:
         text = _generic_result_hint(
             op_name,

@@ -367,8 +367,18 @@ def execute(ctx, parsed_op, result):
         result['message'] = message
         return
 
-    result['status'] = 'APPLIED'
     mode = data.get('mode') or 'file'
+    if mode in ('file', 'ast'):
+        # Every content read reports the whole file's version, so a later
+        # edit can pin IF_VERSION to exactly what was seen here.
+        from forge.core.file_versions import file_version, format_version
+        version = file_version(os.path.join(root, target.split('::', 1)[0]))
+        data['version'] = version
+        preview_lines = data.get('preview_lines') or []
+        if preview_lines:
+            preview_lines[0] = preview_lines[0] + ' · ' + format_version(version)
+
+    result['status'] = 'APPLIED'
     if mode == 'targets':
         result['message'] = '%d targets' % len(data.get('targets') or [])
     elif mode == 'directory':

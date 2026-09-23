@@ -63,6 +63,7 @@ SPEC = {
         'QUERY', 'CASE', 'LIMIT', 'EXT',
         'MATCH', 'CONTEXT', 'FILTER', 'EXCLUDE', 'ACTIVE_ONLY',
         'DEFINES', 'CALLS', 'IMPORTS', 'ASSIGNS',
+        'EXPECT_HITS',
     ]),
     'required_directives': set(),
 }
@@ -112,6 +113,10 @@ HELP = {
         'FILTER: forge/core',
     ],
     'directives': {
+        'EXPECT_HITS': (
+            'Fail the op, and stop later mutations, unless the hit count '
+            'matches: 0, 3, >0, >=2, <5 or <=5. Counts are capped by LIMIT.'
+        ),
         'ACTIVE_ONLY': (
             'With yes, exclude common archive, reference, and '
             'staging paths.'
@@ -173,6 +178,15 @@ HELP = {
 
 HINTS = {
     '_max_hints': 1,
+    'failed_expectation': {
+        'message': 'A SEARCH assertion did not hold, so later mutations were skipped.',
+        'why': 'EXPECT_HITS compares the hit count with what the bundle expected.',
+        'next': [
+            'If hits were found that should be gone, READ the hits listed in the preview.',
+            'If LIMIT was reached, raise LIMIT and rerun.',
+            'If the expectation itself was wrong, fix EXPECT_HITS rather than the code.',
+        ],
+    },
     'query': {
         'message': 'SEARCH needs a query or AST search directive.',
         'why': 'Text search needs text. AST search needs a structural directive such as DEFINES, CALLS, IMPORTS, or ASSIGNS.',
@@ -861,3 +875,41 @@ def execute(ctx, parsed_op, result):
         'skipped_ext': int(scan_stats.get('skipped_ext') or 0),
         'skipped_dirs': sorted(scan_stats.get('skipped_dirs') or []),
     }
+def check_expectations(parsed_op, result):
+    """
+    Judge EXPECT_HITS after a successful search.
+
+    The count is the number of hits returned, so it is capped by LIMIT.
+    When the limit was reached, only lower bounds (>N, >=N) can be judged;
+    an exact or upper-bound expectation fails and asks for a higher LIMIT.
+    """
+    from forge.core.bundle_controls import count_meets, parse_count_expectation
+
+    directives = parsed_op.get('directives') or {}
+    if 'EXPECT_HITS' not in directives:
+        return
+
+    written = str(directives.get('EXPECT_HITS') or '').strip()
+
+    def fail(message):
+        result['status'] = 'FAILED_EXPECTATION'
+        result['message'] = 'EXPECT_HITS %s: %s' % (written, message)
+
+    try:
+        expectation = parse_count_expectation(written)
+    except ValueError as e:
+        fail(str(e))
+        return
+
+    data = result.get('data') or {}
+    count = len(data.get('hits') or [])
+
+    if data.get('limit_reached') and expectation[0] in ('=', '<', '<='):
+        fail('LIMIT reached at %d hits, so the true count is unknown; raise LIMIT' % count)
+        return
+
+    if not count_meets(count, expectation):
+        fail('found %d hits' % count)
+        return
+
+    result['message'] = str(result.get('message') or '') + ' · expected %s: met' % written

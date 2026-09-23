@@ -22,6 +22,7 @@ SPEC = {
     'allowed_directives': set([
         'ARGS',
         'CONFIRM',
+        'STOP_ON_FAIL',
     ]),
     'required_directives': set(),
 }
@@ -41,6 +42,10 @@ HELP = {
         ),
         'CONFIRM': (
             'Explicitly permits execution when the script path is protected by the core guard.'
+        ),
+        'STOP_ON_FAIL': (
+            'With yes, a non-zero exit stops every later mutation and RUN, '
+            'so a test RUN can gate the rest of the bundle.'
         ),
     },
     'internal_directives': [],

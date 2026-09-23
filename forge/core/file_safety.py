@@ -58,6 +58,11 @@ def split_root_prefix(rel_path):
     if not name or os.sep in name or '/' in name:
         return None, text
 
+    # "app.py::main" is an AST target on a root-level file. The first
+    # colon belongs to "::", so it is not a root separator.
+    if remainder.startswith(ROOT_SEPARATOR):
+        return None, text
+
     return name, remainder.strip()
 
 

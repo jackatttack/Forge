@@ -87,6 +87,42 @@ class MutationStopsAfterFailure(ForgeCase):
         self.assertFalse(self.exists('ran.txt'))
 
 
+class FailedRunDoesNotBlock(ForgeCase):
+
+    def test_failed_run_allows_later_write_and_run(self):
+        """
+        A RUN that exits non-zero is an observation, not a failed edit.
+
+        Its outcome is already in the packet, so later edits and runs in
+        the same bundle still execute.
+        """
+        self.put('failing.py', 'raise SystemExit(1)\n')
+        self.put(
+            'sentinel.py',
+            'open("ran.txt", "w").write("executed")\n',
+        )
+
+        run = self.run_bundle(
+            bundle(
+                'RUN failing.py',
+                '',
+                'WRITE after.txt',
+                'BEGIN_BODY',
+                'written',
+                'END_BODY',
+                '',
+                'RUN sentinel.py',
+            )
+        )
+
+        statuses = self.statuses(run)
+        self.assertNotEqual(statuses[0], 'APPLIED')
+        self.assertEqual(statuses[1], 'APPLIED')
+        self.assertEqual(statuses[2], 'APPLIED')
+        self.assertTrue(self.exists('after.txt'))
+        self.assertTrue(self.exists('ran.txt'))
+
+
 class ParseFailuresExecuteNothing(ForgeCase):
 
     def test_a_parse_error_prevents_every_operation(self):

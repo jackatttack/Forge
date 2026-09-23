@@ -44,7 +44,7 @@ SPEC = {
     'name': 'REPLACE',
     'target_kind': 'path',
     'body_mode': 'optional',
-    'allowed_directives': set(['ALL', 'CONFIRM', 'LINES', 'OCCURRENCE']),
+    'allowed_directives': set(['ALL', 'CONFIRM', 'IF_VERSION', 'LINES', 'OCCURRENCE']),
     'required_directives': set(),
 }
 
@@ -80,6 +80,10 @@ HELP = {
         'END_NEW',
     ],
     'directives': {
+        'IF_VERSION': (
+            'Refuse the edit unless the file still has this version from '
+            'an earlier READ or edit result.'
+        ),
         'ALL': (
             'With yes, replace every exact OLD match. '
             'Requires CONFIRM: yes.'
@@ -370,14 +374,36 @@ def validate(parsed_op):
 def _execute_ast(ctx, parsed_op, result):
     from forge.core.file_safety import checked_write, CompileBlocked
 
-    root = _root(ctx)
     target = (parsed_op.get('target') or '').strip()
     body = parsed_op.get('body') or ''
 
-    resolved = resolve_ast_target(root, target)
+    file_target, separator, ast_target = target.partition('::')
+    if not separator:
+        result['status'] = 'FAILED_PARSE'
+        result['message'] = 'Invalid AST target: ' + target
+        return
+
+    root, file_abs, err = safe_target(ctx, file_target)
+    if err:
+        result['status'] = 'FAILED_INVALID_PATH'
+        result['message'] = err
+        return
+
+    try:
+        file_ref = os.path.relpath(file_abs, root)
+    except Exception:
+        file_ref = split_root_prefix(file_target)[1]
+
+    resolved = resolve_ast_target(
+        root,
+        file_ref + '::' + ast_target,
+    )
     if not resolved or not resolved.get('ok'):
         result['status'] = (resolved or {}).get('code') or 'FAILED_NOT_FOUND'
-        result['message'] = (resolved or {}).get('error') or ('Target not found: ' + target)
+        result['message'] = (
+            (resolved or {}).get('error')
+            or ('Target not found: ' + target)
+        )
         return
 
     file_abs = resolved.get('file_abs')
@@ -419,13 +445,14 @@ def _execute_ast(ctx, parsed_op, result):
     try:
         rel = os.path.relpath(file_abs, root)
     except Exception:
-        rel = resolved.get('file_ref') or target.split('::', 1)[0]
+        rel = resolved.get('file_ref') or file_ref
 
-    # rel is already relative to the resolved root, so only the root name
-    # needs recording alongside it.
-    target_root, _ = split_root_prefix(target)
+    target_root, _ = split_root_prefix(file_target)
     touched = touched_file(
-        rel, before, after, existed_before=True,
+        rel,
+        before,
+        after,
+        existed_before=True,
         root=target_root or '',
     )
     record_touched(ctx, result, touched)
@@ -442,7 +469,10 @@ def _execute_ast(ctx, parsed_op, result):
         'mode: ast',
         'file: ' + rel,
         'kind: ' + str(resolved.get('kind') or '?'),
-        'lines: %s-%s' % (resolved.get('start'), resolved.get('end')),
+        'lines: %s-%s' % (
+            resolved.get('start'),
+            resolved.get('end'),
+        ),
     ])
     result['data'] = {
         'target': target,

@@ -45,6 +45,7 @@ SPEC = {
         'ANCHOR',
         'CONFIRM',
         'EXPECT',
+        'IF_VERSION',
         'INDENT',
         'LINE',
         'MATCH',
@@ -96,6 +97,10 @@ HELP = {
         'END_BODY',
     ],
     'directives': {
+        'IF_VERSION': (
+            'Refuse the insert unless the file still has this version from '
+            'an earlier READ or edit result.'
+        ),
         'ANCHOR': (
             'Existing text to match inside a resolved AST target.'
         ),

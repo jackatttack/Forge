@@ -30,6 +30,7 @@ SPEC = {
     'allowed_directives': set([
         'CONFIRM',
         'ALLOW_BROKEN',
+        'IF_VERSION',
     ]),
     'required_directives': set(),
 }
@@ -50,6 +51,10 @@ HELP = {
         'END_BODY',
     ],
     'directives': {
+        'IF_VERSION': (
+            'Refuse the write unless the file still has this version from '
+            'an earlier READ or edit result; missing means create only.'
+        ),
         'ALLOW_BROKEN': (
             'With yes, bypass Python compilation only for a '
             'deliberately invalid fixture.'

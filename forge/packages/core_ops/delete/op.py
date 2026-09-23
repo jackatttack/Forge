@@ -21,7 +21,7 @@ SPEC = {
     'name': 'DELETE',
     'target_kind': 'path',
     'body_mode': 'optional',
-    'allowed_directives': set(['CONFIRM', 'LINES', 'OCCURRENCE', 'ALL']),
+    'allowed_directives': set(['CONFIRM', 'IF_VERSION', 'LINES', 'OCCURRENCE', 'ALL']),
     'required_directives': set(),
 }
 
@@ -46,6 +46,10 @@ HELP = {
         'END_OLD',
     ],
     'directives': {
+        'IF_VERSION': (
+            'Refuse the delete unless the file still has this version from '
+            'an earlier READ or edit result.'
+        ),
         'ALL': (
             'With yes, delete every exact OLD match. '
             'Requires CONFIRM: yes.'

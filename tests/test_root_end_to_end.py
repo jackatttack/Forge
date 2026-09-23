@@ -102,6 +102,33 @@ class ConfiguredRootReachesTheBundle(RootBundleCase):
 
         self.assertEqual(self.statuses(run)[0], 'APPLIED')
 
+    def test_ast_replace_edits_a_file_in_the_named_root(self):
+        """AST REPLACE must resolve its file against the selected named root."""
+        self.put(
+            self.other_root,
+            'app.py',
+            'def main():\n    return 1\n',
+        )
+
+        run = self.run_bundle(
+            bundle(
+                'REPLACE other:app.py::main',
+                'BEGIN_BODY',
+                'def main():',
+                '    return 2',
+                'END_BODY',
+            )
+        )
+
+        self.assertEqual(self.statuses(run)[0], 'APPLIED')
+        self.assertEqual(
+            self.read(self.other_root, 'app.py'),
+            'def main():\n    return 2\n',
+        )
+        self.assertFalse(
+            os.path.exists(os.path.join(self.project_root, 'app.py'))
+        )
+
     def test_unprefixed_write_still_lands_in_the_project_root(self):
         """The default must be completely unaffected by this feature."""
         run = self.run_bundle(
