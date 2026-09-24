@@ -10,6 +10,8 @@ changing Forge execution or the canonical return packet.
 """
 
 import sys
+import threading
+import time
 
 try:
     import console
@@ -24,6 +26,12 @@ PORTABLE_FORGE_PYTHONISTA_LIVE_UI = (
 WIDTH = 41
 BAR_WIDTH = 22
 TIMING_BAR_WIDTH = 17
+# Pythonista's console cannot move the cursor, so every live update is a full
+# clear-and-redraw. Keep them rare: at most one frame per second, and none at
+# all for runs that finish within LIVE_START_DELAY.
+LIVE_FRAME_INTERVAL = 1.0
+LIVE_START_DELAY = 1.0
+LIVE_RECENT_OPERATIONS = 8
 
 
 HEX = {
@@ -65,7 +73,12 @@ PALETTE = {
 
 class ForgeConsoleUI(object):
     """
-    Append-only live execution renderer.
+    Live execution renderer: a console display rebuilt at most once per second.
+
+    Events only mark the display as changed; a timer thread redraws once per
+    LIVE_FRAME_INTERVAL when something changed or an operation's clock is
+    visibly running. Runs shorter than LIVE_START_DELAY are drawn once, at
+    the end.
 
     The current stdout object is captured when the renderer is constructed.
     Forge RUN operations may temporarily redirect global sys.stdout while
@@ -78,14 +91,13 @@ class ForgeConsoleUI(object):
 
         self.started = False
         self.finished = False
-
         self.stamp = ""
         self.mode = "dev"
-
         self.total = 0
 
         self.operations = []
         self.timings = []
+        self.active_operation = None
 
         self.applied = 0
         self.skipped = 0
@@ -95,6 +107,12 @@ class ForgeConsoleUI(object):
         self.run_elapsed = 0.0
         self.error_count = 0
         self.packet_bytes = 0
+
+        self._render_lock = threading.RLock()
+        self._timer_stop = threading.Event()
+        self._timer_thread = None
+        self._clock_start = None
+        self._dirty = False
 
     def _flush(self):
         try:
@@ -358,10 +376,114 @@ class ForgeConsoleUI(object):
             return
 
         self.started = True
+        self._clock_start = time.monotonic()
+        self._set_font()
+        self._dirty = True
 
+        # The clock must continue while a Forge operation blocks the caller.
+        # Do not start a display thread outside Pythonista's console host.
+        if console is not None and not self.finished:
+            self._timer_thread = threading.Thread(
+                target=self._timer_loop,
+                name="ForgeConsoleTimer",
+                daemon=True,
+            )
+            self._timer_thread.start()
+
+    def _timer_loop(self):
+        """Refresh the display between Forge's operation events."""
+        if self._timer_stop.wait(LIVE_START_DELAY):
+            return
+        while True:
+            with self._render_lock:
+                if self.finished:
+                    return
+                # Redraw only when something changed or a clock is visibly ticking.
+                if self._dirty or self.active_operation is not None:
+                    try:
+                        self._render_live()
+                    except Exception:
+                        # Presentation must not interfere with Forge execution.
+                        self._timer_stop.set()
+                        return
+            if self._timer_stop.wait(LIVE_FRAME_INTERVAL):
+                return
+
+    def _render_live(self, show_all=False):
+        """Rebuild the visible console from retained operation state.
+
+        The frame is assembled first and written with one print per run of
+        same-coloured lines, so it appears at once rather than line by line.
+        """
+        self._dirty = False
+        lines = self._hero_lines() + self._live_lines(show_all)
         self._clear()
         self._set_font()
-        self._hero()
+        self._emit(lines)
+
+    def _hero_lines(self):
+        return [
+            ("border", "═" * WIDTH),
+            ("accent", self._center(self._spaced("FORGE"))),
+            ("muted", self._center("{}  ·  LIVE EXECUTION".format(
+                str(self.mode or "dev").upper()))),
+            ("border", "═" * WIDTH),
+            ("text", ""),
+        ]
+
+    def _live_lines(self, show_all):
+        """(tone, text) lines for completed, active and progress sections."""
+        lines = []
+        completed = len(self.operations)
+        first = 0 if show_all else max(0, completed - LIVE_RECENT_OPERATIONS)
+
+        if completed:
+            if first:
+                lines.append(("muted", "  {} earlier operation(s)".format(first)))
+            lines.append(("muted", "Completed"))
+            for position in range(first, completed):
+                op, target, status = self.operations[position]
+                seconds = self.timings[position][2]
+                lines.append((self._status_tone(status), "  {} {:02d}/{:02d}  {:<8}  {}".format(
+                    "✓" if status == "APPLIED" else "•",
+                    position + 1, self.total, op, self._seconds(seconds))))
+                lines.append(("text", "      " + target))
+            lines.append(("text", ""))
+
+        if self.active_operation is not None:
+            active = self.active_operation
+            elapsed = time.monotonic() - active["started_at"]
+            # One spinner step per frame, i.e. per second.
+            spinner = "◐◓◑◒"[int(elapsed) % 4]
+            lines.append(("muted", "Active operation"))
+            lines.append(("accent", "  {} {:02d}/{:02d}  {:<8}  {}s".format(
+                spinner, active["index"], self.total, active["op"], int(elapsed))))
+            lines.append(("text", "      " + active["target"]))
+        elif self.finished:
+            lines.append(("muted", "Execution finished"))
+        else:
+            lines.append(("muted", "Waiting for next operation"))
+
+        lines.append(("text", ""))
+        lines.append(("accent", "  {}  {}/{}".format(
+            self._progress_bar(completed, self.total), completed, self.total)))
+        lines.append(("cyan", "  Run timer: {}s".format(
+            int(time.monotonic() - self._clock_start))))
+        return lines
+
+    def _emit(self, lines):
+        """Write (tone, text) lines with one print per run of the same tone."""
+        run_tone, run = None, []
+        for tone, text in lines + [(None, None)]:
+            if tone != run_tone and run:
+                self._colour(run_tone)
+                print("\n".join(run), file=self.stream)
+                run = []
+            run_tone = tone
+            if text is not None:
+                run.append(text)
+        self._reset()
+        self._flush()
 
     def _status_tone(
         self,
@@ -422,202 +544,34 @@ class ForgeConsoleUI(object):
 
         self.failed += 1
 
-    def _live_start(
-        self,
-        event,
-    ):
+    def _live_start(self, event):
         self._ensure_started()
+        self.total = event.get("total") or self.total or 0
+        self.active_operation = {
+            "index": int(event.get("index") or 0),
+            "op": str(event.get("op") or "?").upper(),
+            "target": str(event.get("target") or ""),
+            "started_at": time.monotonic(),
+        }
+        self._dirty = True
 
-        index = event.get(
-            "index"
-        ) or 0
-
-        total = event.get(
-            "total"
-        ) or self.total or 0
-
-        self.total = total
-
-        op = str(
-            event.get(
-                "op"
-            )
-            or "?"
-        ).upper()
-
-        target = str(
-            event.get(
-                "target"
-            )
-            or ""
-        )
-
-        self._colour(
-            "accent"
-        )
-
-        print(
-            "● {:02d}/{:02d}  {:<8}".format(
-                int(
-                    index
-                ),
-                int(
-                    total
-                ),
-                op,
-            ),
-            file=self.stream,
-        )
-
-        self._reset()
-        self._flush()
-
-        self._write(
-            "  "
-            + target,
-            "text",
-        )
-
-    def _live_finish(
-        self,
-        event,
-    ):
+    def _live_finish(self, event):
         self._ensure_started()
+        self.total = event.get("total") or self.total or 0
 
-        index = event.get(
-            "index"
-        ) or 0
-
-        total = event.get(
-            "total"
-        ) or self.total or 0
-
-        self.total = total
-
-        op = str(
-            event.get(
-                "op"
-            )
-            or "?"
-        ).upper()
-
-        target = str(
-            event.get(
-                "target"
-            )
-            or ""
-        )
-
-        status = str(
-            event.get(
-                "status"
-            )
-            or ""
-        ).upper()
-
+        op = str(event.get("op") or "?").upper()
+        target = str(event.get("target") or "")
+        status = str(event.get("status") or "").upper()
         try:
-            elapsed = float(
-                event.get(
-                    "elapsed_seconds"
-                )
-                or 0.0
-            )
-        except Exception:
+            elapsed = float(event.get("elapsed_seconds") or 0.0)
+        except (TypeError, ValueError):
             elapsed = 0.0
 
-        self.operations.append(
-            (
-                op,
-                target,
-                status,
-            )
-        )
-
-        self.timings.append(
-            (
-                op,
-                target,
-                elapsed,
-            )
-        )
-
-        self._record_status(
-            status
-        )
-
-        word = self._status_word(
-            status
-        )
-
-        tone = self._status_tone(
-            status
-        )
-
-        duration = self._seconds(
-            elapsed
-        )
-
-        label = (
-            "  ✓ "
-            + word
-            if status == "APPLIED"
-            else "  • "
-            + word
-        )
-
-        self._colour(
-            tone
-        )
-
-        print(
-            label,
-            end="",
-            file=self.stream,
-        )
-
-        self._reset()
-
-        padding = max(
-            1,
-            WIDTH
-            - len(label)
-            - len(duration),
-        )
-
-        print(
-            " " * padding
-            + duration,
-            file=self.stream,
-        )
-
-        self._flush()
-
-        self._colour(
-            "accent"
-        )
-
-        print(
-            "  "
-            + self._progress_bar(
-                index,
-                total,
-            ),
-            end="",
-            file=self.stream,
-        )
-
-        self._reset()
-
-        print(
-            "  {}/{}".format(
-                index,
-                total,
-            ),
-            file=self.stream,
-        )
-
-        self._flush()
-        self._plain()
+        self.operations.append((op, target, status))
+        self.timings.append((op, target, elapsed))
+        self._record_status(status)
+        self.active_operation = None
+        self._dirty = True
 
     def _outcome_graph(self):
         values = [
@@ -900,8 +854,11 @@ class ForgeConsoleUI(object):
         if self.finished:
             return
 
-        self.finished = True
         self._ensure_started()
+        self.finished = True
+        self._timer_stop.set()
+        self.active_operation = None
+        self._render_live(show_all=True)
 
         self.run_status = str(
             event.get(
@@ -1008,54 +965,20 @@ class ForgeConsoleUI(object):
                 "danger",
             )
 
-    def __call__(
-        self,
-        event,
-    ):
-        if not isinstance(
-            event,
-            dict,
-        ):
+    def __call__(self, event):
+        if not isinstance(event, dict):
             return
 
-        name = str(
-            event.get(
-                "event"
-            )
-            or ""
-        )
+        with self._render_lock:
+            name = str(event.get("event") or "")
 
-        if name == "run_started":
-            self.stamp = str(
-                event.get(
-                    "stamp"
-                )
-                or ""
-            )
-
-            self.mode = str(
-                event.get(
-                    "mode"
-                )
-                or "dev"
-            )
-
-            self._ensure_started()
-            return
-
-        if name == "operation_started":
-            self._live_start(
-                event
-            )
-            return
-
-        if name == "operation_finished":
-            self._live_finish(
-                event
-            )
-            return
-
-        if name == "run_finished":
-            self._completion(
-                event
-            )
+            if name == "run_started":
+                self.stamp = str(event.get("stamp") or "")
+                self.mode = str(event.get("mode") or "dev")
+                self._ensure_started()
+            elif name == "operation_started":
+                self._live_start(event)
+            elif name == "operation_finished":
+                self._live_finish(event)
+            elif name == "run_finished":
+                self._completion(event)
