@@ -57,6 +57,11 @@ SPEC = {
 
 HELP = {
     'summary': 'Insert text or code into a file or resolved AST target.',
+    'brief': (
+        'path::Target with POSITION: after (new sibling) or end (inside), '
+        'or LINE: N in a plain file · ANCHOR: text places it by matching '
+        'text, INDENT: child nests it · IF_VERSION pins.'
+    ),
     'minimal_example': [
         'INSERT app.py::main',
         'POSITION: end',

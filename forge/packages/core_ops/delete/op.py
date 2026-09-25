@@ -27,6 +27,11 @@ SPEC = {
 
 HELP = {
     'summary': 'Delete a file, explicit file line range, or exact text block.',
+    'brief': (
+        'A whole file, LINES: a-b, or an exact BEGIN_OLD block · repeated '
+        'OLD needs OCCURRENCE: N, or ALL: yes with CONFIRM: yes · '
+        'IF_VERSION pins.'
+    ),
     'minimal_example': [
         'DELETE scratch/example.txt',
         '',

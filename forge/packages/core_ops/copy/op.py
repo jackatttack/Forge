@@ -32,6 +32,10 @@ SPEC = {
 
 HELP = {
     'summary': 'Copy one project-relative text file to another project-relative path.',
+    'brief': (
+        'COPY source with TO: destination · an existing destination needs '
+        'OVERWRITE: yes.'
+    ),
     'minimal_example': [
         'COPY scratch/source.py',
         'TO: scratch/copy.py',

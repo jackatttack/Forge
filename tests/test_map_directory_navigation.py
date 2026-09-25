@@ -80,9 +80,11 @@ class DirectoryMapTests(ForgeCase):
         self.put('alpha/.hidden', '')
         self.put('alpha/visible.txt', '')
         text, data = self.preview()
-        self.assertIn('./  [2 filtered]', text)
-        self.assertIn('alpha/  [2 filtered]', text)
-        self.assertNotIn('__pycache__', text)
+        self.assertIn('./  [2 filtered: .forge, node_modules]', text)
+        self.assertIn('alpha/  [2 filtered: .hidden, __pycache__]', text)
+        # Filtered names appear in the note, never as listed entries.
+        self.assertNotIn('__pycache__/', text)
+        self.assertNotIn('node_modules/', text)
         self.assertIn('visible.txt', text)
 
     def test_directory_mapping_does_not_read_or_rank_source(self):

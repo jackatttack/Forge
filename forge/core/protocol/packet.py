@@ -131,6 +131,56 @@ def _format_changed_files(run):
     return lines
 
 
+# Engine status whose hint is identical for every op it lands on.
+SKIPPED_AFTER_FAILURE = 'SKIPPED_AFTER_FAILURE'
+
+
+def collapse_skip_errors(errors):
+    """
+    Return the Errors lines with repeated after-failure skips merged.
+
+    Every op skipped after a failure records the same error apart from its
+    op name. Real failures stay exactly as recorded; two or more skips
+    become one line with a count, placed where the first skip was.
+    """
+    skip_prefix = SKIPPED_AFTER_FAILURE + ' |'
+    skips = [err for err in errors if str(err).startswith(skip_prefix)]
+
+    if len(skips) < 2:
+        return list(errors)
+
+    reason = str(skips[0]).split(' :: ', 1)[-1]
+    merged = '%s | %s ops :: %s' % (SKIPPED_AFTER_FAILURE, len(skips), reason)
+
+    collapsed = []
+    for err in errors:
+        if not str(err).startswith(skip_prefix):
+            collapsed.append(err)
+        elif merged not in collapsed:
+            collapsed.append(merged)
+    return collapsed
+
+
+def _format_shared_skip_hint(skipped_results):
+    """
+    Render one hint block for several ops skipped after the same failure.
+
+    Every skipped op carries the same engine hint, so it is shown once,
+    headed by how many ops were skipped and which came first. The Ops list
+    still names every skipped op, so nothing is lost.
+    """
+    first = skipped_results[0]
+    return [
+        '%s: %s ops skipped (first: %s %s; all listed under Ops)' % (
+            SKIPPED_AFTER_FAILURE,
+            len(skipped_results),
+            first.get('op') or '?',
+            first.get('target') or '?',
+        ),
+        str(first.get('hint')).rstrip(),
+    ]
+
+
 def format_packet(run):
     """Return the complete deterministic AI-facing Forge packet."""
     run = run or {}
@@ -149,7 +199,7 @@ def format_packet(run):
         lines.append('')
         lines.append('Errors:')
 
-        for err in errors:
+        for err in collapse_skip_errors(errors):
             lines.append('- ' + str(err))
 
     lines.append('')
@@ -194,13 +244,27 @@ def format_packet(run):
         )
     ]
 
+    # One failure can skip dozens of later ops, each carrying the same
+    # engine hint. Show that hint once with a count instead of per op.
+    skipped_with_hint = [
+        result
+        for result in results
+        if result.get('hint')
+        and result.get('status') == SKIPPED_AFTER_FAILURE
+    ]
+    collapse_skips = len(skipped_with_hint) > 1
+
     hinted.extend([
         result
         for result in results
         if result.get('hint')
+        and not (
+            collapse_skips
+            and result.get('status') == SKIPPED_AFTER_FAILURE
+        )
     ])
 
-    if hinted:
+    if hinted or collapse_skips:
         lines.append('')
         lines.append('=== HINTS ===')
 
@@ -214,6 +278,11 @@ def format_packet(run):
             )
             lines.append(
                 str(result.get('hint')).rstrip()
+            )
+
+        if collapse_skips:
+            lines.extend(
+                _format_shared_skip_hint(skipped_with_hint)
             )
 
     previews = [

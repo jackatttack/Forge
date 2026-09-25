@@ -51,6 +51,12 @@ List the stable public language:
 
     FORGE ops
 
+Under each op's summary, the list shows its directives and body shape,
+generated from the op itself so they always match what the parser accepts,
+and, where the op provides one, a one-line brief of its limits and most
+useful capabilities. That is usually enough to write a bundle without a
+help call; use `FORGE help <OP>` for syntax details and examples.
+
 Include installed local extensions:
 
     FORGE ops all

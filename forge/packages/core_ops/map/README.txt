@@ -48,14 +48,17 @@ a turn.
 Counts describe displayed entries, not recursive filesystem totals.
 Collapsed directories report the number of immediate entries hidden by
 depth or limit. These are not recursive counts. Filtered entries are counted
-at their parent. Unreadable directories are marked explicitly; symbolic
-links are listed but never followed.
+at their parent and named there, for example `[2 filtered: .git, __pycache__]`.
+Unreadable directories are marked explicitly; symbolic links are listed but
+never followed.
 
 DEPTH: 0 lists immediate children. DEPTH: 1 also lists their children.
 The maximum is 5. LIMIT caps displayed entries, excluding the root row and
 headers. If even root entries exceed LIMIT, the root reports the omission.
 
 Directory maps do not read source files, rank entrypoints, or suggest reads.
+When a map is truncated and the tree contains Python files, it ends with one
+pointer to `MODE: symbols`, which does read every Python file.
 DOCS affects file maps only. Map a smaller directory to inspect its contents.
 
 Directory maps are source-focused by default. They skip common noisy folders such as:
@@ -137,12 +140,16 @@ Use `MODE: imports` when you deliberately want the full import list.
     MAP file.py
     MODE: relationships
 
+    MAP directory
+    MODE: symbols
+
 Mode behaviour:
 
 - auto: choose a sensible map for the target. Shows both imports and targets.
 - targets: target-focused view. Suppresses import sections and dependency maps.
 - imports: import-focused view. Suppresses target sections and suggested reads.
 - relationships: Python-file relationship view. Indexes the containing project scope and shows reverse imports plus statically resolved external callers.
+- symbols: Python symbol index. One line per Python file under the target with its top-level classes and functions; GLOB narrows by file name and KEY shows a named value per file. See "Symbol index".
 
 Relationship mode is intentionally opt-in because it scans a wider project scope than normal file mapping.
 
@@ -160,12 +167,48 @@ Hide documentation snippets when only structure matters:
     MAP forge/forge/packages/core_ops/map
     DOCS: no
 
+## Symbol index
+
+A directory map lists names, and in a large Python package it truncates long
+before it reaches the module you need. `MODE: symbols` reads every Python
+file under the target instead and gives each one line:
+
+    MAP icloud:projects/mathsgen
+    MODE: symbols
+
+    mathsgen/bounds_family.py — classes: BoundsGenerator · functions: make, check
+
+Narrow it by file name, and show a named value per file:
+
+    MAP icloud:projects/mathsgen
+    MODE: symbols
+    GLOB: *_family.py
+    KEY: id
+
+    mathsgen/bounds_family.py — functions: make · id: 'bounds', 'bounds_lower'
+
+KEY collects the literal values given to that name in assignments
+(`id = 'x'`) and keyword arguments (`GeneratorInfo(id='x')`), in source
+order. A value that is not a literal shows as `<expr>`. Files that cannot
+be parsed are listed with the reason rather than dropped.
+
+LIMIT counts files; the index says how many more exist and how to narrow.
+Noisy folders are skipped exactly as in directory maps, and the header says
+what was left out. The index is opt-in because it parses every file.
+
+When a directory map is truncated and contains Python files, it ends with a
+pointer to the symbol index.
+
+To find who imports a module, map that file with `MODE: relationships`.
+
 ## Directives
 
-- MODE: auto, targets, imports, or relationships.
+- MODE: auto, targets, imports, relationships, or symbols.
 - DEPTH: N — directory expansion depth, 0 to 5. Default: 1.
-- LIMIT: N — cap listed entries. Default: 80.
+- LIMIT: N — cap listed entries (files, in symbols mode). Default: 80.
 - DOCS: yes/no — include documentation snippets in file maps. Default: yes.
+- GLOB: patterns — symbols mode only; file-name patterns, case-insensitive.
+- KEY: name — symbols mode only; show each file's values for that name.
 
 ## Common workflows
 
@@ -228,6 +271,7 @@ It can show:
 - large-file summaries
 - reverse imports in relationship mode
 - statically resolved external callers in relationship mode
+- a one-line-per-file symbol index of a Python tree in symbols mode
 - self-filtering (won't suggest mapping a file from itself)
 
 ### Relationship resolution
@@ -259,5 +303,7 @@ It does not yet fully resolve:
 - Use MODE: imports for dependency orientation (suppresses targets).
 - Use MODE: targets for complete target listings (suppresses imports).
 - Use MODE: relationships when reverse imports or external callers matter.
+- Use MODE: symbols to find which file in a Python package defines what,
+  and GLOB with KEY to list a named value such as an id across files.
 - Use SEARCH when looking for a specific symbol or phrase.
 - MAP is read-only and never modifies files.

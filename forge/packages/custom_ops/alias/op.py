@@ -24,6 +24,10 @@ SPEC = {
 
 HELP = {
     'summary': 'Manage local Forge aliases and one-line command shortcuts.',
+    'brief': (
+        'ALIAS list, tags, show <name>, remove <name> · ALIAS add <name> with '
+        'the bundle as body; DESCRIPTION and HINTS label it.'
+    ),
     'subject': [
         'No subject required. Use same-line args, e.g. ALIAS list or ALIAS show boot.',
         'ARGS carries those same-line arguments through the parser.',

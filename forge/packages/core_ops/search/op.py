@@ -58,10 +58,11 @@ _UNREPORTED_SKIP_DIRS = set(_SKIP_DIR_NAMES)
 SPEC = {
     'name': 'SEARCH',
     'target_kind': 'path',
-    'body_mode': 'forbidden',
+    # Optional body: one search pattern per line (see _body_patterns).
+    'body_mode': 'optional',
     'allowed_directives': set([
         'QUERY', 'CASE', 'LIMIT', 'EXT',
-        'MATCH', 'CONTEXT', 'FILTER', 'EXCLUDE', 'ACTIVE_ONLY',
+        'MATCH', 'CONTEXT', 'FILTER', 'EXCLUDE', 'ACTIVE_ONLY', 'GLOB',
         'DEFINES', 'CALLS', 'IMPORTS', 'ASSIGNS',
         'EXPECT_HITS',
     ]),
@@ -71,6 +72,11 @@ SPEC = {
 
 HELP = {
     'summary': 'Search project files by text or Python AST structure.',
+    'brief': (
+        'SEARCH path FOR text, or one pattern per body line (LIMIT then '
+        'applies per pattern) · MATCH exact|fuzzy|regex|ast · CONTEXT 0-20 '
+        '· GLOB filters file names · EXPECT_HITS asserts a count.'
+    ),
     'minimal_example': [
         'SEARCH forge FOR package contract',
         '',
@@ -111,6 +117,14 @@ HELP = {
         'MATCH: ast',
         'CALLS: expand_bundle',
         'FILTER: forge/core',
+        '',
+        'SEARCH projects/example',
+        'GLOB: *_family.py',
+        'LIMIT: 20',
+        'BEGIN_BODY',
+        'difficulty_descriptions',
+        'GeneratorInfo',
+        'END_BODY',
     ],
     'directives': {
         'EXPECT_HITS': (
@@ -131,7 +145,7 @@ HELP = {
             'With yes, make matching case-sensitive.'
         ),
         'CONTEXT': (
-            'Number of neighbouring lines shown around text hits.'
+            'Number of neighbouring lines shown around text hits, 0 to 20.'
         ),
         'DEFINES': (
             'In AST mode, find function, method, or class definitions.'
@@ -146,11 +160,17 @@ HELP = {
         'FILTER': (
             'Include only paths containing this substring.'
         ),
+        'GLOB': (
+            'Comma-separated file-name patterns such as *_family.py; only '
+            'files whose name matches one are searched. Names only, '
+            'case-insensitive; use FILTER for paths.'
+        ),
         'IMPORTS': (
             'In AST mode, find imports of this module.'
         ),
         'LIMIT': (
-            'Maximum matches returned; the default is 80.'
+            'Maximum matches returned; the default is 80. With body '
+            'patterns the limit applies to each pattern separately.'
         ),
         'MATCH': (
             'Matching mode: exact, fuzzy, regex, or ast.'
@@ -470,6 +490,270 @@ def _unique_suggested_reads(hits, limit=6):
     return suggestions
 
 
+# ---- Several patterns and file-name scoping ---------------------------------
+#
+# Editable: the most body patterns one SEARCH accepts.
+MAX_BODY_PATTERNS = 20
+
+
+def _body_patterns(parsed_op):
+    """
+    Return the search patterns written as body lines, one per line.
+
+    Blank lines and repeats are ignored, surrounding whitespace is trimmed,
+    and one pair of wrapping quotes is removed, so a body line means what
+    the same text would mean after FOR.
+    """
+    body = str((parsed_op or {}).get('body') or '')
+    patterns = []
+    for line in body.splitlines():
+        pattern = _strip_wrapping_quotes(line)
+        if pattern and pattern not in patterns:
+            patterns.append(pattern)
+    return patterns
+
+
+def _body_pattern_errors(patterns, query, match_mode):
+    """Explain why a set of body patterns cannot run, or return []."""
+    errors = []
+    if query:
+        errors.append(
+            'SEARCH takes its pattern inline, from QUERY, or as body lines, not both'
+        )
+    if match_mode == 'ast':
+        errors.append(
+            'SEARCH body patterns work with MATCH exact, fuzzy or regex, not ast'
+        )
+    if len(patterns) > MAX_BODY_PATTERNS:
+        errors.append(
+            'SEARCH accepts at most %d body patterns, got %d'
+            % (MAX_BODY_PATTERNS, len(patterns))
+        )
+    if match_mode == 'regex':
+        for pattern in patterns:
+            try:
+                re.compile(pattern)
+            except re.error as e:
+                errors.append('SEARCH regex pattern %r is invalid: %s' % (pattern, e))
+    return errors
+
+
+def _name_matches_globs(rel, globs):
+    """True when the file name matches any GLOB pattern, or when there are none."""
+    import fnmatch
+
+    if not globs:
+        return True
+    name = os.path.basename(rel).lower()
+    return any(fnmatch.fnmatchcase(name, glob.lower()) for glob in globs)
+
+
+def _path_selected(rel, scope):
+    """Apply FILTER, EXCLUDE and GLOB to one project-relative path."""
+    if scope['path_filter'] and scope['path_filter'] not in rel:
+        return False
+    if _path_excluded(rel, scope['exclude_terms']):
+        return False
+    return _name_matches_globs(rel, scope['globs'])
+
+
+def _line_matcher(pattern, match_mode, case_sensitive):
+    """Return a function that says whether one line matches pattern."""
+    if match_mode == 'regex':
+        regex = re.compile(pattern, 0 if case_sensitive else re.IGNORECASE)
+        return lambda line: regex.search(line) is not None
+    if match_mode == 'fuzzy':
+        return lambda line: _fuzzy_match(pattern, line)
+    if case_sensitive:
+        return lambda line: pattern in line
+    needle = pattern.lower()
+    return lambda line: needle in line.lower()
+
+
+def _record_hit(file_hits, lines, lineno, context):
+    """Add one matching line, and its CONTEXT neighbours, to a file's hit table."""
+    start = max(1, lineno - context)
+    end = min(len(lines), lineno + context)
+    for number in range(start, end + 1):
+        is_match = number == lineno
+        existing = file_hits.get(number)
+        if existing:
+            existing['match'] = existing['match'] or is_match
+        else:
+            file_hits[number] = {'text': lines[number - 1].rstrip(), 'match': is_match}
+
+
+def _execute_multi_pattern(result, root, abs_path, target, patterns, scope):
+    """
+    Search for several text patterns in one pass and report each separately.
+
+    Each file is read once and every pattern is tested against it. Every
+    pattern keeps its own hit table and its own LIMIT, so one noisy pattern
+    cannot starve the others; a line matching two patterns appears under
+    both. The preview opens with a count table marking any pattern whose
+    limit was reached, then lists hits grouped by pattern.
+
+    data['hits'] is the combined list, so EXPECT_HITS judges the total.
+    """
+    limit = scope['limit']
+    context = scope['context']
+    exts = scope['exts']
+    scan_stats = {}
+
+    searches = [
+        {
+            'pattern': pattern,
+            'matches': _line_matcher(pattern, scope['match_mode'], scope['case_sensitive']),
+            'files': {},
+            'hits': 0,
+            'limit_reached': False,
+        }
+        for pattern in patterns
+    ]
+    searched = 0
+
+    for path in _iter_files(root, abs_path, exts, scan_stats):
+        try:
+            rel = os.path.relpath(path, root)
+        except Exception:
+            rel = path
+
+        if not _path_selected(rel, scope):
+            continue
+
+        try:
+            text = read_text(path)
+        except Exception:
+            continue
+
+        searched += 1
+        lines = text.splitlines()
+
+        for search in searches:
+            if search['limit_reached']:
+                continue
+            for idx, line in enumerate(lines):
+                if not search['matches'](line):
+                    continue
+                _record_hit(search['files'].setdefault(rel, {}), lines, idx + 1, context)
+                search['hits'] += 1
+                if search['hits'] >= limit:
+                    search['limit_reached'] = True
+                    break
+
+        if all(search['limit_reached'] for search in searches):
+            break
+
+    total_hits = sum(search['hits'] for search in searches)
+    capped = [search for search in searches if search['limit_reached']]
+    files_hit = len(set(rel for search in searches for rel in search['files']))
+
+    header = [
+        'SEARCH %d patterns in %s [%d hit%s across %d file%s scanned, %d file%s hit]' % (
+            len(searches),
+            target,
+            total_hits, '' if total_hits == 1 else 's',
+            searched, '' if searched == 1 else 's',
+            files_hit, '' if files_hit == 1 else 's',
+        ),
+    ]
+    header.append('EXT=' + _describe_exts(exts))
+    header.extend(_scope_notes(exts, scan_stats))
+    header.append('MATCH=' + scope['match_mode'])
+    if scope['path_filter']:
+        header.append('FILTER=%r' % scope['path_filter'])
+    if scope['exclude_terms']:
+        header.append('EXCLUDE=%r' % ','.join(scope['exclude_terms']))
+    if scope['globs']:
+        header.append('GLOB=%r' % ','.join(scope['globs']))
+    header.append('LIMIT=%d per pattern' % limit)
+    if context:
+        header.append('CONTEXT=%d' % context)
+
+    out = ['\n'.join(header), '', 'Patterns:']
+    for search in searches:
+        out.append('  %4d  %r%s' % (
+            search['hits'],
+            search['pattern'],
+            '  (LIMIT reached, more may exist)' if search['limit_reached'] else '',
+        ))
+
+    flat_hits = []
+    for search in searches:
+        out.append('')
+        out.append('--- %r: %d hit%s ---' % (
+            search['pattern'],
+            search['hits'],
+            '' if search['hits'] == 1 else 's',
+        ))
+        if not search['files']:
+            out.append('(no hits)')
+            continue
+        for rel in sorted(search['files']):
+            out.append(rel)
+            file_hits = search['files'][rel]
+            for lineno in sorted(file_hits):
+                item = file_hits[lineno]
+                marker = '>' if item['match'] else ' '
+                kind = _classify_text_hit(rel, item['text']) if item['match'] else ''
+                label = (' [%s]' % kind) if kind else ''
+                out.append('  %s%04d:%s %s' % (marker, lineno, label, item['text']))
+                if item['match']:
+                    flat_hits.append({
+                        'file': rel,
+                        'line': lineno,
+                        'text': item['text'],
+                        'kind': kind,
+                        'pattern': search['pattern'],
+                    })
+
+    suggested_reads = _unique_suggested_reads(flat_hits)
+    if suggested_reads:
+        out.append('')
+        out.append('Suggested next reads:')
+        for cmd in suggested_reads:
+            out.append('- ' + cmd.replace('\n', ' | '))
+
+    message = '%d patterns · %s' % (
+        len(searches),
+        _result_message(total_hits, searched, exts, scan_stats),
+    )
+    if capped:
+        message += ', LIMIT reached for %d' % len(capped)
+
+    result['status'] = 'APPLIED'
+    result['message'] = message
+    result['preview'] = '\n'.join(out)
+    result['data'] = {
+        'target': target,
+        'query': '',
+        'patterns': [
+            {
+                'pattern': search['pattern'],
+                'hits': search['hits'],
+                'limit_reached': search['limit_reached'],
+            }
+            for search in searches
+        ],
+        'hits': flat_hits,
+        'searched': searched,
+        'files_hit': files_hit,
+        'limit': limit,
+        'limit_per_pattern': True,
+        'limit_reached': bool(capped),
+        'case_sensitive': scope['case_sensitive'],
+        'match_mode': scope['match_mode'],
+        'context': context,
+        'path_filter': scope['path_filter'],
+        'exclude_terms': list(scope['exclude_terms']),
+        'globs': list(scope['globs']),
+        'suggested_reads': suggested_reads,
+        'exts': _exts_for_data(exts),
+        'skipped_ext': int(scan_stats.get('skipped_ext') or 0),
+        'skipped_dirs': sorted(scan_stats.get('skipped_dirs') or []),
+    }
+
+
 def validate(parsed_op):
     errors = []
     raw_target = (parsed_op.get('target') or '').strip()
@@ -487,10 +771,24 @@ def validate(parsed_op):
         str(directives.get('ASSIGNS') or '').strip(),
     ]
 
-    if not query and match_mode != 'ast':
-        errors.append('SEARCH requires QUERY or inline syntax: SEARCH path FOR text')
+    body_patterns = _body_patterns(parsed_op)
 
-    if match_mode == 'ast' and not query and not any(ast_terms):
+    if body_patterns:
+        errors.extend(_body_pattern_errors(body_patterns, query, match_mode))
+    elif not query and match_mode != 'ast':
+        errors.append(
+            'SEARCH requires QUERY or inline syntax: SEARCH path FOR text, '
+            'or one pattern per body line'
+        )
+
+    for glob in _parse_csv(directives.get('GLOB')):
+        if '/' in glob:
+            errors.append(
+                'SEARCH GLOB matches file names only, so %r cannot contain /; '
+                'use FILTER for paths' % glob
+            )
+
+    if match_mode == 'ast' and not query and not body_patterns and not any(ast_terms):
         errors.append('SEARCH MATCH: ast requires QUERY, DEFINES, CALLS, IMPORTS, or ASSIGNS')
 
     limit = _as_int(directives.get('LIMIT'), 80)
@@ -617,6 +915,7 @@ def execute(ctx, parsed_op, result):
     path_filter = (directives.get('FILTER') or '').strip()
     exclude_terms = _parse_csv(directives.get('EXCLUDE'))
     exclude_terms.extend(_active_only_excludes(_truthy(directives.get('ACTIVE_ONLY'))))
+    globs = _parse_csv(directives.get('GLOB'))
 
     if match_mode == 'ast':
         from forge.core.ast_search import search_ast_files
@@ -631,6 +930,8 @@ def execute(ctx, parsed_op, result):
             if path_filter and path_filter not in rel:
                 continue
             if _path_excluded(rel, exclude_terms):
+                continue
+            if not _name_matches_globs(rel, globs):
                 continue
             files.append(path)
 
@@ -669,6 +970,8 @@ def execute(ctx, parsed_op, result):
             header.append('ASSIGNS=%r' % criteria.get('assigns'))
         if path_filter:
             header.append('FILTER=%r' % path_filter)
+        if globs:
+            header.append('GLOB=%r' % ','.join(globs))
         if exclude_terms:
             header.append('EXCLUDE=%r' % ','.join(exclude_terms))
         header.append('EXT=' + _describe_exts(ast_exts))
@@ -719,11 +1022,26 @@ def execute(ctx, parsed_op, result):
             'path_filter': path_filter,
             'exclude_terms': list(exclude_terms),
             'suggested_reads': _unique_suggested_reads(hits),
+            'globs': list(globs),
             'exts': _exts_for_data(ast_exts),
             'skipped_ext': int(scan_stats.get('skipped_ext') or 0),
             'skipped_dirs': sorted(scan_stats.get('skipped_dirs') or []),
             'syntax_errors': syntax_errors,
         }
+        return
+
+    body_patterns = _body_patterns(parsed_op)
+    if body_patterns:
+        _execute_multi_pattern(result, root, abs_path, target, body_patterns, {
+            'match_mode': match_mode,
+            'case_sensitive': case_sensitive,
+            'limit': limit,
+            'context': context,
+            'exts': exts,
+            'path_filter': path_filter,
+            'exclude_terms': exclude_terms,
+            'globs': globs,
+        })
         return
 
     # Compile regex up front so a bad pattern fails clean.
@@ -753,6 +1071,8 @@ def execute(ctx, parsed_op, result):
         if path_filter and path_filter not in rel:
             continue
         if _path_excluded(rel, exclude_terms):
+            continue
+        if not _name_matches_globs(rel, globs):
             continue
 
         try:
@@ -817,6 +1137,8 @@ def execute(ctx, parsed_op, result):
     header.append('MATCH=' + match_mode)
     if path_filter:
         header.append('FILTER=%r' % path_filter)
+    if globs:
+        header.append('GLOB=%r' % ','.join(globs))
     if exclude_terms:
         header.append('EXCLUDE=%r' % ','.join(exclude_terms))
     header.append('LIMIT=%d' % limit)
@@ -870,6 +1192,7 @@ def execute(ctx, parsed_op, result):
         'context': context,
         'path_filter': path_filter,
         'exclude_terms': list(exclude_terms),
+        'globs': list(globs),
         'suggested_reads': suggested_reads,
         'exts': _exts_for_data(exts),
         'skipped_ext': int(scan_stats.get('skipped_ext') or 0),

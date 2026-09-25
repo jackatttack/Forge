@@ -22,14 +22,32 @@ SPEC = {
     'allowed_directives': set([
         'ARGS',
         'CONFIRM',
+        'OUTPUT',
         'STOP_ON_FAIL',
     ]),
     'required_directives': set(),
 }
 
 
+# ---- Output shaping settings ------------------------------------------------
+#
+# OUTPUT lets a bundle keep repeated, passing runs short in the packet.
+# Editable: how many lines "tail" keeps by default, and the most it accepts.
+DEFAULT_TAIL_LINES = 8
+MAX_TAIL_LINES = 200
+
+OUTPUT_USAGE = (
+    'OUTPUT must be full, tail, tail N (1-%d) or summary' % MAX_TAIL_LINES
+)
+
+
 HELP = {
     'summary': 'Execute a project-relative Python file in-process and capture its output.',
+    'brief': (
+        'OUTPUT: tail|summary shortens a passing run (failures always show '
+        'everything) · STOP_ON_FAIL: yes makes a non-zero exit gate the '
+        'rest of the bundle · ARGS sets argv.'
+    ),
     'minimal_example': [
         'RUN smoke.py',
         '',
@@ -47,6 +65,13 @@ HELP = {
             'With yes, a non-zero exit stops every later mutation and RUN, '
             'so a test RUN can gate the rest of the bundle.'
         ),
+        'OUTPUT': (
+            'How much output a successful run shows: full (default), '
+            'tail (last %d lines of each stream), tail N, or summary '
+            '(last line of each stream). A failed run always shows full '
+            'output, and result data always keeps everything.'
+            % DEFAULT_TAIL_LINES
+        ),
     },
     'internal_directives': [],
     'common_failures': [
@@ -57,7 +82,8 @@ HELP = {
     'safe_usage': [
         'READ unfamiliar scripts before executing them.',
         'Do not run Forge entrypoints from inside an active Forge run.',
-        'Keep script output bounded because RUN has no output truncation.',
+        'Keep script output bounded; OUTPUT only shortens successful runs.',
+        'Use OUTPUT: tail or summary on test RUNs that are rerun often.',
         'Remember that in-process execution is not a security boundary.',
     ],
     'related_ops': [
@@ -101,6 +127,18 @@ HINTS = {
         ],
     },
 
+    'output must': {
+        'message': 'OUTPUT has an unsupported value.',
+        'why': 'OUTPUT chooses how much of a successful run the packet shows.',
+        'example': [
+            'RUN tests/run_all.py',
+            'OUTPUT: tail 12',
+        ],
+        'next': [
+            'Use full, tail, tail N or summary.',
+        ],
+    },
+
     'exception': {
         'message': 'The script raised an exception.',
         'why': 'RUN captures traceback text so the failure can be inspected and patched.',
@@ -110,6 +148,43 @@ HINTS = {
         ],
     },
 }
+
+
+def _parse_output_mode(raw):
+    """
+    Read an OUTPUT directive value as (mode, tail_lines, error).
+
+        full     every line (also the default when OUTPUT is absent)
+        tail     the last DEFAULT_TAIL_LINES lines of each stream
+        tail N   the last N lines of each stream
+        summary  the last line of each stream
+
+    tail_lines is None for full. error is '' when the value is valid.
+    """
+    words = str(raw or '').strip().lower().split()
+
+    if not words or words == ['full']:
+        return 'full', None, ''
+
+    if words == ['summary']:
+        return 'summary', 1, ''
+
+    if words[0] == 'tail':
+        if len(words) == 1:
+            return 'tail', DEFAULT_TAIL_LINES, ''
+        if len(words) == 2 and words[1].isdigit():
+            count = int(words[1])
+            if 1 <= count <= MAX_TAIL_LINES:
+                return 'tail', count, ''
+
+    return None, None, '%s; got %r' % (OUTPUT_USAGE, str(raw).strip())
+
+
+def _last_lines(text, count):
+    """Return (the last count lines of text, how many earlier lines were dropped)."""
+    lines = text.splitlines()
+    hidden = max(0, len(lines) - count)
+    return '\n'.join(lines[hidden:]), hidden
 
 
 def validate(parsed_op):
@@ -122,6 +197,11 @@ def validate(parsed_op):
         return [
             'RUN requires a target path'
         ]
+
+    directives = parsed_op.get('directives') or {}
+    _, _, output_error = _parse_output_mode(directives.get('OUTPUT'))
+    if output_error:
+        return [output_error]
 
     return []
 
@@ -166,39 +246,48 @@ def _format_preview(
     exit_code,
     stdout_text,
     stderr_text,
+    tail_lines=None,
 ):
-    lines = [
-        'RUN %s [exit %s]'
-        % (
-            path,
-            exit_code,
-        )
-    ]
+    """
+    Build the packet preview for one RUN.
 
-    if stdout_text:
-        lines.append(
-            '--- stdout ---'
-        )
-        lines.append(
-            stdout_text.rstrip()
-        )
+    tail_lines None shows every captured line. A number keeps only the
+    last lines of each stream and says how many were hidden. execute()
+    passes a number only for successful runs, so a failure always shows
+    everything.
+    """
+    lines = ['RUN %s [exit %s]' % (path, exit_code)]
+    hidden_total = 0
 
-    if stderr_text:
-        lines.append(
-            '--- stderr ---'
-        )
-        lines.append(
-            stderr_text.rstrip()
-        )
+    for stream_name, text in (('stdout', stdout_text), ('stderr', stderr_text)):
+        if not text:
+            continue
+
+        shown = text.rstrip()
+        heading = '--- %s ---' % stream_name
+
+        if tail_lines is not None:
+            shown, hidden = _last_lines(shown, tail_lines)
+            if hidden:
+                heading = '--- %s (%s earlier lines hidden) ---' % (
+                    stream_name,
+                    hidden,
+                )
+                hidden_total += hidden
+
+        lines.append(heading)
+        lines.append(shown)
 
     if not stdout_text and not stderr_text:
+        lines.append('(no output)')
+
+    if hidden_total:
         lines.append(
-            '(no output)'
+            '(OUTPUT hid %s lines of a passing run; OUTPUT: full shows them)'
+            % hidden_total
         )
 
-    return '\n'.join(
-        lines
-    ).rstrip()
+    return '\n'.join(lines).rstrip()
 
 
 def execute(ctx, parsed_op, result):
@@ -372,13 +461,19 @@ def execute(ctx, parsed_op, result):
         stderr_buffer.getvalue()
     )
 
-    result['preview'] = (
-        _format_preview(
-            target,
-            exit_code,
-            stdout_text,
-            stderr_text,
-        )
+    # OUTPUT only shortens what a successful run shows in the packet.
+    # Failures keep every line, and result data always keeps everything.
+    output_mode, tail_lines, _ = _parse_output_mode(
+        directives.get('OUTPUT')
+    )
+    shown_tail_lines = tail_lines if exit_code == 0 else None
+
+    result['preview'] = _format_preview(
+        target,
+        exit_code,
+        stdout_text,
+        stderr_text,
+        tail_lines=shown_tail_lines,
     )
 
     result['data'] = {
@@ -386,6 +481,7 @@ def execute(ctx, parsed_op, result):
         'exit_code': exit_code,
         'stdout': stdout_text,
         'stderr': stderr_text,
+        'output': output_mode,
     }
 
     if exit_code == 0:

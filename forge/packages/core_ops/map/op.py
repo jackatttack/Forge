@@ -14,19 +14,40 @@ import ast
 import os
 
 from forge.core.file_safety import safe_target, read_text
+from forge.core.symbol_index import render_symbol_index
 
 
 SPEC = {
     'name': 'MAP',
     'target_kind': 'path',
     'body_mode': 'forbidden',
-    'allowed_directives': set(['MODE', 'DEPTH', 'LIMIT', 'DOCS']),
+    'allowed_directives': set(['MODE', 'DEPTH', 'LIMIT', 'DOCS', 'GLOB', 'KEY']),
     'required_directives': set(),
 }
 
 
+# Folders and files that directory maps and symbol indexes never show.
+# One list, so both views always agree about what counts as noise.
+NOISE_DIR_NAMES = frozenset([
+    '.git', '__pycache__', '.pytest_cache', '.mypy_cache',
+    'patch_runs', 'script_snapshots', 'build', 'dist',
+    'node_modules', '.venv', 'venv',
+    'site-packages', 'site-packages-2', 'site-packages-3',
+    'artifacts', 'snapshots',
+])
+NOISE_FILE_NAMES = frozenset(['.DS_Store', 'crash_log.txt', 'crash_trail.json'])
+
+# How many filtered names a directory note spells out before "+N".
+FILTERED_NAMES_SHOWN = 4
+
+
 HELP = {
     'summary': 'Map project, directory, Python-file structure, and opt-in code relationships without dumping full contents.',
+    'brief': (
+        'MODE: symbols indexes every Python file under a directory '
+        '(GLOB names, KEY: id shows a value per file) · MODE: relationships '
+        'shows who imports a file · DEPTH 0-5 · LIMIT default 80.'
+    ),
     'minimal_example': [
         'MAP forge',
         '',
@@ -43,6 +64,14 @@ HELP = {
         '',
         'MAP forge/forge/core/runner.py',
         'MODE: relationships',
+        '',
+        'MAP projects/example',
+        'MODE: symbols',
+        '',
+        'MAP projects/example',
+        'MODE: symbols',
+        'GLOB: *_family.py',
+        'KEY: id',
     ],
     'directives': {
         'DEPTH': (
@@ -59,8 +88,17 @@ HELP = {
             'Headers and the root row are outside this budget.'
         ),
         'MODE': (
-            'Choose auto, targets, imports, '
-            'or relationships.'
+            'Choose auto, targets, imports, relationships, or symbols. '
+            'symbols lists every Python file under a directory with its '
+            'top-level classes and functions.'
+        ),
+        'GLOB': (
+            'With MODE: symbols, comma-separated file-name patterns such as '
+            '*_family.py; names only, case-insensitive.'
+        ),
+        'KEY': (
+            'With MODE: symbols, show each file\'s values for this name, '
+            'from assignments (id = ...) and keyword arguments (Info(id=...)).'
         ),
     },
     'common_failures': [
@@ -76,6 +114,8 @@ HELP = {
         'Use MODE: imports for dependency-focused view (suppresses targets).',
         'Use MODE: targets for target-focused view (suppresses imports).',
         'Use MODE: relationships on a Python file for reverse imports and statically resolved external callers.',
+        'Use MODE: symbols on a Python directory to find which file defines what.',
+        'To find who imports a module, MAP that file with MODE: relationships.',
         'Use SEARCH when looking for a specific symbol or phrase.',
     ],
     'related_ops': ['READ', 'SEARCH'],
@@ -98,7 +138,7 @@ HINTS = {
         ],
     },
     'mode': {
-        'message': 'MAP MODE must be auto, targets, imports, or relationships.',
+        'message': 'MAP MODE must be auto, targets, imports, relationships, or symbols.',
         'why': 'MAP has a small set of focused structural views.',
         'example': [
             'MAP forge/forge/core/runner.py',
@@ -660,6 +700,15 @@ def _render_python_relationships(root, abs_path, target, limit):
     return lines
 
 
+def _globs(directives):
+    """Read the GLOB directive as a list of file-name patterns."""
+    return [
+        part.strip()
+        for part in str((directives or {}).get('GLOB') or '').split(',')
+        if part.strip()
+    ]
+
+
 def validate(parsed_op):
     errors = []
     target = (parsed_op.get('target') or '').strip()
@@ -667,11 +716,22 @@ def validate(parsed_op):
         errors.append('MAP requires a target path')
 
     mode = _mode(parsed_op)
-    if mode not in ('auto', 'targets', 'imports', 'relationships'):
+    if mode not in ('auto', 'targets', 'imports', 'relationships', 'symbols'):
         errors.append(
-            'MAP MODE must be auto, targets, imports, or relationships, got: '
+            'MAP MODE must be auto, targets, imports, relationships, or symbols, got: '
             + mode
         )
+
+    symbol_directives = parsed_op.get('directives') or {}
+    globs = _globs(symbol_directives)
+    key = str(symbol_directives.get('KEY') or '').strip()
+    if (globs or key) and mode != 'symbols':
+        errors.append('MAP GLOB and KEY work only with MODE: symbols')
+    for glob in globs:
+        if '/' in glob:
+            errors.append('MAP GLOB matches file names only, so %r cannot contain /' % glob)
+    if key and not key.isidentifier():
+        errors.append('MAP KEY must be a Python name, got: %r' % key)
 
     directives = parsed_op.get('directives') or {}
 
@@ -2502,22 +2562,27 @@ def _render_python_file(root, abs_path, target, mode, docs, limit):
     return lines
 
 
+def _filtered_summary(names):
+    """Name what a directory note filtered: a few names, then +N for the rest."""
+    names = sorted(names, key=lambda name: (name.casefold(), name))
+    shown = names[:FILTERED_NAMES_SHOWN]
+    text = ', '.join(shown)
+    if len(names) > len(shown):
+        text += ' +%d' % (len(names) - len(shown))
+    return text
+
+
 def _render_directory(root, abs_path, target, mode, depth, docs, limit):
     """Select entries fairly, then render each once under its parent."""
-    noise_dirs = {
-        '.git', '__pycache__', '.pytest_cache', '.mypy_cache',
-        'patch_runs', 'script_snapshots', 'build', 'dist',
-        'node_modules', '.venv', 'venv',
-        'site-packages', 'site-packages-2', 'site-packages-3',
-        'artifacts', 'snapshots',
-    }
-    noise_files = {'.DS_Store', 'crash_log.txt', 'crash_trail.json'}
+    noise_dirs = NOISE_DIR_NAMES
+    noise_files = NOISE_FILE_NAMES
 
     def make_node(path, name, is_dir, level):
         return {
             'path': path, 'name': name, 'directory': is_dir,
             'level': level, 'children': [], 'selected': [],
-            'filtered': 0, 'error': '', 'link': os.path.islink(path),
+            'filtered': 0, 'filtered_names': [],
+            'error': '', 'link': os.path.islink(path),
         }
 
     def inspect(node):
@@ -2533,6 +2598,7 @@ def _render_directory(root, abs_path, target, mode, depth, docs, limit):
                             or entry.name in noise_files
                             or (is_dir and entry.name in noise_dirs)):
                         node['filtered'] += 1
+                        node['filtered_names'].append(entry.name)
                         continue
                     children.append(make_node(
                         entry.path, entry.name, is_dir, node['level'] + 1,
@@ -2611,7 +2677,10 @@ def _render_directory(root, abs_path, target, mode, depth, docs, limit):
             reason = 'depth' if node['level'] >= depth else 'limit'
             parts.append('+%d more; %s' % (hidden, reason))
         if node['filtered']:
-            parts.append('%d filtered' % node['filtered'])
+            parts.append('%d filtered: %s' % (
+                node['filtered'],
+                _filtered_summary(node['filtered_names']),
+            ))
         if (node['directory'] and not node['children']
                 and not node['filtered'] and not node['error']
                 and not node['link']):
@@ -2625,6 +2694,20 @@ def _render_directory(root, abs_path, target, mode, depth, docs, limit):
             render(child, indent + 1)
 
     render(base, 0)
+
+    # A truncated tree cannot show where Python code is defined; point at
+    # the index that can, but only when Python files are actually present.
+    inspected = [base] + [node for node in selected if node['directory']]
+    truncated = any(len(node['children']) > len(node['selected']) for node in inspected)
+    has_python = any(
+        not child['directory'] and child['name'].endswith('.py')
+        for node in inspected
+        for child in node['children']
+    )
+    if truncated and has_python:
+        lines.append('')
+        lines.append('Python symbols for every file: MAP %s | MODE: symbols' % target)
+
     return lines
 
 
@@ -2649,7 +2732,18 @@ def execute(ctx, parsed_op, result):
         result['message'] = 'Target not found: ' + raw_target
         return
 
-    if mode == 'relationships':
+    if mode == 'symbols':
+        lines = render_symbol_index(
+            abs_path,
+            raw_target,
+            NOISE_DIR_NAMES,
+            globs=_globs(directives),
+            key=str(directives.get('KEY') or '').strip() or None,
+            limit=limit,
+        )
+        kind = 'symbol-index'
+
+    elif mode == 'relationships':
         if not _is_python(abs_path):
             result['status'] = 'FAILED_INVALID_TARGET'
             result['message'] = (

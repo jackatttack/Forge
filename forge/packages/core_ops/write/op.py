@@ -38,6 +38,11 @@ SPEC = {
 
 HELP = {
     'summary': 'Write complete file contents, creating new files or explicitly overwriting existing files.',
+    'brief': (
+        'Replacing different content needs CONFIRM: overwrite (the literal '
+        'word) · IF_VERSION: missing means create only · Python must compile '
+        'unless ALLOW_BROKEN: yes.'
+    ),
     'minimal_example': [
         'WRITE scratch/example.txt',
         'BEGIN_BODY',

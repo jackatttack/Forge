@@ -22,6 +22,10 @@ SPEC = {
 
 HELP = {
     'summary': 'Review touched file changes compactly by default, with full line diff on request.',
+    'brief': (
+        'DIFF current, DIFF latest or DIFF <run stamp> · compact by default, '
+        'MODE: full for the line-by-line diff.'
+    ),
     'minimal_example': [
         'DIFF current',
         '',

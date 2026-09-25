@@ -91,6 +91,10 @@ SPEC = {
 
 HELP = {
     'summary': 'Inspect Forge itself: operations, help, workflow docs, health, configuration, and stored runs.',
+    'brief': (
+        'FORGE ops [all] · help <OP> [full] · audit · config · runs latest, '
+        'runs show <stamp> · docs, search docs <query> · bundle.'
+    ),
     'minimal_example': [
         'FORGE',
         '',
@@ -290,6 +294,45 @@ def _bundle_syntax(result):
     }
 
 
+# Width of the wrapped detail lines under each op in FORGE ops.
+OPS_DETAIL_WIDTH = 100
+
+
+def _op_detail_lines(mod, help_data, indent):
+    """
+    Return the lines FORGE ops shows under one op's summary.
+
+    The directives line is generated from HELP['directives'] and the SPEC
+    body mode, so it always matches what the parser accepts. The brief line
+    is HELP['brief'], an optional hand-written line for what cannot be
+    generated: limits, modes and the most useful capabilities. Together
+    they let a cold session see what each op can do without a help call.
+    """
+    import textwrap
+
+    spec = getattr(mod, 'SPEC', {}) or {}
+    directives = sorted((help_data.get('directives') or {}).keys())
+    body_mode = str(spec.get('body_mode') or 'forbidden').strip().lower()
+
+    parts = []
+    if directives:
+        parts.append('directives: ' + ', '.join(directives))
+    if body_mode in ('required', 'optional'):
+        parts.append('body: ' + body_mode)
+
+    lines = []
+    for text in (' · '.join(parts), str(help_data.get('brief') or '').strip()):
+        if text:
+            lines.extend(textwrap.wrap(
+                text,
+                width=OPS_DETAIL_WIDTH,
+                initial_indent=indent,
+                subsequent_indent=indent + '  ',
+                break_on_hyphens=False,
+            ))
+    return lines
+
+
 def _ops(result, all_ops=False):
     discover_ops()
 
@@ -344,6 +387,7 @@ def _ops(result, all_ops=False):
             'name': name,
             'kind': kind,
             'summary': summary,
+            'brief': str(help_data.get('brief') or '').strip(),
         })
 
         if all_ops:
@@ -363,6 +407,10 @@ def _ops(result, all_ops=False):
                     summary,
                 )
             )
+
+        # Align details under the summary column of the row above.
+        detail_indent = ' ' * (25 if all_ops else 15)
+        lines.extend(_op_detail_lines(mod, help_data, detail_indent))
 
     lines.extend([
         '',

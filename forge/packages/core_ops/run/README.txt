@@ -45,6 +45,11 @@ That restoration is deliberately limited. Imported modules remain in
 shared process state may survive. RUN is therefore convenient execution, not
 process isolation or a security boundary.
 
+Because imported modules stay loaded, a script that imports a module edited
+earlier in the session may keep using the version already in memory, unless
+the script reloads it itself, as some project loaders do. The same applies to
+Forge: after installing a new Forge, restart Pythonista before relying on it.
+
 ## Exit and exception rules
 
 Normal completion, `sys.exit()`, and `SystemExit(0)` produce an applied result.
@@ -65,11 +70,26 @@ never returns.
 
 ## Output size
 
-RUN does not truncate stdout or stderr. The complete captured strings are
-stored in result data and included in the preview packet.
+RUN never truncates what it stores: the complete stdout and stderr are kept in
+result data. By default the packet preview shows them in full as well.
 
-Keep diagnostic output bounded. A noisy or accidentally unbounded script can
-create a very large packet and make the interactive loop difficult to use.
+`OUTPUT` shortens the preview of a successful run, which is useful for test
+RUNs that are repeated many times in a session:
+
+    RUN dev/forge/tools/run_checkout_tests.py
+    OUTPUT: tail
+
+- `full` — every line (the default).
+- `tail` — the last 8 lines of each stream.
+- `tail N` — the last N lines of each stream, from 1 to 200.
+- `summary` — the last line of each stream.
+
+A run that exits non-zero always shows its full output, whatever `OUTPUT`
+says, so a failure is never hidden. When lines are hidden, the preview says how
+many and that `OUTPUT: full` shows them.
+
+Keep diagnostic output bounded anyway. A noisy script that fails still produces
+a very large packet and makes the interactive loop difficult to use.
 
 ## Core confirmation
 
@@ -96,6 +116,10 @@ Do not use the public Forge launcher as a test script.
 - `ARGS: text` — optional command-line arguments with shell-like quoting.
 - `CONFIRM: yes` — permits execution only when required by the protected-core
   guard.
+- `STOP_ON_FAIL: yes` — a non-zero exit stops every later mutation and RUN, so
+  a test RUN can gate the rest of the bundle.
+- `OUTPUT: full | tail | tail N | summary` — how much of a successful run the
+  preview shows. Failures always show full output.
 
 ## Choosing the operation
 

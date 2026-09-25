@@ -79,6 +79,29 @@ Regex search:
     QUERY: def .*run
     MATCH: regex
 
+## Several patterns at once
+
+Put one pattern per body line to search for several things in one pass:
+
+    SEARCH icloud:projects/mathsgen
+    GLOB: *_family.py
+    LIMIT: 20
+    BEGIN_BODY
+    difficulty_descriptions
+    GeneratorInfo
+    END_BODY
+
+Each pattern is searched independently, and a line matching two patterns
+appears under both. Results open with a count per pattern, then list hits
+grouped by pattern. LIMIT applies to each pattern separately, so one noisy
+pattern cannot hide the others, and a pattern that reached its limit is
+marked in the count table and in the ops-list message.
+
+MATCH exact, fuzzy or regex applies to every pattern, as do CASE, CONTEXT and
+every scope directive. Body patterns cannot be combined with an inline FOR
+query or QUERY, and do not work with MATCH: ast. At most 20 patterns are
+accepted. EXPECT_HITS judges the total across all patterns.
+
 ## AST syntax
 
 Find a function, method, or class definition:
@@ -205,8 +228,11 @@ Search a broad tree but deliberately skip noisy areas:
 ### Scope
 
 - `EXT: .py,.txt` restricts extensions; see “What a search did not read”.
-- `LIMIT: N` caps returned matches; default `80`.
+- `LIMIT: N` caps returned matches; default `80`. With body patterns it
+  applies to each pattern separately.
 - `FILTER: text` includes only paths containing one substring.
+- `GLOB: *_family.py,*_info.py` searches only files whose name matches one of
+  the patterns (case-insensitive). Names only; use `FILTER` for paths.
 - `EXCLUDE: text,text` excludes paths containing any listed substring.
 - `ACTIVE_ONLY: yes` skips common archive, reference, and staging paths.
 
@@ -271,6 +297,9 @@ are the real question.
 
 - Prefer SEARCH path FOR text for simple text searches.
 - Use QUERY when the search text is long, awkward, or contains words like IN/FOR.
+- Put one pattern per body line to search for several things in one op;
+  LIMIT then applies to each pattern and capped patterns are marked.
+- Use GLOB to search only files with matching names, such as *_family.py.
 - Use MATCH: ast when searching Python structure rather than text.
 - Use explicit AST directives instead of QUERY in AST mode when possible.
 - Use FILTER aggressively on large trees.

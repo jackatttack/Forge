@@ -19,6 +19,10 @@ SPEC = {
 
 HELP = {
     'summary': 'Restore project files to their pre-run state using a stored Forge run.',
+    'brief': (
+        'REVERT <run stamp> · find stamps with FORGE runs latest and review '
+        'with DIFF <stamp> first.'
+    ),
     'minimal_example': [
         'FORGE runs latest',
         '',

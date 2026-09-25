@@ -260,7 +260,7 @@ ENGINE_STATUS_HINTS = {
             'mutations and RUNs so nothing builds on a broken step.'
         ),
         'next': [
-            'Fix the first failure listed in Errors, then rerun this operation.',
+            'Fix the first failure listed in Errors, then rerun what was skipped.',
         ],
     },
     'SKIPPED_STALE_READ': {
@@ -288,6 +288,51 @@ def _matching_hints(hints, haystack, max_hints):
         if len(rendered) >= max_hints:
             break
     return rendered
+
+
+def _directive_help_for_message(op_module, message):
+    """
+    Return (name, help) for each of the op's directives the message names.
+
+    Directives are the all-caps words in the message that the op's HELP
+    documents, in the order the message mentions them, each listed once.
+    """
+    import re
+
+    help_table = (getattr(op_module, 'HELP', {}) or {}).get('directives') or {}
+    found = []
+    for match in re.finditer(r'\b[A-Z][A-Z_]+\b', str(message or '')):
+        name = match.group(0)
+        if name in help_table and name not in [known for known, _ in found]:
+            found.append((name, ' '.join(str(help_table[name]).split())))
+    return found
+
+
+def _validation_rule_hint(op_module, op_name, result):
+    """
+    Hint for a validation failure that no op-specific hint covers.
+
+    Validation messages already state the rule that was broken, such as
+    "REPLACE ALL: yes requires CONFIRM: yes", so the rule leads, followed
+    by the help line of each directive it names. Every validation rule gets
+    a specific hint this way without a hand-written entry per rule.
+    """
+    message = ' '.join(str((result or {}).get('message') or '').split())
+    lines = [
+        'HINT: %s refused this operation before running it.' % op_name,
+        'RULE: ' + message,
+    ]
+
+    directive_help = _directive_help_for_message(op_module, message)
+    if directive_help:
+        lines.append('DIRECTIVES:')
+        for name, text in directive_help:
+            lines.append('- %s: %s' % (name, text))
+
+    lines.append('NEXT:')
+    lines.append('- Change the operation so it satisfies this rule, then rerun it.')
+    lines.append('- FORGE help %s full lists every directive and its limits.' % op_name)
+    return '\n'.join(lines)
 
 
 def render_hints_for_result(
@@ -351,6 +396,10 @@ def render_hints_for_result(
 
     if rendered:
         text = '\n\n'.join(rendered).strip()
+    elif status == 'FAILED_PARSE':
+        # Refused before running: the message is the rule, so show it
+        # with the help for each directive it names.
+        text = _validation_rule_hint(op_module, op_name, result)
     else:
         text = _generic_result_hint(
             op_name,

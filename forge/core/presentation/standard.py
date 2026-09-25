@@ -166,9 +166,14 @@ def format_summary(run):
     errors = run.get('errors') or []
 
     if errors:
+        # Count the lines the packet's Errors list actually shows, where
+        # repeated skips after one failure are merged into a single line.
+        # Imported here so this module keeps no module-level dependencies.
+        from forge.core.protocol.packet import collapse_skip_errors
+
         lines.append(
             'Errors: %d'
-            % len(errors)
+            % len(collapse_skip_errors(errors))
         )
 
     return (

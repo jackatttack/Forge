@@ -39,6 +39,10 @@ SPEC = {
 
 HELP = {
     'summary': 'Fetch, probe, download, or parse HTTP resources.',
+    'brief': (
+        'MODE: fetch, json, download and more (FORGE help URL) · JPATH picks '
+        'a JSON field · DEST sets the download path.'
+    ),
     'minimal_example': [
         'URL https://example.com',
         'MODE: fetch',

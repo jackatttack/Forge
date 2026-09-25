@@ -28,6 +28,10 @@ SPEC = {
 
 HELP = {
     'summary': 'Create, restore, list, or delete named filesystem checkpoints.',
+    'brief': (
+        'BRANCH create <name> with the paths to checkpoint as body lines · '
+        'BRANCH restore <name> · BRANCH list · BRANCH delete <name>.'
+    ),
     'minimal_example': [
         'BRANCH create before_big_change',
         'BEGIN_BODY',

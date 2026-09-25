@@ -946,7 +946,7 @@ class ForgeHelpRendering(ForgeCase):
             preview,
         )
         self.assertIn(
-            'RUN does not truncate stdout or stderr',
+            'RUN never truncates what it stores',
             preview,
         )
         self.assertIn(

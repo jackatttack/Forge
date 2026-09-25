@@ -50,6 +50,11 @@ SPEC = {
 
 HELP = {
     'summary': 'Surgically replace an AST target, explicit file range, or exact old/new block.',
+    'brief': (
+        'path::Target or LINES: a-b with BEGIN_BODY, or an exact '
+        'BEGIN_OLD/BEGIN_NEW block · repeated OLD needs OCCURRENCE: N, or '
+        'ALL: yes with CONFIRM: yes · IF_VERSION pins.'
+    ),
     'minimal_example': [
         'READ app.py',
         'TARGETS: yes',

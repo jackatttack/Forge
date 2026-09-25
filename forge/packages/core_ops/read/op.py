@@ -24,6 +24,11 @@ SPEC = {
 
 HELP = {
     'summary': 'Read a file, line range, AST target, anchored slice, or Python target list.',
+    'brief': (
+        'READ path, LINES: a-b, path::Target, or ANCHOR: text with CONTEXT '
+        '· TARGETS: yes lists Python targets · headers show v:version for '
+        'IF_VERSION pins.'
+    ),
     'minimal_example': [
         'READ app.py',
         '',
