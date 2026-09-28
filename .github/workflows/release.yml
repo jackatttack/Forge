@@ -265,6 +265,7 @@ jobs:
               'FORGE',
               'INSERT',
               'MAP',
+              'MOVE',
               'READ',
               'REPLACE',
               'REVERT',
@@ -307,9 +308,9 @@ jobs:
               or {}
           )
 
-          if audit_data.get('total') != 15:
+          if audit_data.get('total') != 16:
               raise SystemExit(
-                  'Wheel audit did not discover all 15 ops.'
+                  'Wheel audit did not discover all 16 ops.'
               )
 
           if audit_data.get('failed') != 0:

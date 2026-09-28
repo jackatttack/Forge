@@ -889,27 +889,19 @@ class ForgeHelpRendering(ForgeCase):
             run_contract,
         )
 
-    def test_copy_help_is_file_only_and_uses_overwrite(self):
+    def test_copy_help_describes_directories_and_policies(self):
         preview = self.help_preview(
             'FORGE help COPY full'
         )
 
-        self.assertIn(
-            'It does not copy directories',
-            preview,
-        )
-        self.assertIn(
-            'COPY has no',
-            preview,
-        )
-        self.assertIn(
-            '`CONFIRM` directive.',
-            preview,
-        )
-        self.assertIn(
-            'A precise whole-file DELETE does not require confirmation',
-            preview,
-        )
+        for phrase in (
+            'Copy a directory',
+            'TO names the destination itself',
+            'replace: make the destination match the source',
+            'Binary files are not supported yet',
+            'Use MOVE',
+        ):
+            self.assertIn(phrase, preview)
 
         quick = self.help_preview(
             'FORGE help COPY'
@@ -919,17 +911,23 @@ class ForgeHelpRendering(ForgeCase):
             1,
         )[1]
 
+        for name in (
+            'TO', 'OVERWRITE', 'GLOB', 'EXCLUDE', 'DRY_RUN', 'CONFIRM',
+        ):
+            self.assertIn(name, directives)
+
+    def test_move_help_states_verify_before_remove(self):
+        preview = self.help_preview(
+            'FORGE help MOVE full'
+        )
+
         self.assertIn(
-            'TO',
-            directives,
+            'verifies each copy against its source',
+            preview,
         )
         self.assertIn(
-            'OVERWRITE',
-            directives,
-        )
-        self.assertNotIn(
-            'CONFIRM',
-            directives,
+            'recreating any directories MOVE removed',
+            preview,
         )
 
     def test_run_help_states_in_process_boundaries(self):

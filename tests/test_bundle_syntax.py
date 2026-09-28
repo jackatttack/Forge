@@ -75,12 +75,12 @@ class OpCountIsUnchanged(ForgeCase):
     """
     FORGE bundle is a subcommand, not a new operation.
 
-    CI asserts an exact set of 15 public ops, so a subcommand that
+    CI asserts an exact set of 16 public ops, so a subcommand that
     accidentally registered as an op would break the release job. This
     catches that earlier and more clearly.
     """
 
-    def test_still_fifteen_public_ops(self):
+    def test_sixteen_public_ops(self):
         run = self.run_bundle(
             bundle(
                 'FORGE ops',
@@ -96,7 +96,7 @@ class OpCountIsUnchanged(ForgeCase):
             names,
             set([
                 'ALIAS', 'BRANCH', 'COPY', 'DELETE', 'DIFF',
-                'FORGE', 'INSERT', 'MAP', 'READ', 'REPLACE',
+                'FORGE', 'INSERT', 'MAP', 'MOVE', 'READ', 'REPLACE',
                 'REVERT', 'RUN', 'SEARCH', 'URL', 'WRITE',
             ]),
         )

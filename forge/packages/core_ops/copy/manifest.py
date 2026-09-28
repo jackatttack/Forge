@@ -2,8 +2,8 @@
 
 MANIFEST = {
     'name': 'copy',
-    'version': '0.1.0',
+    'version': '0.2.0',
     'op': 'COPY',
     'kind': 'core-op',
-    'summary': 'COPY copies a project-relative file and records reversible destination metadata.',
+    'summary': 'COPY copies a file or directory tree, across roots, recording every file for REVERT.',
 }

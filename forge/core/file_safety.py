@@ -149,6 +149,16 @@ def write_text(path, text):
     with open(path, 'w', encoding='utf-8') as f:
         f.write(text or '')
 
+def read_text_exact(path):
+    """
+    Return a file's exact UTF-8 text, raising UnicodeDecodeError otherwise.
+
+    Unlike read_text this never replaces undecodable bytes and never
+    translates newlines, so a recorded "before" restores byte-for-byte.
+    """
+    with open(path, 'rb') as handle:
+        return handle.read().decode('utf-8')
+
 class CompileBlocked(Exception):
     """Raised when a .py write is refused because the new text does not compile."""
 

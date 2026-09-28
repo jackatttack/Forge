@@ -221,6 +221,8 @@ def _replace_range_with_empty(before, start, end):
 
 
 def _execute_file_delete(ctx, target, result):
+    from forge.core.file_safety import read_text_exact
+
     root, abs_path, err = safe_target(ctx, target)
     if err:
         result['status'] = 'FAILED_INVALID_PATH'
@@ -237,7 +239,17 @@ def _execute_file_delete(ctx, target, result):
         result['message'] = 'Target exists but is not a file: ' + target
         return
 
-    before = read_text(abs_path)
+    # Read exactly: a lossy "before" would make REVERT restore garbage.
+    try:
+        before = read_text_exact(abs_path)
+    except UnicodeDecodeError:
+        result['status'] = 'FAILED_NOT_TEXT'
+        result['message'] = (
+            'Only UTF-8 text files can be deleted with recovery; not text: '
+            + target
+        )
+        return
+
     os.remove(abs_path)
 
     target_root, target_rel = split_root_prefix(target)

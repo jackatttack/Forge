@@ -156,15 +156,15 @@ normal laptop, you probably don't need Forge.
 
 ## The vocabulary
 
-Fifteen operations, deliberately:
+Sixteen operations, deliberately:
 
-| Area                | Operations                                     |
-| ------------------- | ---------------------------------------------- |
-| Forge itself        | `FORGE`                                        |
-| Inspect             | `MAP`, `READ`, `SEARCH`                        |
-| Edit                | `WRITE`, `REPLACE`, `INSERT`, `DELETE`, `COPY` |
-| Execute and recover | `RUN`, `DIFF`, `REVERT`, `BRANCH`              |
-| Utilities           | `URL`, `ALIAS`                                 |
+| Area                | Operations                                             |
+| ------------------- | ------------------------------------------------------ |
+| Forge itself        | `FORGE`                                                |
+| Inspect             | `MAP`, `READ`, `SEARCH`                                |
+| Edit                | `WRITE`, `REPLACE`, `INSERT`, `DELETE`, `COPY`, `MOVE` |
+| Execute and recover | `RUN`, `DIFF`, `REVERT`, `BRANCH`                      |
+| Utilities           | `URL`, `ALIAS`                                         |
 
 The model doesn't have to memorise them. `FORGE ops` lists them; `FORGE help
 REPLACE` explains one. The installed runtime is the documentation.

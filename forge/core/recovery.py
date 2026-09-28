@@ -45,13 +45,17 @@ def _safe_path(root, relative):
 
 
 def _state(root, relative):
-    """Read exact UTF-8 contents and a file identity for change detection."""
+    """Read exact UTF-8 contents and a file identity for change detection.
+
+    A missing file is reported as absent even when its parent directories
+    are missing too: MOVE removes the source directories it empties, and
+    reverting it must put the sources back. _install recreates missing
+    parents only after _safe_path has refused escapes and symlinks.
+    """
     path = _safe_path(root, relative)
     try:
         information = os.lstat(path)
     except FileNotFoundError:
-        if not os.path.isdir(os.path.dirname(path)):
-            raise RecoveryRefused('Parent directory is missing: ' + relative)
         return path, False, '', None
 
     if not stat.S_ISREG(information.st_mode):
@@ -179,7 +183,11 @@ def _recheck(project_root, entry):
 
 
 def _install(project_root, entry):
-    """Install one recovery step without truncating an existing destination."""
+    """Install one recovery step without truncating an existing destination.
+
+    Missing parent directories are created before a file is restored, so a
+    reverted MOVE can put sources back into directories it removed.
+    """
     path, exists, text, identity = entry['current']
     desired_exists = entry['restore_exists']
     desired_text = entry['restore_text']
@@ -189,8 +197,11 @@ def _install(project_root, entry):
         return None
 
     if desired_exists:
+        parent = os.path.dirname(path)
+        if not os.path.isdir(parent):
+            os.makedirs(parent)
         descriptor, staged = tempfile.mkstemp(
-            prefix='.forge-revert-', dir=os.path.dirname(path),
+            prefix='.forge-revert-', dir=parent,
         )
         try:
             with os.fdopen(descriptor, 'wb') as handle:
