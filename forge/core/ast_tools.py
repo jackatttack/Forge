@@ -368,6 +368,18 @@ def resolve_ast_target(project_root, target_ref, default_file=None):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
         and node.name == target_name
     ]
+
+    if not matches and any(
+        isinstance(node, ast.ClassDef) and node.name == target_name
+        for node in tree.body
+    ):
+        # A bare class name is the most common near miss: say which form works.
+        return {'ok': False, 'error': (
+            'Target not found: %s. %s is a class: use ::%s.* for the whole '
+            'class, or ::%s.method for one method.'
+            % (target_ref, target_name, target_name, target_name)
+        )}
+
     return single(
         matches, 'function',
         'Target not found: ' + str(target_ref),

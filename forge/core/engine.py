@@ -262,6 +262,12 @@ def execute_ops(
         op_name = parsed_op.get('op')
         target = parsed_op.get('target') or ''
         result = make_result(op_name, target)
+        if not target:
+            # Targetless ops (FORGE, MEMORY, GIT...) carry their subcommand
+            # in ARGS. Keep it so the packet can say which one this was.
+            result['args'] = str(
+                (parsed_op.get('directives') or {}).get('ARGS') or ''
+            ).strip()
         mod = get_op(op_name)
 
         emit_event(

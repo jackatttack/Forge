@@ -89,6 +89,15 @@ HELP = {
 
 
 HINTS = {
+    'failed_ambiguous': {
+        'message': 'The OLD block matched more than once, so nothing was deleted.',
+        'why': 'Deleting the first match silently could remove the wrong copy.',
+        'next': [
+            'Add OCCURRENCE: N to delete one specific match.',
+            'Or widen OLD with neighbouring lines until it is unique.',
+            'Use ALL: yes with CONFIRM: yes only when every match should go.',
+        ],
+    },
     '_max_hints': 1,
     'failed_compile': {
         'message': 'The deletion would break the Python file, so nothing was written.',
@@ -282,7 +291,8 @@ def _execute_lines_delete(ctx, target, parsed_op, result):
     start, end = _parse_lines((parsed_op.get('directives') or {}).get('LINES'))
     after, err = _replace_range_with_empty(before, start, end)
     if err:
-        result['status'] = 'FAILED_PARSE'
+        # The bundle was well formed; the file does not have those lines now.
+        result['status'] = 'FAILED_NOT_FOUND'
         result['message'] = err
         return
 
@@ -340,12 +350,12 @@ def _execute_block_delete(ctx, target, parsed_op, result):
         deleted = count
     else:
         if occurrence > count:
-            result['status'] = 'FAILED_PARSE'
+            result['status'] = 'FAILED_NOT_FOUND'
             result['message'] = 'OCCURRENCE %d out of range; OLD block matched %d times' % (occurrence, count)
             return
 
         if count > 1 and 'OCCURRENCE' not in directives:
-            result['status'] = 'FAILED_PARSE'
+            result['status'] = 'FAILED_AMBIGUOUS'
             result['message'] = 'OLD block matched %d times; use OCCURRENCE: N or ALL: yes' % count
             return
 

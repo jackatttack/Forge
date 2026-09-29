@@ -42,6 +42,61 @@ from forge.core.run_storage import (
 MAX_RUN_PREVIEW_BYTES = 256 * 1024
 
 
+def _run_row(stamp, packet):
+    """
+    One FORGE runs line: stamp, status, op counts, changed files, first op.
+
+    Stored packets hold the Ops and Changed files lists; the summary footer
+    is added later by the presenter. So the counts come from those lists,
+    which every stored run has, old or new. A missing packet gives just the
+    stamp.
+    """
+    status = ''
+    applied = skipped = failed = changed = 0
+    first_op = ''
+    section = ''
+
+    for line in (packet or '').splitlines():
+        if line in ('Ops:', 'Changed files:', 'Errors:'):
+            section = line
+            continue
+        if not line.strip() or line.startswith('==='):
+            section = ''
+            continue
+        if line.startswith('Status: ') and not status:
+            status = line[len('Status: '):].strip()
+            continue
+
+        if section == 'Ops:' and line.startswith('- '):
+            parts = line[2:].split(' | ')
+            op_status = parts[0].strip()
+            # Older packets could carry a multi-line message inside the Ops
+            # list; only lines starting with a real status token are ops.
+            if len(parts) < 3 or not op_status.replace('_', '').isalpha() \
+                    or not op_status.isupper():
+                continue
+            if op_status == 'APPLIED':
+                applied += 1
+            elif op_status.startswith('SKIPPED'):
+                skipped += 1
+            else:
+                failed += 1
+            if not first_op:
+                first_op = (parts[1] + ' ' + parts[2].split(' :: ')[0]).strip()
+        elif section == 'Changed files:' and line.startswith('- '):
+            changed += 1
+
+    pieces = [stamp]
+    if status:
+        pieces.append(status)
+    if applied or skipped or failed:
+        pieces.append('%d applied · %d skipped · %d failed' % (applied, skipped, failed))
+        pieces.append('changed %d file%s' % (changed, '' if changed == 1 else 's'))
+    if first_op:
+        pieces.append('first: ' + first_op[:70])
+    return '- ' + '  '.join(pieces)
+
+
 def _bounded_run_preview(text, limit=MAX_RUN_PREVIEW_BYTES):
     """
     Bound interactive stored-run output without altering the stored artifact.
@@ -92,8 +147,9 @@ SPEC = {
 HELP = {
     'summary': 'Inspect Forge itself: operations, help, workflow docs, health, configuration, and stored runs.',
     'brief': (
-        'FORGE ops [all] · help <OP> [full] · audit · config · runs latest, '
-        'runs show <stamp> · docs, search docs <query> · bundle.'
+        'FORGE ops [all] · help <OP> [full] · bundle · docs, search docs '
+        '<query> · runs, runs latest, runs show <stamp> · audit · config · '
+        'boot.'
     ),
     'minimal_example': [
         'FORGE',
@@ -1706,7 +1762,13 @@ def _runs(
 
         if names:
             lines.extend(
-                '- ' + stamp
+                _run_row(stamp, read_text(
+                    project_root,
+                    stamp,
+                    'packet.txt',
+                    mode=run_mode,
+                    environment=environment,
+                ) or '')
                 for stamp in names
             )
         else:

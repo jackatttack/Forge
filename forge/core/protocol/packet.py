@@ -181,6 +181,21 @@ def _format_shared_skip_hint(skipped_results):
     ]
 
 
+def _preview_text(result):
+    """
+    The PREVIEW text for one result.
+
+    The Ops summary keeps one line per op, so a multi-line message (a
+    PROJECTS brief, for example) is shown here in full, ahead of any
+    preview the op also produced.
+    """
+    message = str(result.get('message') or '')
+    preview = str(result.get('preview') or '').rstrip()
+    if '\n' in message.strip():
+        return message.rstrip() + ('\n' + preview if preview else '')
+    return preview
+
+
 def format_packet(run):
     """Return the complete deterministic AI-facing Forge packet."""
     run = run or {}
@@ -214,11 +229,16 @@ def format_packet(run):
             line = '- %s | %s | %s' % (
                 result.get('status') or 'UNKNOWN',
                 result.get('op') or '?',
-                result.get('target') or '?',
+                result.get('target') or result.get('args') or '?',
             )
 
-            if result.get('message'):
-                line += ' :: ' + str(result.get('message'))
+            message = str(result.get('message') or '').strip()
+            if message:
+                first_line, _, rest = message.partition('\n')
+                line += ' :: ' + first_line
+                if rest.strip():
+                    # One line per op; the rest is shown by _preview_text.
+                    line += ' (continued in PREVIEW)'
 
             lines.append(line)
 
@@ -273,7 +293,7 @@ def format_packet(run):
                 '%s %s'
                 % (
                     result.get('op') or '?',
-                    result.get('target') or '?',
+                    result.get('target') or result.get('args') or '?',
                 )
             )
             lines.append(
@@ -286,18 +306,16 @@ def format_packet(run):
             )
 
     previews = [
-        result
-        for result in results
-        if result.get('preview')
+        text
+        for text in (_preview_text(result) for result in results)
+        if text
     ]
 
     if previews:
         lines.append('')
         lines.append('=== PREVIEW ===')
 
-        for result in previews:
-            lines.append(
-                str(result.get('preview')).rstrip()
-            )
+        for text in previews:
+            lines.append(text)
 
     return '\n'.join(lines).rstrip() + '\n'

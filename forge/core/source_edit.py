@@ -156,10 +156,23 @@ def insert_after_line(
         before[-1] = before[-1] + '\n'
 
     if not tight:
-        if before and before[-1].strip():
-            new_lines.insert(0, '\n')
-        if after and after[0].strip():
-            new_lines.append('\n')
+        # Python style: two blank lines around top-level definitions, one
+        # around nested ones. Top up whatever blank lines are already there.
+        wanted = 1 if indent else 2
+        blank_before = 0
+        for line in reversed(before):
+            if line.strip():
+                break
+            blank_before += 1
+        blank_after = 0
+        for line in after:
+            if line.strip():
+                break
+            blank_after += 1
+        if before:
+            new_lines[:0] = ['\n'] * max(0, wanted - blank_before)
+        if after:
+            new_lines.extend(['\n'] * max(0, wanted - blank_after))
 
     return ''.join(before) + ''.join(new_lines) + ''.join(after)
 

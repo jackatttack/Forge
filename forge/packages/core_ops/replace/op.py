@@ -134,12 +134,12 @@ HINTS = {
         ],
     },
     'failed_ambiguous': {
-        'message': 'The target name matched more than one definition in the file.',
-        'why': 'Patching the first match silently would risk editing dead code. The message lists the matching line numbers.',
+        'message': 'The target matched more than once, so Forge did not guess.',
+        'why': 'A repeated OLD block or a duplicated definition name is ambiguous. Editing the first match silently could change the wrong copy.',
         'next': [
-            'READ the file and decide which definition is live.',
-            'Use REPLACE with LINES: start-end to target the exact range.',
-            'Consider removing the duplicate; the later definition wins at runtime.',
+            'Repeated OLD block: add OCCURRENCE: N, or widen OLD with neighbouring lines until it is unique.',
+            'Every match intended: ALL: yes with CONFIRM: yes.',
+            'Duplicated definition: READ the file, decide which is live, then use LINES: start-end.',
         ],
     },
     'body': {
@@ -529,7 +529,8 @@ def _execute_file_range(ctx, parsed_op, result):
     start, end = _parse_lines(directives.get('LINES'))
     after, err = _replace_range(before, start, end, parsed_op.get('body') or '')
     if err:
-        result['status'] = 'FAILED_PARSE'
+        # The bundle was well formed; the file does not have those lines now.
+        result['status'] = 'FAILED_NOT_FOUND'
         result['message'] = err
         return
 
@@ -604,7 +605,7 @@ def _execute_block(ctx, parsed_op, result):
         replaced = count
     else:
         if occurrence > count:
-            result['status'] = 'FAILED_PARSE'
+            result['status'] = 'FAILED_NOT_FOUND'
             result['message'] = 'OCCURRENCE %d out of range; OLD block matched %d times' % (
                 occurrence,
                 count,
@@ -612,7 +613,7 @@ def _execute_block(ctx, parsed_op, result):
             return
 
         if count > 1 and 'OCCURRENCE' not in directives:
-            result['status'] = 'FAILED_PARSE'
+            result['status'] = 'FAILED_AMBIGUOUS'
             result['message'] = 'OLD block matched %d times; use OCCURRENCE: N or ALL: yes' % count
             return
 

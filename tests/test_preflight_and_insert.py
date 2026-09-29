@@ -173,7 +173,7 @@ class NoTrailingNewline(ForgeCase):
         self.assertEqual(run.get('status'), 'APPLIED')
         self.assertEqual(
             self.get('lab.py'),
-            'def a():\n    return 1\n\ndef b():\n    return 2\n',
+            'def a():\n    return 1\n\n\ndef b():\n    return 2\n',
         )
 
 

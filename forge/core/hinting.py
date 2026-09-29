@@ -278,11 +278,22 @@ ENGINE_STATUS_HINTS = {
 
 
 def _matching_hints(hints, haystack, max_hints):
-    """Render the op hints whose key appears in haystack, in table order."""
+    """
+    Render the op hints whose key appears in haystack, in table order.
+
+    A key must appear as a whole word (a plural 's' is allowed), so the
+    'anchor' hint matches "ANCHOR:" and "SKIPPED_ANCHOR_MISMATCH" but not
+    a target named "AnchorSelection". Underscores count as word breaks.
+    """
+    import re
+
     rendered = []
     for key, hint in hints.items():
         needle = str(key).lower()
-        if not needle or needle.startswith('_') or needle not in haystack:
+        if not needle or needle.startswith('_'):
+            continue
+        pattern = r'(?<![a-z0-9])' + re.escape(needle) + r's?(?![a-z0-9])'
+        if not re.search(pattern, haystack):
             continue
         rendered.append(_render_hint(key, hint))
         if len(rendered) >= max_hints:
