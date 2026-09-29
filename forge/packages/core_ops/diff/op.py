@@ -109,22 +109,51 @@ def _stamp_arg(parsed_op):
     return parts[0]
 
 
-def _diff_lines(before, after):
+# Lines of unchanged context shown around each change in a full diff.
+DIFF_CONTEXT_LINES = 2
+
+# Most diff lines shown per file, so a whole-file rewrite cannot flood the
+# packet. READ the file for anything beyond this.
+MAX_DIFF_LINES = 200
+
+
+def _diff_lines(before, after, context=DIFF_CONTEXT_LINES):
+    """
+    Real line diff of before -> after, as numbered hunks.
+
+    Uses difflib, so an inserted line shows as one '+' line instead of
+    shifting every later line into a change. Each hunk starts with a
+    unified-style header; removed lines carry their old line number, added
+    and context lines their new one. Output is capped at MAX_DIFF_LINES.
+    """
+    import difflib
+
     before_lines = (before or '').splitlines()
     after_lines = (after or '').splitlines()
-    max_len = max(len(before_lines), len(after_lines))
+    matcher = difflib.SequenceMatcher(None, before_lines, after_lines, autojunk=False)
+
     out = []
+    for group in matcher.get_grouped_opcodes(context):
+        first, last = group[0], group[-1]
+        out.append('  @@ -%d,%d +%d,%d @@' % (
+            first[1] + 1, last[2] - first[1],
+            first[3] + 1, last[4] - first[3],
+        ))
+        for tag, i1, i2, j1, j2 in group:
+            if tag == 'equal':
+                for offset, text in enumerate(after_lines[j1:j2]):
+                    out.append('    %04d  %s' % (j1 + offset + 1, text))
+                continue
+            for offset, text in enumerate(before_lines[i1:i2]):
+                out.append('  - %04d  %s' % (i1 + offset + 1, text))
+            for offset, text in enumerate(after_lines[j1:j2]):
+                out.append('  + %04d  %s' % (j1 + offset + 1, text))
 
-    for i in range(max_len):
-        b = before_lines[i] if i < len(before_lines) else None
-        a = after_lines[i] if i < len(after_lines) else None
-        if b == a:
-            continue
-        if b is not None:
-            out.append('  line %d -%s' % (i + 1, b))
-        if a is not None:
-            out.append('  line %d +%s' % (i + 1, a))
-
+    if len(out) > MAX_DIFF_LINES:
+        hidden = len(out) - MAX_DIFF_LINES
+        out = out[:MAX_DIFF_LINES] + [
+            '  ... %d more diff lines; READ the file for the rest' % hidden
+        ]
     return out
 
 
@@ -185,41 +214,41 @@ def _line_count(text):
 
 
 def _changed_ranges(before, after):
+    """
+    Compact summary of real changes, located in the new file.
+
+    "51-54 (+4 -3), 99 (+1)" means lines 51-54 now hold 4 lines that
+    replaced 3, and line 99 is one new line. A pure deletion has no lines
+    of its own in the new file, so it reads "after 120 (-2)". Returns
+    "none" when nothing changed.
+    """
+    import difflib
+
     before_lines = (before or '').splitlines()
     after_lines = (after or '').splitlines()
-    max_len = max(len(before_lines), len(after_lines))
-    nums = []
-
-    for i in range(max_len):
-        b = before_lines[i] if i < len(before_lines) else None
-        a = after_lines[i] if i < len(after_lines) else None
-        if b != a:
-            nums.append(i + 1)
-
-    if not nums:
-        return 'none'
-
-    ranges = []
-    start = nums[0]
-    prev = nums[0]
-
-    for n in nums[1:]:
-        if n == prev + 1:
-            prev = n
-            continue
-        ranges.append((start, prev))
-        start = prev = n
-
-    ranges.append((start, prev))
+    matcher = difflib.SequenceMatcher(None, before_lines, after_lines, autojunk=False)
 
     parts = []
-    for a, b in ranges:
-        if a == b:
-            parts.append(str(a))
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == 'equal':
+            continue
+        added = j2 - j1
+        removed = i2 - i1
+        if added == 0:
+            where = 'after %d' % j1
+        elif added == 1:
+            where = '%d' % (j1 + 1)
         else:
-            parts.append('%d-%d' % (a, b))
+            where = '%d-%d' % (j1 + 1, j2)
+        counts = ' '.join(
+            text for text in (
+                '+%d' % added if added else '',
+                '-%d' % removed if removed else '',
+            ) if text
+        )
+        parts.append('%s (%s)' % (where, counts))
 
-    return ', '.join(parts)
+    return ', '.join(parts) or 'none'
 
 
 def _render_touched_full(root, label, touched):

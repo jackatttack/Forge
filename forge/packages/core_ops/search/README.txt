@@ -230,6 +230,10 @@ Search a broad tree but deliberately skip noisy areas:
 - `EXT: .py,.txt` restricts extensions; see “What a search did not read”.
 - `LIMIT: N` caps returned matches; default `80`. With body patterns it
   applies to each pattern separately.
+- In a directory search one file shows at most a quarter of LIMIT (never
+  fewer than 3), so a noisy log cannot take every slot. Hidden hits are
+  counted in the header and beside the file name. Searching that file
+  directly shows everything, and EXPECT_HITS always counts every hit.
 - `FILTER: text` includes only paths containing one substring.
 - `GLOB: *_family.py,*_info.py` searches only files whose name matches one of
   the patterns (case-insensitive). Names only; use `FILTER` for paths.

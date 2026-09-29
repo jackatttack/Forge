@@ -415,6 +415,7 @@ def _active_only_excludes(enabled):
         'workspaces/forge_reboot/',
         'workspaces/forge_public_release/',
         'packed/',
+        'backups/',
     ]
 
 
@@ -1058,9 +1059,18 @@ def execute(ctx, parsed_op, result):
     needle = query if case_sensitive else query.lower()
 
     grouped = {}        # rel_path -> {lineno: {'text': str, 'match': bool}}
+    overflow = {}       # rel_path -> matches beyond the per-file cap
     total_hits = 0
     searched = 0
     stopped_at_limit = False
+
+    # In a directory search one noisy file (a log, a backup copy) could
+    # otherwise take every hit. Each file may use at most a quarter of LIMIT,
+    # never fewer than 3; the rest are counted, not shown. EXPECT_HITS needs
+    # the true count, so it switches the cap off.
+    per_file_cap = limit
+    if os.path.isdir(abs_path) and 'EXPECT_HITS' not in directives:
+        per_file_cap = max(3, limit // 4)
 
     for path in _iter_files(root, abs_path, exts, scan_stats):
         try:
@@ -1082,6 +1092,7 @@ def execute(ctx, parsed_op, result):
 
         searched += 1
         lines = text.splitlines()
+        file_matches = 0
 
         for idx, line in enumerate(lines):
             lineno = idx + 1
@@ -1095,6 +1106,11 @@ def execute(ctx, parsed_op, result):
                 matched = needle in hay
 
             if not matched:
+                continue
+
+            file_matches += 1
+            if file_matches > per_file_cap:
+                overflow[rel] = overflow.get(rel, 0) + 1
                 continue
 
             file_hits = grouped.setdefault(rel, {})
@@ -1146,6 +1162,13 @@ def execute(ctx, parsed_op, result):
         header.append('CONTEXT=%d' % context)
     if stopped_at_limit:
         header.append('(limit reached, results may be incomplete)')
+    if overflow:
+        hidden = sum(overflow.values())
+        header.append('(per-file cap %d: %d more hit%s in %d file%s not shown)' % (
+            per_file_cap,
+            hidden, '' if hidden == 1 else 's',
+            len(overflow), '' if len(overflow) == 1 else 's',
+        ))
 
     out = ['\n'.join(header)]
 
@@ -1154,7 +1177,11 @@ def execute(ctx, parsed_op, result):
         out.append('(no hits)')
     else:
         for rel in sorted(grouped):
-            out.append(rel)
+            if overflow.get(rel):
+                out.append('%s  (+%d more hits here; SEARCH this file to see them)' % (
+                    rel, overflow[rel]))
+            else:
+                out.append(rel)
             for lineno in sorted(grouped[rel]):
                 item = grouped[rel][lineno]
                 marker = '>' if item.get('match') else ' '
@@ -1187,6 +1214,8 @@ def execute(ctx, parsed_op, result):
         'files_hit': files_hit,
         'limit': limit,
         'limit_reached': stopped_at_limit,
+        'per_file_cap': per_file_cap,
+        'per_file_overflow': dict(overflow),
         'case_sensitive': case_sensitive,
         'match_mode': match_mode,
         'context': context,
