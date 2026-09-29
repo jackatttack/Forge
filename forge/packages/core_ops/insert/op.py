@@ -58,30 +58,23 @@ SPEC = {
 HELP = {
     'summary': 'Insert text or code into a file or resolved AST target.',
     'brief': (
-        'path::Target with POSITION: after (new sibling) or end (inside), '
-        'or LINE: N in a plain file · ANCHOR: text places it by matching '
-        'text, INDENT: child nests it · IF_VERSION pins.'
+        'Plain file: ANCHOR: text (or LINE: N) with POSITION: before|after · '
+        'path::Target with POSITION: before|after (sibling) or start|end '
+        '(inside) · ANCHOR inside a target, INDENT: child nests · '
+        'OCCURRENCE: N picks a repeated anchor · IF_VERSION pins.'
     ),
     'minimal_example': [
-        'INSERT app.py::main',
-        'POSITION: end',
-        'BEGIN_BODY',
-        'print("done")',
-        'END_BODY',
-        '',
-        'INSERT docs/example.txt',
-        'LINE: 4',
+        'INSERT docs/notes.md',
+        'ANCHOR: ## Setup',
         'POSITION: after',
         'BEGIN_BODY',
         'new line',
         'END_BODY',
         '',
-        'INSERT .github/workflows/ci.yml',
-        'LINE: 12',
-        'POSITION: after',
+        'INSERT app.py::main',
+        'POSITION: end',
         'BEGIN_BODY',
-        '      - name: Run tests',
-        '        run: python -m unittest',
+        'print("done")',
         'END_BODY',
         '',
         'INSERT app.py::main',
@@ -100,6 +93,14 @@ HELP = {
         'def new_helper():',
         '    return True',
         'END_BODY',
+        '',
+        'INSERT .github/workflows/ci.yml',
+        'LINE: 12',
+        'POSITION: after',
+        'BEGIN_BODY',
+        '      - name: Run tests',
+        '        run: python -m unittest',
+        'END_BODY',
     ],
     'directives': {
         'IF_VERSION': (
@@ -107,45 +108,49 @@ HELP = {
             'an earlier READ or edit result.'
         ),
         'ANCHOR': (
-            'Existing text to match inside a resolved AST target.'
+            'Text on an existing line; the body goes before or after that '
+            'line. Searches the whole plain file, or only inside path::Target.'
         ),
         'CONFIRM': (
             'Use yes only to approve an intentional edit when the '
             'shared core guard identifies the target as protected.'
         ),
         'EXPECT': (
-            'Required total anchor-match count; the default is 1.'
+            'Assert the total anchor-match count. Without EXPECT or '
+            'OCCURRENCE the anchor must match exactly once.'
         ),
         'INDENT': (
             'Anchored AST indentation: auto, same, or child.'
         ),
         'LINE': (
-            'One-based insertion line required for plain files.'
+            'One-based line in a plain file, from a fresh READ. Use LINE or '
+            'ANCHOR, not both.'
         ),
         'MATCH': (
             'Anchor matching: exact or fuzzy; the default is exact.'
         ),
         'OCCURRENCE': (
-            'One-based anchor match to select; the default is 1.'
+            'Select the Nth anchor match; works on its own, like REPLACE.'
         ),
         'POSITION': (
-            'before/after for siblings, anchors, and plain files; '
+            'before/after for plain files, anchors and AST siblings; '
             'start/end for AST bodies.'
         ),
     },
     'common_failures': [
-        'Plain-file insertion without LINE.',
+        'Plain-file insertion with neither ANCHOR nor LINE, or with both.',
         'Using start or end on a plain file.',
-        'Using an anchor outside a resolved AST target.',
-        'Selecting OCCURRENCE: 2 while leaving EXPECT at its default of 1.',
+        'A repeated anchor without OCCURRENCE.',
+        'A stale LINE number after earlier edits in the same bundle.',
         'Producing invalid Python after insertion.',
     ],
     'safe_usage': [
         'READ the exact target or surrounding lines first.',
+        'Prefer ANCHOR over LINE: content anchors survive earlier edits.',
         'Use explicit POSITION rather than relying on placement guesses.',
         'Preserve exact body whitespace for plain-file insertion.',
         'Use INDENT only for anchored AST insertion.',
-        'Set EXPECT and OCCURRENCE together for repeated anchors.',
+        'Check the landed lines in the result preview.',
     ],
     'related_ops': ['READ', 'REPLACE', 'WRITE'],
 }
@@ -166,34 +171,31 @@ HINTS = {
         'why': 'Inserting at the first match silently would risk anchoring on dead code. The message lists the matching lines.',
         'next': [
             'READ the file and decide which definition is live.',
-            'Use plain-file INSERT with LINE: N to target the exact spot.',
+            'Target the file without :: and place the body with ANCHOR: text or LINE: N.',
         ],
     },
     'line': {
-        'message': 'Plain file INSERT needs LINE: N.',
-        'why': 'For non-AST targets, Forge needs an explicit line number to know where to splice the body.',
+        'message': 'Plain file INSERT needs ANCHOR: text or LINE: N, not both.',
+        'why': 'Forge needs to know which line to insert beside. ANCHOR finds it by content, so it survives earlier edits; LINE needs a current line number.',
         'example': [
-            'READ docs/example.txt',
-            '',
             'INSERT docs/example.txt',
-            'LINE: 4',
+            'ANCHOR: ## Setup',
             'POSITION: after',
             'BEGIN_BODY',
             'new line',
             'END_BODY',
         ],
         'next': [
-            'READ the file to get the current line number.',
+            'Prefer ANCHOR with text from a line you have already seen.',
+            'Use LINE: N only with a line number from a fresh READ.',
             'Use POSITION: before or POSITION: after for plain files.',
             'For Python helper functions/classes, prefer AST sibling insertion: INSERT app.py::existing_function with POSITION: after.',
         ],
     },
     'anchor': {
         'message': 'Anchored INSERT could not resolve the anchor safely.',
-        'why': 'Forge searches only inside the resolved AST target. The anchor may not match exactly, or it may match more times than EXPECT allows.',
+        'why': 'In a plain file Forge searches the whole file; with path::Target only inside that target. Without OCCURRENCE or EXPECT the anchor must match exactly once, so a repeated anchor is refused rather than guessed.',
         'example': [
-            'READ app.py::main',
-            '',
             'INSERT app.py::main',
             'ANCHOR: if ready:',
             'POSITION: after',
@@ -202,28 +204,27 @@ HINTS = {
             'run()',
             'END_BODY',
             '',
-            'INSERT app.py::main',
-            'ANCHOR: print("same")',
+            'INSERT notes.txt',
+            'ANCHOR: same line text',
             'POSITION: after',
-            'INDENT: same',
             'OCCURRENCE: 2',
-            'EXPECT: 2',
             'BEGIN_BODY',
-            'run_after_second_match()',
+            'inserted after the second match',
             'END_BODY',
         ],
         'next': [
-            'READ the AST target and copy the anchor exactly.',
-            'If the anchor matched 0 times, check spelling, indentation, or use MATCH: fuzzy for whitespace drift.',
-            'If the anchor matched more than once, make it more specific or use OCCURRENCE with EXPECT deliberately.',
+            'Copy the anchor exactly from a line you have READ.',
+            'If it matched 0 times, check spelling or use MATCH: fuzzy for whitespace drift.',
+            'If it matched more than once, make it more specific or add OCCURRENCE: N.',
+            'Add EXPECT: N only when you also want the total number of matches asserted.',
         ],
     },
     'position': {
         'message': 'INSERT POSITION must fit the target shape.',
-        'why': 'Plain files support only before/after with LINE. AST body insertion supports start/end. Anchored insertion supports before/after around the anchor.',
+        'why': 'Plain files and anchors support before/after. AST sibling insertion supports before/after the target. AST body insertion supports start/end.',
         'example': [
             'INSERT docs/example.txt',
-            'LINE: 4',
+            'ANCHOR: ## Setup',
             'POSITION: after',
             'BEGIN_BODY',
             'new line',
@@ -282,6 +283,13 @@ def _normalise_position(value):
 
 
 def validate(parsed_op):
+    """
+    Static rules for INSERT, checked before any op in the bundle runs.
+
+    Only the parsed op is available here, never the file. Checks that
+    depend on file contents (LINE past the end, anchor matches) belong in
+    execute().
+    """
     errors = []
     target = (parsed_op.get('target') or '').strip()
     directives = parsed_op.get('directives') or {}
@@ -293,6 +301,7 @@ def validate(parsed_op):
 
     pos = _normalise_position(directives.get('POSITION'))
     has_anchor = 'ANCHOR' in directives
+    has_line = 'LINE' in directives
     is_ast = '::' in target
     is_plain_file = not is_ast
 
@@ -313,13 +322,20 @@ def validate(parsed_op):
     if match_mode not in ('exact', 'fuzzy'):
         errors.append('INSERT MATCH must be exact or fuzzy')
 
-    if 'LINE' in directives:
-        line = _as_int(directives.get('LINE'), 0)
-        if line < 1:
-            errors.append('INSERT LINE must be an integer >= 1')
+    if has_line and _as_int(directives.get('LINE'), 0) < 1:
+        errors.append('INSERT LINE must be an integer >= 1')
 
-    if is_plain_file and ('LINE' not in directives):
-        errors.append('Plain file INSERT requires LINE: N')
+    if 'OCCURRENCE' in directives and _as_int(directives.get('OCCURRENCE'), 0) < 1:
+        errors.append('INSERT OCCURRENCE must be an integer >= 1')
+
+    if 'EXPECT' in directives and _as_int(directives.get('EXPECT'), 0) < 1:
+        errors.append('INSERT EXPECT must be an integer >= 1')
+
+    if has_line and has_anchor:
+        errors.append('INSERT takes LINE or ANCHOR, not both')
+
+    if is_plain_file and not has_line and not has_anchor:
+        errors.append('Plain file INSERT requires LINE: N or ANCHOR: text')
 
     return errors
 
@@ -363,8 +379,78 @@ def _indent_for(anchor_line, mode):
         return base + '    '
     return base
 
+def _anchor_selection(directives):
+    """
+    Return (occurrence, expect) for anchored insertion.
+
+    With neither directive the anchor must match exactly once, so an
+    ambiguous anchor is refused rather than guessed. OCCURRENCE alone picks
+    the Nth match without asserting the total, the same as REPLACE. EXPECT,
+    when given, always asserts the total. expect 0 means "not asserted".
+    """
+    occurrence = _as_int(directives.get('OCCURRENCE'), 1)
+    if 'EXPECT' in directives:
+        expect = _as_int(directives.get('EXPECT'), 1)
+    elif 'OCCURRENCE' in directives:
+        expect = 0
+    else:
+        expect = 1
+    return occurrence, expect
+
+
+def _landed_region(before, after):
+    """
+    Return the first and last line (1-based) of `after` that differ from
+    `before`. Comparing whole texts reports where the body really landed,
+    whatever blank-line handling insert_after_line applied.
+    """
+    old = before.splitlines()
+    new = after.splitlines()
+    limit = min(len(old), len(new))
+    prefix = 0
+    while prefix < limit and old[prefix] == new[prefix]:
+        prefix += 1
+    suffix = 0
+    while suffix < limit - prefix and old[len(old) - 1 - suffix] == new[len(new) - 1 - suffix]:
+        suffix += 1
+    first = prefix + 1
+    last = max(first, len(new) - suffix)
+    return first, last
+
+
+def _landed_context(after, first, last, context=2, max_shown=12):
+    """
+    Numbered lines around an insertion, inserted lines marked with '>'.
+
+    Lets the packet confirm placement without another READ. Long insertions
+    show only their first and last few lines.
+    """
+    lines = after.splitlines()
+    low = max(1, first - context)
+    high = min(len(lines), last + context)
+    numbers = list(range(low, high + 1))
+    if last - first + 1 > max_shown:
+        half = max_shown // 2
+        numbers = [n for n in numbers if n < first + half or n > last - half]
+    out = []
+    previous = None
+    for n in numbers:
+        if previous is not None and n != previous + 1:
+            out.append('  ....')
+        marker = '>' if first <= n <= last else ' '
+        out.append('%s %04d: %s' % (marker, n, lines[n - 1]))
+        previous = n
+    return out
+
 
 def _execute_plain_file(ctx, parsed_op, result):
+    """
+    Insert verbatim text into a non-Python target.
+
+    Placement comes from LINE (an inspected line number) or ANCHOR (a line
+    containing the anchor text, selected by OCCURRENCE and checked by
+    EXPECT). validate() guarantees exactly one of the two is present.
+    """
     target = (parsed_op.get('target') or '').strip()
     body = parsed_op.get('body') or ''
     directives = parsed_op.get('directives') or {}
@@ -381,14 +467,35 @@ def _execute_plain_file(ctx, parsed_op, result):
         return
 
     before = read_text(abs_path)
-    total = len(before.splitlines())
-    line_no = _as_int(directives.get('LINE'), 0)
+    lines = before.splitlines()
     pos = _normalise_position(directives.get('POSITION'))
+    anchor = str(directives.get('ANCHOR') or '')
+    match_mode = str(directives.get('MATCH') or 'exact').strip().lower()
+    occurrence, expect = _anchor_selection(directives)
 
-    if line_no > total:
-        result['status'] = 'FAILED_PARSE'
-        result['message'] = 'LINE out of range: file has %d lines' % total
-        return
+    if anchor:
+        index, anchor_err = _anchor_index(lines, anchor, match_mode, occurrence, expect)
+        if anchor_err:
+            result['status'] = 'SKIPPED_ANCHOR_MISMATCH'
+            result['message'] = 'ANCHOR: ' + anchor_err
+            result['data'] = {
+                'path': target,
+                'file': target,
+                'anchor': anchor,
+                'match': match_mode,
+                'occurrence': occurrence,
+                'expect': expect,
+                'inserted_lines': 0,
+            }
+            return
+        line_no = index + 1
+    else:
+        line_no = _as_int(directives.get('LINE'), 0)
+        if line_no > len(lines):
+            # The bundle was well formed; the file is shorter than expected.
+            result['status'] = 'FAILED_NOT_FOUND'
+            result['message'] = 'LINE %d out of range: file has %d lines' % (line_no, len(lines))
+            return
 
     insert_line = line_no - 1 if pos == 'before' else line_no
     inserted_lines = len(str(body).splitlines())
@@ -404,7 +511,7 @@ def _execute_plain_file(ctx, parsed_op, result):
             dedent=False,
         )
     except Exception as e:
-        result['status'] = 'FAILED_PARSE'
+        result['status'] = 'FAILED_RUNTIME'
         result['message'] = '%s: %s' % (type(e).__name__, e)
         return
 
@@ -426,25 +533,42 @@ def _execute_plain_file(ctx, parsed_op, result):
     )
     record_touched(ctx, result, touched)
 
-    mode = 'line-%s' % pos
+    mode = ('anchor-%s' if anchor else 'line-%s') % pos
+    landed_start, landed_end = _landed_region(before, after)
+
+    preview_lines = [
+        'INSERT %s' % target,
+        'mode: %s' % mode,
+        'position: %s' % pos,
+    ]
+    if anchor:
+        preview_lines.extend([
+            'anchor: %s' % anchor,
+            'anchor line: %d' % line_no,
+            'occurrence: %d' % occurrence,
+            'expect: %s' % (expect or 'not asserted'),
+        ])
+    else:
+        preview_lines.append('line: %d' % line_no)
+    preview_lines.append(
+        'inserted: %d line%s' % (inserted_lines, '' if inserted_lines == 1 else 's'))
+    preview_lines.append('landed: lines %d-%d' % (landed_start, landed_end))
+    preview_lines.extend(_landed_context(after, landed_start, landed_end))
 
     result['status'] = 'APPLIED'
     result['message'] = 'Inserted into %s %s line %d' % (target, pos, line_no)
     result['file'] = target
-    result['preview'] = '\n'.join([
-        'INSERT %s' % target,
-        'mode: %s' % mode,
-        'position: %s' % pos,
-        'line: %d' % line_no,
-        'inserted: %d line%s' % (inserted_lines, '' if inserted_lines == 1 else 's'),
-    ])
+    result['preview'] = '\n'.join(preview_lines)
     result['data'] = {
         'path': target,
         'file': target,
         'line': line_no,
         'position': pos,
         'mode': mode,
+        'anchor': anchor,
         'inserted_lines': inserted_lines,
+        'landed_start': landed_start,
+        'landed_end': landed_end,
     }
 
 
@@ -477,8 +601,7 @@ def _execute_ast(ctx, parsed_op, result):
 
     anchor = str(directives.get('ANCHOR') or '')
     match_mode = str(directives.get('MATCH') or 'exact').strip().lower()
-    occurrence = _as_int(directives.get('OCCURRENCE'), 1)
-    expect = _as_int(directives.get('EXPECT'), 1)
+    occurrence, expect = _anchor_selection(directives)
     indent_mode = str(directives.get('INDENT') or 'auto').strip().lower()
 
     mode = 'ast-%s' % pos
@@ -546,7 +669,7 @@ def _execute_ast(ctx, parsed_op, result):
             insert_at = max(start, end - 1)
 
     except Exception as e:
-        result['status'] = 'FAILED_PARSE'
+        result['status'] = 'FAILED_RUNTIME'
         result['message'] = '%s: %s' % (type(e).__name__, e)
         return
 
@@ -575,16 +698,19 @@ def _execute_ast(ctx, parsed_op, result):
         'target span: %d-%d' % (start, end),
         'inserted: %d line%s' % (inserted_lines, '' if inserted_lines == 1 else 's'),
     ]
-    if insert_at is not None:
-        preview.append('insert at: %d' % insert_at)
+    landed_start, landed_end = _landed_region(before, after)
+
     if anchor:
         preview.extend([
             'anchor: %s' % anchor,
             'indent: %s' % indent_mode,
             'match: %s' % match_mode,
             'occurrence: %d' % occurrence,
-            'expect: %d' % expect,
+            'expect: %s' % (expect or 'not asserted'),
         ])
+
+    preview.append('landed: lines %d-%d' % (landed_start, landed_end))
+    preview.extend(_landed_context(after, landed_start, landed_end))
 
     result['status'] = 'APPLIED'
     result['message'] = 'Inserted into %s' % target

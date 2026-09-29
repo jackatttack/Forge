@@ -54,6 +54,51 @@ def _record_run_error(run, result):
 
     run.setdefault('errors', []).append(text)
 
+def validate_ops(parsed_ops):
+    """
+    Check every operation's static rules before any operation runs.
+
+    Parsing proves each line is well formed; this proves each op's
+    directives make sense together (a plain-file INSERT needs LINE or
+    ANCHOR, and so on). Both happen before execution, so a bundle refused
+    here has run nothing, which is exactly what FAILED_PARSE promises.
+
+    validate() sees only the parsed op, never the filesystem. Checks that
+    depend on file contents stay in each op's execute().
+
+    Returns (errors, hints): error strings in the packet's usual
+    'STATUS | OP :: message' shape, and hint dicts for run['parse_hints'].
+    """
+    errors = []
+    hints = []
+    for parsed_op in parsed_ops or []:
+        op_name = parsed_op.get('op') or '?'
+        target = parsed_op.get('target') or ''
+        mod = get_op(op_name)
+        if mod is None:
+            errors.append('FAILED_PARSE | %s :: Unknown op: %s' % (op_name, op_name))
+            continue
+        validate = getattr(mod, 'validate', None)
+        if not callable(validate):
+            continue
+        try:
+            messages = validate(parsed_op)
+        except Exception as e:
+            messages = [type(e).__name__ + ': ' + str(e)]
+        if not messages:
+            continue
+
+        result = make_result(op_name, target)
+        result['status'] = 'FAILED_PARSE'
+        result['message'] = '; '.join(str(message) for message in messages)
+        errors.append('FAILED_PARSE | %s :: %s' % (op_name, result['message']))
+        try:
+            hint = render_hints_for_result(mod, result)
+        except Exception as e:
+            hint = 'HINT: hint rendering failed: %s: %s' % (type(e).__name__, e)
+        hints.append({'op': op_name, 'target': target or '?', 'hint': hint})
+    return errors, hints
+
 
 def _finish_result(
     run,
@@ -206,6 +251,13 @@ def execute_ops(
         status = str((result or {}).get('status') or '').strip().upper()
         return status != 'APPLIED'
 
+    # Refuse the whole bundle before anything runs. See validate_ops.
+    preflight_errors, preflight_hints = validate_ops(parsed_ops)
+    if preflight_errors:
+        if run is not None:
+            run.setdefault('errors', []).extend(preflight_errors)
+            run['parse_hints'] = (run.get('parse_hints') or []) + preflight_hints
+        return []
     for index, parsed_op in enumerate(parsed_ops, 1):
         op_name = parsed_op.get('op')
         target = parsed_op.get('target') or ''

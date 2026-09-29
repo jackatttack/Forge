@@ -9,6 +9,15 @@ plain-file insertion.
 
 ## Decision guide
 
+Add text beside a line you have seen, in any file:
+
+    INSERT docs/notes.md
+    ANCHOR: ## Setup
+    POSITION: after
+    BEGIN_BODY
+    new line
+    END_BODY
+
 Add a sibling function or class beside an existing Python target:
 
     INSERT app.py::existing_function
@@ -38,7 +47,7 @@ Add code relative to a line inside one resolved AST target:
     run()
     END_BODY
 
-Add text at an inspected line in a plain file:
+Add text at an inspected line number in a plain file:
 
     INSERT docs/example.txt
     LINE: 4
@@ -47,18 +56,44 @@ Add text at an inspected line in a plain file:
     new line
     END_BODY
 
+Prefer ANCHOR over LINE. An anchor finds its line by content, so it still
+lands correctly after earlier edits have shifted line numbers.
+
+## Anchors
+
+ANCHOR matches any line containing the anchor text. In a plain file Forge
+searches the whole file; with path::Target it searches only inside that
+target, keeping the edit narrow.
+
+Without OCCURRENCE or EXPECT the anchor must match exactly once. A repeated
+anchor is refused rather than guessed.
+
+Pick one of several matches with OCCURRENCE alone, the same as REPLACE:
+
+    INSERT notes.txt
+    ANCHOR: TODO
+    POSITION: after
+    OCCURRENCE: 2
+    BEGIN_BODY
+    inserted after the second TODO line
+    END_BODY
+
+Add EXPECT: N when you also want the total number of matches asserted.
+The insert is refused if the count differs.
+
 ## Whitespace
 
 The two insertion families treat the body differently, because they have
 different jobs.
 
 Plain-file insertion writes the body exactly as given. Leading spaces,
-relative indentation, and blank lines all survive. Indentation is often
+relative indentation, and blank lines between body lines all survive.
+Blank lines at the very start or end of the body are dropped. Indentation is often
 the meaning of the line in YAML, Markdown, or indented configuration, so
 Forge does not touch it:
 
     INSERT .github/workflows/ci.yml
-    LINE: 12
+    ANCHOR: steps:
     POSITION: after
     BEGIN_BODY
           - name: Run tests
@@ -83,6 +118,20 @@ INDENT applies only to anchored AST insertion. It has no effect on
 plain-file insertion, where the body is already verbatim.
 
 ## Target shapes
+
+### Plain-file insertion
+
+    INSERT docs/file.txt
+    ANCHOR: text on an existing line
+    POSITION: before
+
+or:
+
+    INSERT docs/file.txt
+    LINE: 12
+    POSITION: after
+
+Plain files need exactly one of ANCHOR or LINE.
 
 ### AST sibling insertion
 
@@ -120,65 +169,63 @@ target.
     inserted_code()
     END_BODY
 
-ANCHOR searches only inside the resolved AST target, keeping the edit narrow.
-
-### Plain-file line insertion
-
-    INSERT docs/file.txt
-    LINE: 12
-    POSITION: after
-    BEGIN_BODY
-    inserted text
-    END_BODY
-
-Plain-file insertion requires `LINE` because it does not perform anchor
-resolution.
-
 ## Directives
 
 ### Placement
 
-- `POSITION: before|after` works with AST siblings, AST anchors, and plain
-  file lines.
+- `POSITION: before|after` works with plain files, anchors, and AST siblings.
 - `POSITION: start|end` inserts inside an AST body.
-- `LINE: N` is a one-based line number and is required for plain files.
+- `ANCHOR: text` places the body beside the line containing that text.
+- `LINE: N` is a one-based line number in a plain file. Use LINE or ANCHOR,
+  not both.
 
-### Anchored AST insertion
+### Anchor matching
 
-- `ANCHOR: text` searches inside the resolved AST target.
-- `MATCH: exact|fuzzy` controls anchor matching; default `exact`.
-- `INDENT: auto|same|child` controls placement indentation; default `auto`.
-- `EXPECT: N` requires exactly N anchor matches; default `1`.
-- `OCCURRENCE: N` selects the Nth match; default `1`.
-
-Repeated anchors require both count and selection:
-
-    INSERT app.py::main
-    ANCHOR: print("same")
-    POSITION: after
-    INDENT: same
-    EXPECT: 2
-    OCCURRENCE: 2
-    BEGIN_BODY
-    run_after_second_match()
-    END_BODY
-
-`OCCURRENCE: 2` alone fails when two anchors exist because the default
-`EXPECT: 1` still requires exactly one match.
+- `MATCH: exact|fuzzy` controls anchor matching; default `exact`. Fuzzy
+  ignores leading and trailing whitespace.
+- `OCCURRENCE: N` selects the Nth match and works on its own.
+- `EXPECT: N` asserts the total number of matches.
+- `INDENT: auto|same|child` controls AST placement indentation; default
+  `auto`.
 
 ### Protected targets
 
-`CONFIRM: yes` approves an intentional insertion only when Forge’s shared core
+`CONFIRM: yes` approves an intentional insertion only when Forge's shared core
 guard identifies the target as protected. Inspect the target and create a
 BRANCH before confirming a core edit.
 
+### Version pins
+
+`IF_VERSION: <version>` refuses the insert if the file changed since that
+version was read.
+
+## Result preview
+
+A successful insert reports the lines where the body landed, with two lines
+of numbered context either side. Inserted lines are marked with `>`:
+
+    landed: lines 3-3
+      0001: alpha
+      0002: beta
+    > 0003: new line
+      0004: gamma
+
+Check this instead of re-reading the file.
+
 ## Refusals and recovery
 
-INSERT refuses invalid placement combinations, missing bodies, missing
-targets, unresolved or unexpectedly repeated anchors, and edits that would
-leave a Python file unable to compile.
+Rule violations, such as a plain file with neither ANCHOR nor LINE, are
+found before the bundle runs. Nothing in the bundle executes and the packet
+reports FAILED_PARSE.
 
-Validation and anchor failures write nothing. Successful changes record
+Problems that depend on the file are found when the INSERT runs:
+
+- SKIPPED_ANCHOR_MISMATCH: the anchor matched zero times, more than once
+  without OCCURRENCE, or a different number of times than EXPECT.
+- FAILED_NOT_FOUND: the file, target, or LINE does not exist.
+- FAILED_COMPILE: the result would not compile; the file is untouched.
+
+These stop later mutating operations in the bundle. Successful changes record
 before-state metadata for DIFF and REVERT.
 
 ## Choosing the operation
@@ -192,10 +239,10 @@ existing file.
 
 ## Notes for LLMs
 
-- READ the exact current target or line range before insertion.
+- Prefer ANCHOR with text copied from a line you have READ; it survives
+  earlier edits in the same bundle.
+- Use LINE only with a line number from a fresh READ.
 - Plain-file insertion is verbatim; reproduce every required leading space.
 - AST insertion re-aligns naturally written code to its destination.
-- For YAML, Markdown, and other whitespace-sensitive files, inspect adjacent
-  lines before constructing the body.
-- INDENT has no effect on plain-file insertion.
-- Set EXPECT and OCCURRENCE together when repeated anchors are deliberate.
+- A repeated anchor needs OCCURRENCE; add EXPECT only to assert the total.
+- Confirm placement from the landed lines in the preview.

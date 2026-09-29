@@ -150,6 +150,11 @@ def insert_after_line(
     before = src_lines[:line_no]
     after = src_lines[line_no:]
 
+    # A last line without a newline would otherwise run straight into the
+    # inserted text ("gammanew"). Terminate it; inserted lines carry their own.
+    if before and not before[-1].endswith('\n'):
+        before[-1] = before[-1] + '\n'
+
     if not tight:
         if before and before[-1].strip():
             new_lines.insert(0, '\n')

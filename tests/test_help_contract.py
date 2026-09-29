@@ -683,7 +683,7 @@ class ForgeHelpRendering(ForgeCase):
         )
 
         self.assertIn(
-            '`OCCURRENCE: 2` alone fails',
+            '`OCCURRENCE: N` selects the Nth match and works on its own.',
             full,
         )
 
