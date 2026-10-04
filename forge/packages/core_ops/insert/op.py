@@ -339,7 +339,17 @@ def validate(parsed_op):
 
     return errors
 
-def _anchor_index(lines, anchor, match_mode, occurrence, expect):
+def _anchor_index(lines, anchor, match_mode, occurrence, expect, line_offset=0):
+    """
+    Return (index into lines, None) for the chosen anchor match, or
+    (None, error).
+
+    A refusal names the matching lines, so the next bundle can pick
+    OCCURRENCE without another READ. line_offset turns indexes into real
+    file line numbers when lines is one AST target's slice of the file.
+    """
+    from forge.core.near_match import format_line_numbers
+
     needle = str(anchor or '')
     if not needle:
         return None, 'ANCHOR is empty'
@@ -354,16 +364,27 @@ def _anchor_index(lines, anchor, match_mode, occurrence, expect):
             if needle in hay:
                 matches.append(i)
 
+    where = ''
+    if matches:
+        where = ' (%s)' % format_line_numbers(
+            [i + 1 + line_offset for i in matches]
+        )
+
     if expect and len(matches) != expect:
-        return None, 'ANCHOR matched %d times, expected %d' % (len(matches), expect)
+        return None, 'ANCHOR matched %d times, expected %d%s' % (
+            len(matches),
+            expect,
+            where,
+        )
 
     if occurrence < 1:
         occurrence = 1
 
     if occurrence > len(matches):
-        return None, 'ANCHOR occurrence %d not found; matched %d times' % (
+        return None, 'ANCHOR occurrence %d not found; matched %d times%s' % (
             occurrence,
             len(matches),
+            where,
         )
 
     return matches[occurrence - 1], None
@@ -477,7 +498,7 @@ def _execute_plain_file(ctx, parsed_op, result):
         index, anchor_err = _anchor_index(lines, anchor, match_mode, occurrence, expect)
         if anchor_err:
             result['status'] = 'SKIPPED_ANCHOR_MISMATCH'
-            result['message'] = 'ANCHOR: ' + anchor_err
+            result['message'] = anchor_err
             result['data'] = {
                 'path': target,
                 'file': target,
@@ -644,10 +665,11 @@ def _execute_ast(ctx, parsed_op, result):
                 match_mode,
                 occurrence,
                 expect,
+                line_offset=start - 1,
             )
             if anchor_err:
                 result['status'] = 'SKIPPED_ANCHOR_MISMATCH'
-                result['message'] = 'ANCHOR: ' + anchor_err
+                result['message'] = anchor_err
                 result['data'] = {
                     'target': target,
                     'file': file_ref,

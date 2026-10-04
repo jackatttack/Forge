@@ -208,12 +208,15 @@ Fix it by using a line range or exact old/new blocks.
 
 ### OLD block matched 0 times
 
-The OLD block does not match the current file exactly.
+The OLD block does not match the current file exactly. The failure names
+the closest block in the file, how similar it is, and the first line that
+differs. Both versions of that line are shown with repr(), so tabs,
+trailing spaces and quote styles are visible.
 
 Fix:
 
-- READ the current file.
-- Copy the exact old text again.
+- Correct OLD from the first difference; usually no READ is needed.
+- If no close block is named, READ the current file and copy the text again.
 - Watch whitespace and blank lines.
 
 ### OLD block matched multiple times

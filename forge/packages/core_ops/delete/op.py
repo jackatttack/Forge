@@ -338,8 +338,11 @@ def _execute_block_delete(ctx, target, parsed_op, result):
     count = before.count(old)
 
     if count == 0:
+        from forge.core.near_match import describe_closest
         result['status'] = 'FAILED_NOT_FOUND'
-        result['message'] = 'OLD block matched 0 times'
+        result['message'] = (
+            'OLD block matched 0 times\n' + describe_closest(before, old)
+        )
         return
 
     delete_all = _parse_bool(directives.get('ALL'))

@@ -279,26 +279,32 @@ ENGINE_STATUS_HINTS = {
 
 def _matching_hints(hints, haystack, max_hints):
     """
-    Render the op hints whose key appears in haystack, in table order.
+    Render the op hints whose key appears in haystack, earliest first.
 
     A key must appear as a whole word (a plural 's' is allowed), so the
     'anchor' hint matches "ANCHOR:" and "SKIPPED_ANCHOR_MISMATCH" but not
     a target named "AnchorSelection". Underscores count as word breaks.
+
+    When several keys appear, the one named earliest wins: a message
+    names its subject first, and later words are usually detail. Table
+    order only breaks ties. Table order alone once let the "(lines 2, 7)"
+    detail of an ANCHOR refusal pick INSERT's LINE hint.
     """
     import re
 
-    rendered = []
-    for key, hint in hints.items():
+    found = []
+    for order, (key, hint) in enumerate(hints.items()):
         needle = str(key).lower()
         if not needle or needle.startswith('_'):
             continue
         pattern = r'(?<![a-z0-9])' + re.escape(needle) + r's?(?![a-z0-9])'
-        if not re.search(pattern, haystack):
+        match = re.search(pattern, haystack)
+        if not match:
             continue
-        rendered.append(_render_hint(key, hint))
-        if len(rendered) >= max_hints:
-            break
-    return rendered
+        found.append((match.start(), order, key, hint))
+
+    found.sort(key=lambda item: (item[0], item[1]))
+    return [_render_hint(key, hint) for _, _, key, hint in found[:max_hints]]
 
 
 def _directive_help_for_message(op_module, message):
