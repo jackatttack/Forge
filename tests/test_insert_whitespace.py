@@ -161,6 +161,51 @@ class AstInsertionStillReindents(ForgeCase):
         self.assertIn('    print("done")', text)
         self.assertNotIn('\nprint("done")', text)
 
+    def test_body_end_insert_lands_after_the_last_line(self):
+        self.put(
+            'app.py',
+            'def main():\n    value = 1\n    return value\n',
+        )
+
+        run = self.run_bundle(
+            bundle(
+                'INSERT app.py::main',
+                'POSITION: end',
+                'BEGIN_BODY',
+                'print("done")',
+                'END_BODY',
+            )
+        )
+
+        self.assertEqual(self.statuses(run), ['APPLIED'])
+        text = self.get('app.py')
+        self.assertLess(text.index('return value'), text.index('print("done")'))
+        self.assertIn('    return value\n    print("done")', text)
+
+    def test_body_end_insert_on_a_class_keeps_the_last_method_whole(self):
+        self.put(
+            'app.py',
+            'class Box:\n    def a(self):\n        return 1\n',
+        )
+
+        run = self.run_bundle(
+            bundle(
+                'INSERT app.py::Box.*',
+                'POSITION: end',
+                'BEGIN_BODY',
+                '',
+                'def b(self):',
+                '    return 2',
+                'END_BODY',
+            )
+        )
+
+        self.assertEqual(self.statuses(run), ['APPLIED'])
+        text = self.get('app.py')
+        self.assertIn('    def a(self):\n        return 1\n', text)
+        self.assertIn('        return 1\n\n    def b(self):\n        return 2', text)
+        self.assertLess(text.index('return 1'), text.index('def b'))
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

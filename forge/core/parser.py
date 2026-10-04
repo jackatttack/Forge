@@ -42,6 +42,17 @@ _BEGIN_MARKERS = {}
 for _name, _spec in BLOCK_SPECS.items():
     _BEGIN_MARKERS[_spec['begin']] = (_name, _spec)
 
+# Inside an OLD or NEW block, a bare (column 0) marker belonging to the
+# partner block almost always means a closer was missing or mistyped.
+# Reading on would swallow the following operation into this block's
+# text, and that operation would vanish from the packet. Refusing the
+# bundle is the only safe answer. BODY is deliberately not covered:
+# bodies may contain Forge syntax as data (see test_parser_contract).
+PARTNER_MARKERS = {
+    'OLD': ('BEGIN_NEW', 'END_NEW'),
+    'NEW': ('BEGIN_OLD', 'END_OLD'),
+}
+
 
 def _is_directive(line):
     if ':' not in line:
@@ -138,10 +149,27 @@ def _validate_shape(ops):
 
 def _read_block(lines, i, block_name, block_spec, op_name):
     end_marker = block_spec.get('end')
+    partner_markers = PARTNER_MARKERS.get(block_name, ())
+    begin_line = i + 1
     collected = []
     i += 1
 
     while i < len(lines) and lines[i].rstrip() != end_marker:
+        if lines[i].rstrip() in partner_markers:
+            return i, None, (
+                'Line %d: %s inside the %s block opened at line %d for %s\n'
+                'WHY: %s was probably missing or mistyped, so this block '
+                'would swallow the text after it, including any later '
+                'operation.\n'
+                'NEXT:\n'
+                '- Close the %s block with %s on its own line.\n'
+                '- If the file really contains this line, use a LINES: range '
+                'REPLACE instead.'
+                % (
+                    i + 1, lines[i].rstrip(), block_name, begin_line, op_name,
+                    end_marker, block_name, end_marker,
+                )
+            )
         collected.append(lines[i])
         i += 1
 
@@ -272,6 +300,11 @@ def parse_bundle(text):
                 break
 
             i += 1
+
+        if errors:
+            # Stop at the first parse error. Carrying on from a broken spot
+            # only adds follow-on errors that bury the real one.
+            break
 
         spec = OP_SPECS.get(op_name) or {}
 

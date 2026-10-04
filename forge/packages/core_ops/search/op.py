@@ -359,14 +359,39 @@ def _parse_exts(value):
     return out or set(_DEFAULT_EXTS)
 
 def _strip_wrapping_quotes(text):
-    """Remove one simple pair of wrapping quotes from a search query."""
+    """
+    Remove one pair of wrapping quotes from a search query.
+
+    Inside the pair, a backslash before the same kind of quote means a
+    literal quote, so a query can contain the quote character it is
+    wrapped in. Other backslashes are left exactly as written.
+    """
     text = str(text or '').strip()
     if len(text) >= 2:
         first = text[0]
         last = text[-1]
         if first == last and first in ('"', "'"):
-            return text[1:-1].strip()
+            # No strip here: quoting is how a query keeps leading or
+            # trailing spaces, as in FOR " for ".
+            inner = text[1:-1]
+            return inner.replace('\\' + first, first)
     return text
+
+
+def _shown_path(target, rel):
+    """
+    Return rel as the packet should show it: with the target's root prefix.
+
+    A hit in icloud:notes.py must be shown, and suggested for READ, as
+    icloud:notes.py; the bare path would point at the project root.
+    Filtering still uses the bare rel, so FILTER, EXCLUDE and GLOB behave
+    the same in every root.
+    """
+    from forge.core.file_safety import split_root_prefix
+    root_name = split_root_prefix(target)[0]
+    if root_name:
+        return '%s:%s' % (root_name, rel)
+    return rel
 
 
 def _inline_target_query(target, directives):
@@ -621,6 +646,7 @@ def _execute_multi_pattern(result, root, abs_path, target, patterns, scope):
 
         if not _path_selected(rel, scope):
             continue
+        rel = _shown_path(target, rel)
 
         try:
             text = read_text(path)
@@ -905,7 +931,9 @@ def execute(ctx, parsed_op, result):
         result['message'] = 'Target not found: ' + target
         return
 
-    query = str(query or '').strip()
+    # Not stripped again: _inline_target_query has already trimmed the
+    # query, and a quoted query keeps its leading and trailing spaces.
+    query = str(query or '')
     case_sensitive = _truthy(directives.get('CASE'))
     limit = _as_int(directives.get('LIMIT'), 80)
     exts = _parse_exts(directives.get('EXT'))
@@ -950,6 +978,12 @@ def execute(ctx, parsed_op, result):
             criteria,
             limit=limit,
         )
+
+        # AST hits come back relative to the resolved root; show the prefix.
+        for hit in hits:
+            for key in ('file', 'target'):
+                if hit.get(key):
+                    hit[key] = _shown_path(target, hit[key])
 
         files_hit = len(set([h.get('file') for h in hits]))
         header = [
@@ -1084,6 +1118,7 @@ def execute(ctx, parsed_op, result):
             continue
         if not _name_matches_globs(rel, globs):
             continue
+        rel = _shown_path(target, rel)
 
         try:
             text = read_text(path)

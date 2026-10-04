@@ -125,6 +125,59 @@ class BlockContentStaysLiteral(ForgeCase):
         self.assertFalse(self.exists('app.py'))
 
 
+class MismatchedReplaceBlocksAreRefused(ForgeCase):
+    """
+    A mistyped or missing END_OLD / END_NEW must refuse the bundle.
+
+    In run 20261003_225551 a malformed pair let one REPLACE's block run on
+    into the next REPLACE, which then vanished from the Ops list.
+    """
+
+    ORIGINAL = 'alpha\nbeta\n'
+
+    def assert_refused(self, run):
+        self.assertTrue(run.get('errors'))
+        self.assertEqual(len(run.get('errors')), 1, run.get('errors'))
+        self.assertEqual(run.get('results') or [], [])
+        self.assertEqual(self.get('notes.txt'), self.ORIGINAL)
+
+    def test_old_closed_with_end_new_refuses_the_bundle(self):
+        self.put('notes.txt', self.ORIGINAL)
+        run = self.run_bundle(bundle(
+            'REPLACE notes.txt',
+            'BEGIN_OLD', 'alpha', 'END_NEW',
+            'BEGIN_NEW', 'ALPHA', 'END_NEW',
+            '',
+            'REPLACE notes.txt',
+            'BEGIN_OLD', 'beta', 'END_OLD',
+            'BEGIN_NEW', 'BETA', 'END_NEW',
+        ))
+        self.assert_refused(run)
+
+    def test_missing_end_new_refuses_the_bundle(self):
+        self.put('notes.txt', self.ORIGINAL)
+        run = self.run_bundle(bundle(
+            'REPLACE notes.txt',
+            'BEGIN_OLD', 'alpha', 'END_OLD',
+            'BEGIN_NEW', 'ALPHA',
+            '',
+            'REPLACE notes.txt',
+            'BEGIN_OLD', 'beta', 'END_OLD',
+            'BEGIN_NEW', 'BETA', 'END_NEW',
+        ))
+        self.assert_refused(run)
+
+    def test_indented_markers_inside_old_are_data(self):
+        self.put('guide.txt', 'Example:\n    BEGIN_NEW\n')
+        run = self.run_bundle(bundle(
+            'REPLACE guide.txt',
+            'BEGIN_OLD', '    BEGIN_NEW', 'END_OLD',
+            'BEGIN_NEW', '    BEGIN_NEW here', 'END_NEW',
+        ))
+        self.assertEqual(self.statuses(run), ['APPLIED'])
+        self.assertIn('BEGIN_NEW here', self.get('guide.txt'))
+
+
 class ValidBundlesStillParse(ForgeCase):
 
     def test_multi_op_bundle_parses(self):

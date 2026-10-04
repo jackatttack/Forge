@@ -572,21 +572,49 @@ def _execute_plain_file(ctx, parsed_op, result):
     }
 
 
+def _starts_with_definition(body):
+    """
+    True when the inserted code opens with def, async def, class or a
+    decorator.
+
+    Body-end insertion is tight (no added blank lines) so a statement sits
+    right after the last line. A new method or nested class wants Python
+    spacing instead, so it gets the same blank-line handling as AST after.
+    """
+    for line in str(body or '').splitlines():
+        stripped = line.strip()
+        if stripped:
+            return stripped.startswith(('def ', 'async def ', 'class ', '@'))
+    return False
+
+
 def _execute_ast(ctx, parsed_op, result):
     target = (parsed_op.get('target') or '').strip()
     body = parsed_op.get('body') or ''
     directives = parsed_op.get('directives') or {}
 
-    from forge.core.environment import path_from_ctx
-    root = path_from_ctx(ctx, 'project_root')
-    resolved = resolve_ast_target(root, target)
+    # Resolve any "name:" root prefix first, exactly as REPLACE does, so an
+    # AST target on a configured root reads and writes that root's file.
+    # file_target keeps the prefix; it is what the touched record needs.
+    file_target, _separator, ast_target = target.partition('::')
+    root, file_abs, err = safe_target(ctx, file_target)
+    if err:
+        result['status'] = 'FAILED_INVALID_PATH'
+        result['message'] = err
+        return
+
+    try:
+        file_ref = os.path.relpath(file_abs, root)
+    except Exception:
+        file_ref = split_root_prefix(file_target)[1]
+
+    resolved = resolve_ast_target(root, file_ref + '::' + ast_target)
 
     if not resolved.get('ok'):
         result['status'] = resolved.get('code') or 'FAILED_NOT_FOUND'
         result['message'] = resolved.get('error') or 'Target not found'
         return
 
-    file_ref = resolved.get('file_ref') or target.split('::', 1)[0]
     file_abs, before, err = read_source(root, file_ref)
     if err:
         result['status'] = 'FAILED_IO'
@@ -664,9 +692,16 @@ def _execute_ast(ctx, parsed_op, result):
 
         else:
             ref_line = all_lines[start - 1]
-            after = insert_after_line(before, max(start, end - 1), body, indent=line_indent(ref_line) + '    ', tight=True)
+            # end is the target's last line (inclusive), so insert after it.
+            # end - 1 landed before the last line and split a class's final
+            # method in two.
+            after = insert_after_line(
+                before, end, body,
+                indent=line_indent(ref_line) + '    ',
+                tight=not _starts_with_definition(body),
+            )
             mode = 'body-end'
-            insert_at = max(start, end - 1)
+            insert_at = end + 1
 
     except Exception as e:
         result['status'] = 'FAILED_RUNTIME'
@@ -684,12 +719,17 @@ def _execute_ast(ctx, parsed_op, result):
             'File untouched.' % (e.lineno, e.msg)
         )
         return
-    file_root, file_rel = split_root_prefix(file_ref)
+    file_root, file_rel = split_root_prefix(file_target)
     touched = touched_file(
         file_rel, before, after, existed_before=True,
         root=file_root or '',
     )
     record_touched(ctx, result, touched)
+
+    # Count what actually landed. The body's edge blank lines are trimmed
+    # and Python spacing may be added, so the body's own length misleads.
+    landed_start, landed_end = _landed_region(before, after)
+    inserted_lines = max(0, landed_end - landed_start + 1)
 
     preview = [
         'INSERT %s' % target,
@@ -698,7 +738,6 @@ def _execute_ast(ctx, parsed_op, result):
         'target span: %d-%d' % (start, end),
         'inserted: %d line%s' % (inserted_lines, '' if inserted_lines == 1 else 's'),
     ]
-    landed_start, landed_end = _landed_region(before, after)
 
     if anchor:
         preview.extend([

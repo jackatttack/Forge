@@ -70,24 +70,33 @@ def _packet_collect_touched(run):
         if not rel:
             continue
 
+        # A file in a named root is shown, and grouped, as root:rel, so
+        # icloud:a.py and the project's a.py are never merged or confused.
+        root = str(item.get('root') or '').strip()
+        shown = '%s:%s' % (root, rel) if root else rel
+
         before = item.get('before') if item.get('before') is not None else ''
         after = item.get('after') if item.get('after') is not None else ''
 
-        if rel not in by_rel:
-            order.append(rel)
-            by_rel[rel] = {
+        if shown not in by_rel:
+            order.append(shown)
+            by_rel[shown] = {
                 'rel': rel,
+                'root': root,
+                'shown': shown,
                 'kind': item.get('kind') or 'file',
                 'existed_before': bool(item.get('existed_before')),
+                'existed_after': bool(item.get('existed_after', True)),
                 'before': before,
                 'after': after,
             }
         else:
-            by_rel[rel]['after'] = after
+            by_rel[shown]['after'] = after
+            by_rel[shown]['existed_after'] = bool(item.get('existed_after', True))
             if item.get('kind'):
-                by_rel[rel]['kind'] = item.get('kind')
+                by_rel[shown]['kind'] = item.get('kind')
 
-    return [by_rel[rel] for rel in order]
+    return [by_rel[shown] for shown in order]
 
 
 def _format_changed_files(run):
@@ -99,12 +108,18 @@ def _format_changed_files(run):
     lines = ['', 'Changed files:']
 
     for item in touched:
-        rel = item.get('rel') or '?'
+        rel = item.get('shown') or item.get('rel') or '?'
         existed_before = bool(item.get('existed_before'))
         before = item.get('before') or ''
         after = item.get('after') or ''
 
-        if not existed_before:
+        existed_after = bool(item.get('existed_after', True))
+
+        if not existed_before and not existed_after:
+            summary = 'created and removed · no net change'
+        elif not existed_after:
+            summary = 'deleted · %d lines' % _packet_line_count(before)
+        elif not existed_before:
             summary = 'created · %d lines' % _packet_line_count(after)
         elif before == after:
             summary = (
@@ -289,13 +304,16 @@ def format_packet(run):
         lines.append('=== HINTS ===')
 
         for result in hinted:
-            lines.append(
-                '%s %s'
-                % (
+            # A parse-failure hint has no target, so show the op alone
+            # rather than a bare "?" after it.
+            heading = ' '.join(
+                str(part) for part in (
                     result.get('op') or '?',
-                    result.get('target') or result.get('args') or '?',
+                    result.get('target') or result.get('args') or '',
                 )
+                if part
             )
+            lines.append(heading)
             lines.append(
                 str(result.get('hint')).rstrip()
             )

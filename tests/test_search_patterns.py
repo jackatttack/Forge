@@ -40,6 +40,18 @@ class SearchPatterns(ForgeCase):
             *(list(directives) + ['BEGIN_BODY'] + list(patterns) + ['END_BODY'])
         )
 
+    def test_escaped_quotes_inside_a_quoted_query_are_literal(self):
+        self.put('quoted.py', 'print("hello")\n')
+        run = self.search('SEARCH quoted.py FOR "print(\\"hello\\")"')
+        self.assertEqual(self.statuses(run), ['APPLIED'])
+        self.assertTrue(hit_files(run), 'escaped quotes should match real quotes')
+
+    def test_quoted_query_keeps_its_spaces(self):
+        self.put('spaced.py', 'format\nfor x in y\n')
+        run = self.search('SEARCH spaced.py FOR " for "')
+        self.assertEqual(self.statuses(run), ['APPLIED'])
+        self.assertFalse(hit_files(run), 'format must not match " for "')
+
     def test_patterns_are_counted_and_grouped_separately(self):
         run = self.search_patterns(['difficulty_descriptions', 'GeneratorInfo'])
         self.assertEqual(self.statuses(run), ['APPLIED'])

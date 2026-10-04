@@ -569,6 +569,18 @@ def _parse_hint_text(
             'WHY: The operation contract requires structured body content.',
         ]
 
+    elif 'block opened at line' in text:
+        lines = [
+            'HINT: %s has a block closed by the wrong marker.'
+            % (
+                op_name
+                or 'An operation'
+            ),
+            'WHY: An OLD block met a NEW marker (or a NEW block met an OLD '
+            'one), so a closer is missing or mistyped. The whole bundle was '
+            'refused before anything ran.',
+        ]
+
     elif (
         'Missing END_' in text
         or 'Missing end_' in text
@@ -657,7 +669,7 @@ def render_parse_hints(
                 op_name
                 or 'FORGE'
             ),
-            'target': '?',
+            'target': '',
             'hint': _parse_hint_text(
                 text,
                 op_name,

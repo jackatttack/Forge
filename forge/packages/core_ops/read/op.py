@@ -339,6 +339,29 @@ def _read_targets(root, target, directives):
     }, None, None
 
 
+def _show_root_in_read(data, bare_target, root_name):
+    """
+    Put a named-root prefix back on what READ shows.
+
+    execute() strips "name:" to resolve the file, so every helper builds
+    its title, path and header from the bare path. Shown bare,
+    icloud:notes.py reads as notes.py in the project root, which is a
+    different file. Resolution and versions keep using the bare path.
+    """
+    shown = '%s:%s' % (root_name, bare_target)
+
+    path = data.get('path')
+    if path and not str(path).startswith(root_name + ':'):
+        data['path'] = '%s:%s' % (root_name, path)
+
+    if data.get('title'):
+        data['title'] = data['title'].replace(bare_target, shown, 1)
+
+    preview_lines = data.get('preview_lines') or []
+    if preview_lines:
+        preview_lines[0] = preview_lines[0].replace(bare_target, shown, 1)
+
+
 def execute(ctx, parsed_op, result):
     from forge.core.file_safety import resolve_root
 
@@ -349,6 +372,9 @@ def execute(ctx, parsed_op, result):
     # so named-root prefixes have to be handled explicitly here. The
     # remainder is what every helper below expects: a path relative to
     # whichever root it resolved against.
+    from forge.core.file_safety import split_root_prefix
+    root_name = split_root_prefix(target)[0]
+
     root, target, root_error = resolve_root(ctx, target)
 
     if root_error:
@@ -371,6 +397,9 @@ def execute(ctx, parsed_op, result):
         result['status'] = status
         result['message'] = message
         return
+
+    if root_name:
+        _show_root_in_read(data, target, root_name)
 
     mode = data.get('mode') or 'file'
     if mode in ('file', 'ast'):

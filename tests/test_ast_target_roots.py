@@ -45,6 +45,21 @@ class RootLevelAstTargetsWork(ForgeCase):
         self.assertEqual(self.statuses(run), ['APPLIED'])
         self.assertIn('return 2', self.get('app.py'))
 
+    def test_insert_after_root_level_ast_target_applies(self):
+        self.put('app.py', self.SOURCE)
+        run = self.run_bundle(bundle(
+            'INSERT app.py::main',
+            'POSITION: after',
+            'BEGIN_BODY',
+            '',
+            '',
+            'def helper():',
+            '    return 3',
+            'END_BODY',
+        ))
+        self.assertEqual(self.statuses(run), ['APPLIED'])
+        self.assertIn('def helper', self.get('app.py'))
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -189,6 +189,67 @@ class ConfiguredRootReachesTheBundle(RootBundleCase):
 
         self.assertNotEqual(self.statuses(run)[0], 'APPLIED')
 
+    def test_insert_after_ast_target_lands_in_the_named_root(self):
+        os.makedirs(os.path.join(self.other_root, 'game'))
+        self.put(self.other_root, 'game/ui.py', 'def main():\n    return 1\n')
+
+        run = self.run_bundle(
+            bundle(
+                'INSERT other:game/ui.py::main',
+                'POSITION: after',
+                'BEGIN_BODY',
+                '',
+                '',
+                'def helper():',
+                '    return 3',
+                'END_BODY',
+            )
+        )
+
+        self.assertEqual(self.statuses(run), ['APPLIED'])
+        self.assertIn('def helper', self.read(self.other_root, 'game/ui.py'))
+        self.assertFalse(
+            os.path.exists(os.path.join(self.project_root, 'game', 'ui.py'))
+        )
+
+
+class NamedRootPathsAreShownWithTheirPrefix(RootBundleCase):
+
+    def test_search_hits_and_suggestions_keep_the_root(self):
+        self.put(self.other_root, 'notes.py', 'def marker():\n    return 1\n')
+        run = self.run_bundle(bundle('SEARCH other:notes.py FOR return 1'))
+        result = run['results'][0]
+        files = [hit.get('file') for hit in result['data']['hits']]
+        self.assertEqual(files, ['other:notes.py'])
+        self.assertIn('READ other:notes.py', result.get('preview') or '')
+
+    def test_read_header_keeps_the_root(self):
+        self.put(self.other_root, 'notes.py', 'def marker():\n    return 1\n')
+        run = self.run_bundle(bundle('READ other:notes.py'))
+        preview = run['results'][0].get('preview') or ''
+        self.assertTrue(preview.startswith('other:notes.py'), preview)
+
+    def test_ast_search_hits_keep_the_root(self):
+        self.put(self.other_root, 'notes.py', 'def marker():\n    return 1\n')
+        run = self.run_bundle(bundle(
+            'SEARCH other:notes.py',
+            'MATCH: ast',
+            'DEFINES: marker',
+        ))
+        hits = run['results'][0]['data']['hits']
+        self.assertEqual([hit.get('file') for hit in hits], ['other:notes.py'])
+
+    def test_changed_files_show_the_root(self):
+        from forge.core.protocol.packet import _format_changed_files
+        run = {'results': [{'touched': [{
+            'rel': 'a.txt', 'root': 'other', 'before': '', 'after': 'x\n',
+            'existed_before': False,
+        }]}]}
+        lines = _format_changed_files(run)
+        self.assertTrue(
+            any(line.startswith('- other:a.txt') for line in lines), lines,
+        )
+
 
 if __name__ == '__main__':
     unittest.main()
