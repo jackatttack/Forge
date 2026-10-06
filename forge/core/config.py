@@ -244,6 +244,53 @@ def _validate_features(features):
                 % str(name)
             )
 
+
+# The opt-in "host_roots" feature adds these roots without the user writing
+# any paths. Roots the user configures under the same names win.
+HOST_ROOTS_FEATURE = 'host_roots'
+
+
+def _host_roots(home):
+    """
+    Roots added by features.host_roots.
+
+    forge_home is Forge's own home (config, runs, installed user ops).
+    home is the host user's home directory; on Pythonista that is the whole
+    app container, including Documents and Forge's home.
+    """
+    return {
+        'forge_home': home,
+        'home': os.path.abspath(
+            os.path.expanduser('~')
+        ),
+    }
+
+
+def _resolved_roots(home, config):
+    """
+    Absolute named roots for one validated config.
+
+    Host roots come first when their feature is on, then configured roots,
+    so a configured name always replaces a host root of the same name.
+    Configured paths resolve like every other config path: absolute as
+    given, relative against forge_home.
+    """
+    roots = {}
+
+    if config['features'].get(HOST_ROOTS_FEATURE):
+        roots.update(
+            _host_roots(home)
+        )
+
+    for name, value in config['roots'].items():
+        roots[str(name)] = _resolve_path(
+            home,
+            value,
+        )
+
+    return roots
+
+
 def _validate_roots(roots):
     """
     Validate the optional named-roots mapping.
@@ -500,15 +547,10 @@ def resolve_config(
             ]
         ),
 
-        # Named roots resolve like every other config path: absolute as
-        # given, relative against forge_home.
-        'roots': {
-            str(name): _resolve_path(
-                home,
-                value,
-            )
-            for name, value in config[
-                'roots'
-            ].items()
-        },
+        # Named roots: configured roots, plus forge_home and home when the
+        # opt-in host_roots feature is on. Configured names win.
+        'roots': _resolved_roots(
+            home,
+            config,
+        ),
     }

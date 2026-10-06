@@ -127,6 +127,16 @@ credentials.
 
 By default every path in a bundle resolves against the project root.
 
+Two built-in roots can be switched on with a feature flag instead of
+writing paths:
+
+    {"config_version": 1, "features": {"host_roots": true}}
+
+This adds forge_home: (Forge's own home: config, runs and installed user
+ops) and home: (the user's home directory; on Pythonista, the whole app
+container, including Documents and Forge's home). Off by default. A root
+configured under either name in "roots" replaces the built-in one.
+
 A Forge home may configure additional named roots in forge.json:
 
     {
