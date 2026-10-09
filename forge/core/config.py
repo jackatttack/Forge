@@ -27,6 +27,10 @@ DEFAULT_CONFIG = {
         'default_project_root': '..',
         'storage_root': 'artifacts',
         'aliases_path': 'aliases.json',
+        # The one trusted folder personal ops load from. The default keeps
+        # them in forge_home; a user may move it deliberately, for example
+        # into the workspace so ops are editable and backed up.
+        'ops_root': 'ops',
     },
 
     'storage': {
@@ -140,6 +144,7 @@ def _validate_paths(paths):
         'default_project_root',
         'storage_root',
         'aliases_path',
+        'ops_root',
     }
 
     unknown = set(
@@ -532,6 +537,13 @@ def resolve_config(
             home,
             paths[
                 'aliases_path'
+            ],
+        ),
+
+        'ops_root': _resolve_path(
+            home,
+            paths[
+                'ops_root'
             ],
         ),
 

@@ -137,6 +137,9 @@ def standard_environment(
         roots=resolved[
             'roots'
         ],
+        ops_root=resolved[
+            'ops_root'
+        ],
         config_path=resolved[
             'config_path'
         ],

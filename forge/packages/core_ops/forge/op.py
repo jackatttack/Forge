@@ -1545,6 +1545,18 @@ def _config(ctx, result):
             )
             or ''
         ),
+        'ops_root: '
+        + str(
+            environment.get(
+                'ops_root'
+            )
+            or ''
+        )
+        + (
+            '  [WARNING: %s]' % environment.get('ops_root_warning')
+            if environment.get('ops_root_warning')
+            else ''
+        ),
         'config_path: '
         + str(
             environment.get(

@@ -36,7 +36,8 @@ OP_PACKAGE_MODULES = {}
 # Active trusted filesystem root for user-owned operations.
 #
 # Hosts do not choose arbitrary extension paths. The runner sets this from
-# environment['ops_root'], which is always derived as <forge_home>/ops.
+# environment['ops_root']: <forge_home>/ops unless forge.json paths.ops_root
+# deliberately moves it (see forge/core/environment.py).
 USER_OPS_ROOT = ''
 
 

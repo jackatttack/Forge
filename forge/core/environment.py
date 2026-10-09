@@ -33,6 +33,7 @@ def make_environment(
     features=None,
     config_path=None,
     roots=None,
+    ops_root=None,
 ):
     """Build one normalised environment dictionary."""
     project_root = _required_path(
@@ -45,14 +46,28 @@ def make_environment(
         'forge_home',
     )
 
-    # Forge has exactly one trusted user-operation root.
-    #
-    # It is derived from forge_home rather than supplied by projects or
-    # arbitrary configuration.
-    ops_root = os.path.join(
+    # Forge has exactly one trusted user-operation root. By default it is
+    # forge_home/ops. forge.json paths.ops_root may move it deliberately;
+    # projects cannot add roots. A configured folder that does not exist
+    # falls back to the default with a warning, so a bad setting can never
+    # stop Forge starting, and the config can always be fixed from Forge.
+    default_ops_root = os.path.join(
         forge_home,
         'ops',
     )
+    configured_ops_root = str(ops_root or '').strip()
+    ops_root_warning = ''
+
+    if not configured_ops_root:
+        ops_root = default_ops_root
+    elif os.path.isdir(configured_ops_root):
+        ops_root = os.path.abspath(configured_ops_root)
+    else:
+        ops_root = default_ops_root
+        ops_root_warning = (
+            'configured ops_root not found: %s; using %s'
+            % (os.path.abspath(configured_ops_root), default_ops_root)
+        )
 
     if storage_root:
         storage_root = os.path.abspath(
@@ -140,6 +155,7 @@ def make_environment(
         'project_root': project_root,
         'forge_home': forge_home,
         'ops_root': ops_root,
+        'ops_root_warning': ops_root_warning,
         'storage_root': storage_root,
         'aliases_path': aliases_path,
         'roots': named_roots,
@@ -286,6 +302,10 @@ def normalise_environment(
                 'host'
             )
             or 'plain'
+        ),
+
+        ops_root=source.get(
+            'ops_root'
         ),
 
         storage=storage_settings,
