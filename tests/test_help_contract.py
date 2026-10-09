@@ -758,7 +758,7 @@ class ForgeHelpRendering(ForgeCase):
         )
 
         self.assertIn(
-            '`SomeClass.*` selects the complete class definition',
+            '`SomeClass` selects the complete class definition',
             preview,
         )
 

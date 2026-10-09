@@ -206,6 +206,59 @@ def validate(parsed_op):
     return []
 
 
+# Folders under the project root whose modules RUN never evicts: Forge's
+# own local layer and state. site-packages* folders are always kept too.
+KEPT_MODULE_FOLDERS = ('forge_local', '.forge')
+
+
+def _evict_workspace_modules(roots):
+    """Drop cached project modules so this RUN imports them fresh.
+
+    RUN executes inside Forge's own process. Without this, a module imported
+    by an earlier RUN stays in sys.modules: edits to it are not seen, and its
+    import-time setup (for example adding a folder to sys.path, which RUN
+    restores after every run) does not happen again.
+
+    Only modules loaded from files under `roots` are dropped. Forge itself
+    (forge, forge.*, forge_*), installed packages (site-packages*) and
+    KEPT_MODULE_FOLDERS are never touched. Returns the evicted names.
+    """
+    prefixes = set()
+    for root in roots:
+        if root:
+            prefixes.add(os.path.abspath(root).rstrip(os.sep) + os.sep)
+            prefixes.add(os.path.realpath(root).rstrip(os.sep) + os.sep)
+
+    evicted = []
+    for name, module in list(sys.modules.items()):
+        if (
+            name == '__main__'
+            or name == 'forge'
+            or name.startswith('forge.')
+            or name.startswith('forge_')
+        ):
+            continue
+
+        path = getattr(module, '__file__', None)
+        if not path:
+            continue
+        path = os.path.abspath(path)
+        prefix = next((p for p in prefixes if path.startswith(p)), None)
+        if prefix is None:
+            continue
+
+        folders = path[len(prefix):].split(os.sep)[:-1]
+        if any(
+            folder.startswith('site-packages') or folder in KEPT_MODULE_FOLDERS
+            for folder in folders
+        ):
+            continue
+
+        sys.modules.pop(name, None)
+        evicted.append(name)
+    return evicted
+
+
 def _split_args(raw):
     raw = str(
         raw
@@ -410,6 +463,9 @@ def execute(ctx, parsed_op, result):
                     0,
                     path,
                 )
+
+        # Fresh imports of project code on every RUN; see the helper.
+        _evict_workspace_modules((root, script_dir))
 
         with contextlib.redirect_stdout(
             stdout_buffer

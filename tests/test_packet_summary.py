@@ -154,6 +154,25 @@ class SearchContextCap(ForgeCase):
         self.assertEqual(run['results'][0]['status'], 'APPLIED')
 
 
+class RunImportsFresh(ForgeCase):
+    """Each RUN imports project modules fresh, so their setup runs again."""
+
+    def test_second_run_reruns_module_setup(self):
+        self.put('probe_mod.py', (
+            'import sys\n'
+            "sys.path.append('/forge_probe_marker_dir')\n"
+        ))
+        self.put('first.py', 'import probe_mod\n')
+        self.put('second.py', (
+            'import sys\n'
+            'import probe_mod\n'
+            "if '/forge_probe_marker_dir' in sys.path:\n"
+            "    print('MARKER OK')\n"
+        ))
+        run = self.run_bundle(bundle('RUN first.py', '', 'RUN second.py'))
+        self.assertIn('MARKER OK', run['results'][1]['preview'])
+
+
 class RunRows(unittest.TestCase):
     """FORGE runs rows summarise each stored packet."""
 
