@@ -81,17 +81,18 @@ Use this when replacing a whole function, method, class, or assignment target.
 Common target shapes:
 
     REPLACE app.py::main
+    REPLACE app.py::SomeClass
     REPLACE app.py::SomeClass.method
-    REPLACE app.py::SomeClass.*
     REPLACE app.py::@SETTING
     REPLACE app.py::SomeClass.@SETTING
 
 The target forms mean:
 
 - `main` selects one module-level function or class named `main`
+- `SomeClass` selects the complete class definition, class line included
 - `SomeClass.method` selects one method in that class
-- `SomeClass.*` selects the complete class definition, not every method as
-  separate replacements
+- `SomeClass.*` is an older alias for `SomeClass`: the complete class
+  definition, not every method as separate replacements
 - `@SETTING` selects one module-level assignment
 - `SomeClass.@SETTING` selects one assignment in the class body
 

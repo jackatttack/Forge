@@ -4,8 +4,9 @@ AST helpers for the Forge.
 
 This is intentionally close to Forge2's proven target model:
     file.py::function
+    file.py::Class            (whole class)
     file.py::Class.method
-    file.py::Class.*
+    file.py::Class.*          (whole class; older alias)
     file.py::@ASSIGNMENT
     file.py::Class.@ASSIGNMENT
 
@@ -369,16 +370,17 @@ def resolve_ast_target(project_root, target_ref, default_file=None):
         and node.name == target_name
     ]
 
-    if not matches and any(
-        isinstance(node, ast.ClassDef) and node.name == target_name
-        for node in tree.body
-    ):
-        # A bare class name is the most common near miss: say which form works.
-        return {'ok': False, 'error': (
-            'Target not found: %s. %s is a class: use ::%s.* for the whole '
-            'class, or ::%s.method for one method.'
-            % (target_ref, target_name, target_name, target_name)
-        )}
+    if not matches:
+        # A bare class name means the whole class, just as a bare function
+        # name means the whole function. ::Class.* remains as an alias.
+        classes = [
+            node for node in tree.body
+            if isinstance(node, ast.ClassDef) and node.name == target_name
+        ]
+        if len(classes) > 1:
+            return ambiguous('class', classes)
+        if classes:
+            return found(classes[0], 'class')
 
     return single(
         matches, 'function',

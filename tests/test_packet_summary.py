@@ -110,18 +110,47 @@ class HintKeyMatching(unittest.TestCase):
 
 
 class BareClassTarget(ForgeCase):
-    """A bare class name as a :: target says which form resolves."""
+    """A bare class name as a :: target means the whole class."""
 
-    def test_not_found_suggests_the_star_form(self):
-        self.put('lab.py', 'class Box:\n    def open(self):\n        return 1\n')
+    SOURCE = 'class Box:\n    def open(self):\n        return 1\n'
+
+    def test_bare_class_reads(self):
+        self.put('lab.py', self.SOURCE)
         run = self.run_bundle(bundle('READ lab.py::Box'))
-        result = run['results'][0]
-        self.assertEqual(result['status'], 'FAILED_NOT_FOUND')
-        self.assertIn('::Box.*', result['message'])
+        self.assertEqual(run['results'][0]['status'], 'APPLIED')
 
-    def test_star_form_resolves(self):
-        self.put('lab.py', 'class Box:\n    def open(self):\n        return 1\n')
+    def test_star_form_still_resolves(self):
+        self.put('lab.py', self.SOURCE)
         run = self.run_bundle(bundle('READ lab.py::Box.*'))
+        self.assertEqual(run['results'][0]['status'], 'APPLIED')
+
+    def test_bare_class_replaces_whole_class(self):
+        self.put('lab.py', self.SOURCE)
+        run = self.run_bundle(bundle(
+            'REPLACE lab.py::Box',
+            'BEGIN_BODY',
+            'class Box:',
+            '    def open(self):',
+            '        return 2',
+            'END_BODY',
+        ))
+        self.assertEqual(run['results'][0]['status'], 'APPLIED')
+
+    def test_unknown_name_is_still_not_found(self):
+        self.put('lab.py', self.SOURCE)
+        run = self.run_bundle(bundle('READ lab.py::Crate'))
+        self.assertEqual(run['results'][0]['status'], 'FAILED_NOT_FOUND')
+
+
+class SearchContextCap(ForgeCase):
+    """CONTEXT above the cap is capped at run time, not a parse failure."""
+
+    def test_large_context_runs(self):
+        self.put('lab.py', 'alpha\nbeta\n')
+        run = self.run_bundle(bundle(
+            'SEARCH lab.py FOR "alpha"',
+            'CONTEXT: 80',
+        ))
         self.assertEqual(run['results'][0]['status'], 'APPLIED')
 
 

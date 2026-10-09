@@ -70,11 +70,17 @@ SPEC = {
 }
 
 
+# Most lines SEARCH shows on either side of each hit. Larger requests are
+# capped to this rather than refused, so one generous CONTEXT cannot fail a
+# whole bundle. Keep the 0-50 in HELP['brief'] in step with it.
+MAX_CONTEXT = 50
+
+
 HELP = {
     'summary': 'Search project files by text or Python AST structure.',
     'brief': (
         'SEARCH path FOR text, or one pattern per body line (LIMIT then '
-        'applies per pattern) · MATCH exact|fuzzy|regex|ast · CONTEXT 0-20 '
+        'applies per pattern) · MATCH exact|fuzzy|regex|ast · CONTEXT 0-50 '
         '· GLOB filters file names · EXPECT_HITS asserts a count.'
     ),
     'minimal_example': [
@@ -695,7 +701,7 @@ def _execute_multi_pattern(result, root, abs_path, target, patterns, scope):
         header.append('GLOB=%r' % ','.join(scope['globs']))
     header.append('LIMIT=%d per pattern' % limit)
     if context:
-        header.append('CONTEXT=%d' % context)
+        header.append(_context_label(context))
 
     out = ['\n'.join(header), '', 'Patterns:']
     for search in searches:
@@ -831,10 +837,16 @@ def validate(parsed_op):
         context = _as_int(context_raw, -1)
         if context < 0:
             errors.append('SEARCH CONTEXT must be >= 0')
-        elif context > 20:
-            errors.append('SEARCH CONTEXT must be <= 20')
+        # Values above MAX_CONTEXT are capped at run time, not refused.
 
     return errors
+
+
+def _context_label(context):
+    """Header text for CONTEXT, marking when the cap was applied."""
+    if context >= MAX_CONTEXT:
+        return 'CONTEXT=%d (max)' % context
+    return 'CONTEXT=%d' % context
 
 
 def _should_skip_dir(root, dirpath, dirname):
@@ -940,7 +952,7 @@ def execute(ctx, parsed_op, result):
     scan_stats = {}
     match_mode = str(directives.get('MATCH') or 'exact').strip().lower()
     context = _as_int(directives.get('CONTEXT'), 0)
-    context = max(0, min(context, 20))
+    context = max(0, min(context, MAX_CONTEXT))
     path_filter = (directives.get('FILTER') or '').strip()
     exclude_terms = _parse_csv(directives.get('EXCLUDE'))
     exclude_terms.extend(_active_only_excludes(_truthy(directives.get('ACTIVE_ONLY'))))
@@ -1194,7 +1206,7 @@ def execute(ctx, parsed_op, result):
         header.append('EXCLUDE=%r' % ','.join(exclude_terms))
     header.append('LIMIT=%d' % limit)
     if context:
-        header.append('CONTEXT=%d' % context)
+        header.append(_context_label(context))
     if stopped_at_limit:
         header.append('(limit reached, results may be incomplete)')
     if overflow:
