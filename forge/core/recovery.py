@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Conflict-aware recovery of recorded UTF-8 text-file changes.
+"""Conflict-aware recovery of legacy text and byte-exact file changes.
 
 Validate every target and snapshot before mutation. Recheck each target
 immediately before installation, then report each completed change.
@@ -125,6 +125,16 @@ def _prepare(project_root, run_directory, manifest):
         else:
             entry_root = project_root
 
+        if 'before_content' in item or 'after_content' in item:
+            from .content_recovery import prepare_entry
+            entry = prepare_entry(entry_root, run_directory, item)
+            path = entry['current'][0]
+            if path in seen:
+                raise RecoveryRefused('Duplicate recovery target: ' + relative)
+            seen.add(path)
+            plan.append(entry)
+            continue
+
         current = _state(entry_root, relative)
         path, exists, text, identity = current
         if path in seen:
@@ -188,6 +198,10 @@ def _install(project_root, entry):
     Missing parent directories are created before a file is restored, so a
     reverted MOVE can put sources back into directories it removed.
     """
+    if entry.get('content_record'):
+        from .content_recovery import install_entry
+        return install_entry(entry)
+
     path, exists, text, identity = entry['current']
     desired_exists = entry['restore_exists']
     desired_text = entry['restore_text']

@@ -167,46 +167,8 @@ def _read_current(root, rel):
 
 
 def _collect_current_touched(run):
-    touched = []
-
-    for item in run.get('touched_files') or []:
-        if isinstance(item, dict):
-            touched.append(dict(item))
-
-    for res in run.get('results') or []:
-        for item in res.get('touched') or []:
-            if isinstance(item, dict):
-                touched.append(dict(item))
-
-    by_rel = {}
-    order = []
-
-    for item in touched:
-        rel = str(item.get('rel') or item.get('file') or '').strip()
-        if not rel:
-            continue
-
-        before = item.get('before') if item.get('before') is not None else ''
-        after = item.get('after') if item.get('after') is not None else ''
-
-        if rel not in by_rel:
-            order.append(rel)
-            by_rel[rel] = {
-                'rel': rel,
-                'kind': item.get('kind') or 'file',
-                'existed_before': bool(item.get('existed_before')),
-                'before': before,
-                'after': after,
-            }
-        else:
-            # A file can be patched multiple times in one run. Keep the first
-            # before snapshot and the final after snapshot so current-run diff
-            # reflects the aggregate change, not fake drift after the first edit.
-            by_rel[rel]['after'] = after
-            if item.get('kind'):
-                by_rel[rel]['kind'] = item.get('kind')
-
-    return [by_rel[rel] for rel in order]
+    from forge.core.content_records import collect_changes
+    return collect_changes(run)
 
 
 def _line_count(text):
@@ -343,10 +305,115 @@ def _render_touched_compact(root, label, touched):
     return lines
 
 
-def _render_touched(root, label, touched, mode='compact'):
-    if str(mode or '').strip().lower() == 'full':
-        return _render_touched_full(root, label, touched)
-    return _render_touched_compact(root, label, touched)
+def _render_content_item(root, item, mode):
+    """Render byte-aware states without loading binary payloads for display."""
+    from forge.core.content_records import state_content
+    from forge.core.content_recovery import disk_state
+    from forge.core.file_content import INLINE_TEXT_BYTES
+
+    relative = item['rel']
+    root_name = item.get('root') or ''
+    shown = '%s:%s' % (root_name, relative) if root_name else relative
+    before = state_content(item, 'before')
+    after = state_content(item, 'after')
+    existed_before = bool(item.get('existed_before'))
+    existed_after = item.get('existed_after')
+    if existed_after is None:
+        existed_after = True
+    file_backed = any(
+        content.get('encoding') == 'blob' for content in (before, after)
+    )
+
+    lines = ['', shown]
+    if not existed_before and not existed_after:
+        action = 'created and removed; no net change'
+    elif not existed_after:
+        action = 'deleted by run'
+    elif not existed_before:
+        action = 'created by run'
+    elif before['sha256'] == after['sha256']:
+        action = 'touched, no content change'
+    else:
+        action = 'modified by run'
+    lines.append('  stored: ' + action)
+
+    if file_backed:
+        lines.extend([
+            '  content: binary/large file',
+            '  bytes: %d -> %d' % (before['size'], after['size']),
+            '  SHA-256 before: ' + before['sha256'],
+            '  SHA-256 after:  ' + after['sha256'],
+        ])
+    else:
+        old_text = before['text']
+        new_text = after['text']
+        lines.append('  lines: %d -> %d' % (
+            _line_count(old_text), _line_count(new_text),
+        ))
+        if mode == 'full':
+            lines.extend(_diff_lines(old_text, new_text))
+        elif old_text != new_text:
+            lines.append('  changed lines: ' + _changed_ranges(old_text, new_text))
+
+    if not root:
+        lines.append('  drift: recorded root unavailable')
+        return lines
+    try:
+        path, exists, size, checksum, identity = disk_state(root, relative)
+    except (OSError, ValueError) as error:
+        lines.append('  drift: unreadable or unsafe target: ' + str(error))
+        return lines
+
+    if exists != existed_after:
+        lines.append('  drift: file appeared on disk' if exists
+                     else '  drift: file missing on disk')
+    elif not exists or (size, checksum) == (after['size'], after['sha256']):
+        lines.append('  drift: no')
+        return lines
+    else:
+        lines.append('  drift: yes')
+
+    if exists:
+        lines.append('  current bytes: %d' % size)
+        lines.append('  current SHA-256: ' + checksum)
+        if not file_backed and size <= INLINE_TEXT_BYTES:
+            try:
+                with open(path, 'rb') as handle:
+                    current_text = handle.read().decode('utf-8')
+                if '\x00' not in current_text:
+                    if mode == 'full':
+                        lines.extend(_diff_lines(after['text'], current_text))
+                    else:
+                        lines.append('  drift lines: ' + _changed_ranges(
+                            after['text'], current_text,
+                        ))
+            except (OSError, UnicodeError):
+                pass
+    return lines
+
+
+def _render_touched(root, label, touched, mode='compact', roots=None):
+    mode = str(mode or '').strip().lower()
+    modern = any(
+        item.get('root') or 'before_content' in item or 'after_content' in item
+        for item in touched
+    )
+    if not modern:
+        if mode == 'full':
+            return _render_touched_full(root, label, touched)
+        return _render_touched_compact(root, label, touched)
+
+    roots = roots or {}
+    lines = ['DIFF %s' % label]
+    if mode != 'full':
+        lines.append('MODE=compact')
+    lines.append('%d touched file(s)' % len(touched))
+    for item in touched:
+        entry_root = roots.get(item['root']) if item.get('root') else root
+        lines.extend(_render_content_item(entry_root, item, mode))
+    if mode != 'full':
+        lines.extend(['', 'Use MODE: full for text line diffs; binary files show byte metadata.'])
+    return lines
 
 
 def execute(ctx, parsed_op, result):
@@ -416,6 +483,7 @@ def execute(ctx, parsed_op, result):
             'current',
             touched,
             mode=diff_mode,
+            roots=environment.get('roots') or {},
         )
 
         result['status'] = 'APPLIED'
@@ -477,6 +545,7 @@ def execute(ctx, parsed_op, result):
         stamp,
         touched,
         mode=diff_mode,
+        roots=manifest.get('roots') or {},
     )
 
     result['status'] = 'APPLIED'

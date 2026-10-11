@@ -51,52 +51,13 @@ def _packet_changed_ranges(before, after):
 
 
 def _packet_collect_touched(run):
-    touched = []
-
-    for item in (run or {}).get('touched_files') or []:
-        if isinstance(item, dict):
-            touched.append(dict(item))
-
-    for res in (run or {}).get('results') or []:
-        for item in res.get('touched') or []:
-            if isinstance(item, dict):
-                touched.append(dict(item))
-
-    by_rel = {}
-    order = []
-
+    from forge.core.content_records import collect_changes
+    touched = collect_changes(run)
     for item in touched:
-        rel = str(item.get('rel') or item.get('file') or '').strip()
-        if not rel:
-            continue
-
-        # A file in a named root is shown, and grouped, as root:rel, so
-        # icloud:a.py and the project's a.py are never merged or confused.
-        root = str(item.get('root') or '').strip()
-        shown = '%s:%s' % (root, rel) if root else rel
-
-        before = item.get('before') if item.get('before') is not None else ''
-        after = item.get('after') if item.get('after') is not None else ''
-
-        if shown not in by_rel:
-            order.append(shown)
-            by_rel[shown] = {
-                'rel': rel,
-                'root': root,
-                'shown': shown,
-                'kind': item.get('kind') or 'file',
-                'existed_before': bool(item.get('existed_before')),
-                'existed_after': bool(item.get('existed_after', True)),
-                'before': before,
-                'after': after,
-            }
-        else:
-            by_rel[shown]['after'] = after
-            by_rel[shown]['existed_after'] = bool(item.get('existed_after', True))
-            if item.get('kind'):
-                by_rel[shown]['kind'] = item.get('kind')
-
-    return [by_rel[shown] for shown in order]
+        root = item.get('root') or ''
+        relative = item['rel']
+        item['shown'] = '%s:%s' % (root, relative) if root else relative
+    return touched
 
 
 def _format_changed_files(run):
@@ -115,7 +76,29 @@ def _format_changed_files(run):
 
         existed_after = bool(item.get('existed_after', True))
 
-        if not existed_before and not existed_after:
+        from forge.core.content_records import state_content
+        before_content = state_content(item, 'before')
+        after_content = state_content(item, 'after')
+        file_backed = any(
+            content.get('encoding') == 'blob'
+            for content in (before_content, after_content)
+        )
+
+        if file_backed:
+            if not existed_before and not existed_after:
+                action = 'created and removed'
+            elif not existed_after:
+                action = 'deleted'
+            elif not existed_before:
+                action = 'created'
+            elif before_content['sha256'] == after_content['sha256']:
+                action = 'touched, no content change'
+            else:
+                action = 'modified'
+            summary = '%s · binary/large file · %d -> %d bytes' % (
+                action, before_content['size'], after_content['size'],
+            )
+        elif not existed_before and not existed_after:
             summary = 'created and removed · no net change'
         elif not existed_after:
             summary = 'deleted · %d lines' % _packet_line_count(before)

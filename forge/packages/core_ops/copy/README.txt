@@ -63,20 +63,38 @@ copy that changes protected core paths. Check big copies with DRY_RUN first.
 
 ## Planning before writing
 
-COPY checks everything before it writes: paths, overlap, conflicts,
-filters, protection, the file limit, and that every file is UTF-8 text. Any
-problem refuses the whole copy and nothing is written.
+COPY checks paths, overlap, conflicts, filters, protection, the file limit,
+and readable source/destination snapshots before changing project files.
+A planning problem refuses the whole copy.
 
-Binary files are not supported yet, because run recovery stores text. A
-file that is not UTF-8 refuses the copy and is named; skip it with EXCLUDE.
+Binary files are supported automatically, with no extra directive.
+PNG images, audio, archives and other ordinary files are copied byte-for-byte,
+as are text files including their original line endings.
+
+Binary and large files use chunked I/O and file-backed snapshots. Small
+UTF-8 text remains available for line diffs. DIFF reports byte counts and
+SHA-256 checksums for binary/large files instead of printing their contents.
+
+Each destination is written to a verified temporary file beside the target,
+then installed atomically. A destination that changed since planning is
+refused. Temporary snapshots require disk space; DRY_RUN may create temporary
+snapshots but does not change source or destination files.
 
 ## Recovery
 
 REVERT restores replaced and removed files and deletes created ones.
 Folders COPY created are left behind, empty, as with WRITE.
 
-An I/O error part-way through stops the copy. Every file written before it
-is recorded, so REVERT undoes the partial copy.
+An I/O error part-way through stops the copy. Completed changes are recorded,
+so REVERT can undo the recorded partial copy. A failed staged write leaves
+its existing destination intact.
+
+REVERT checks current contents and snapshot checksums before recovery and
+refuses newer edits. Existing text run records remain supported. Recovery
+is itself recorded and can be reverted.
+
+Run evidence is persisted when the bundle finishes. Transfers are not a
+crash-atomic multi-file transaction and do not lock out concurrent writers.
 
 ## Moving
 
@@ -98,7 +116,7 @@ COPY refuses without writing when:
 - the source is missing, is a symlink, or contains symlinks
 - a path escapes its root, or the source and destination overlap
 - a differing destination file exists and OVERWRITE is no
-- a file is not UTF-8 text
+- a source or existing destination cannot be snapshotted
 - the change count or a protected path needs CONFIRM: yes
 
 ## Related operations

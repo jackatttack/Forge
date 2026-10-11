@@ -81,7 +81,7 @@ HELP = {
     'common_failures': [
         'The source does not exist.',
         'An existing destination file differs and OVERWRITE is no.',
-        'A file is not UTF-8 text; binary moves are not supported yet.',
+        'A source or destination changes before source removal.',
         'The move changes more than 200 files without CONFIRM: yes.',
         'The source and destination overlap, or a path escapes its root.',
     ],
@@ -115,19 +115,7 @@ HINTS = {
         ],
         'priority': 100,
     },
-    'utf-8': {
-        'message': 'MOVE only transfers UTF-8 text files for now.',
-        'why': 'Run recovery stores text, so a binary file could not be restored by REVERT.',
-        'example': [
-            'MOVE projects/app',
-            'TO: icloud:projects/app',
-            'EXCLUDE: *.png, *.wav',
-        ],
-        'next': [
-            'Leave the named files behind with EXCLUDE, or move only text with GLOB.',
-        ],
-        'priority': 95,
-    },
+
     'confirm: yes': {
         'message': 'This MOVE needs CONFIRM: yes.',
         'why': 'Large moves and protected core paths are deliberate decisions.',

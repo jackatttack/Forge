@@ -164,15 +164,18 @@ class CopyDirectories(TransferCase):
         )
         self.assertFalse(self.exists(self.project_root, 'dest/a.py'))
 
-    def test_a_binary_file_refuses_the_copy_and_is_named(self):
+    def test_a_binary_file_is_copied_exactly_and_reverted(self):
         self.make_source_tree()
-        self.put(self.project_root, 'src/sprite.png', b'\x89PNG\xff\x00')
+        data = b'\x89PNG\xff\x00'
+        self.put(self.project_root, 'src/sprite.png', data)
         run = self.run_bundle('COPY src', 'TO: dest')
-
         result = self.last(run)
-        self.assertEqual(result['status'], 'FAILED_NOT_TEXT')
-        self.assertIn('sprite.png', result['message'])
-        self.assertFalse(self.exists(self.project_root, 'dest'))
+        self.assertEqual(result['status'], 'APPLIED', result.get('message'))
+        with open(os.path.join(self.project_root, 'dest/sprite.png'), 'rb') as handle:
+            self.assertEqual(handle.read(), data)
+        reverted = self.revert(run)
+        self.assertEqual(self.last(reverted)['status'], 'APPLIED')
+        self.assertFalse(self.exists(self.project_root, 'dest/sprite.png'))
 
     def test_exclude_and_glob_filter_the_tree(self):
         self.make_source_tree()
@@ -262,11 +265,13 @@ class MoveDirectories(TransferCase):
     def test_a_refused_move_leaves_the_source_untouched(self):
         self.put(self.project_root, 'game/model.py', 'x = 1\n')
         self.put(self.project_root, 'game/art.png', b'\x89PNG\xff')
+        self.put(self.project_root, 'moved/art.png', b'\xffdifferent')
         run = self.run_bundle('MOVE game', 'TO: moved')
 
-        self.assertEqual(self.last(run)['status'], 'FAILED_NOT_TEXT')
+        self.assertEqual(self.last(run)['status'], 'FAILED_EXISTS')
         self.assertTrue(self.exists(self.project_root, 'game/model.py'))
-        self.assertFalse(self.exists(self.project_root, 'moved'))
+        self.assertTrue(self.exists(self.project_root, 'game/art.png'))
+        self.assertFalse(self.exists(self.project_root, 'moved/model.py'))
 
 
 class DeleteIsExact(TransferCase):

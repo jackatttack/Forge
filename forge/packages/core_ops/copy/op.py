@@ -81,14 +81,14 @@ HELP = {
     'common_failures': [
         'The source does not exist.',
         'An existing destination file differs and OVERWRITE is no.',
-        'A file is not UTF-8 text; binary copies are not supported yet.',
+        'A source cannot be snapshotted or a destination changes during copying.',
         'The copy changes more than 200 files without CONFIRM: yes.',
         'The source and destination overlap, or a path escapes its root.',
     ],
     'safe_usage': [
         'Check large or replacing copies with DRY_RUN: yes first.',
         'Use MOVE rather than COPY then DELETE when the source should go.',
-        'Skip binary files with EXCLUDE until binary transfer exists.',
+        'Text and binary files are copied byte-for-byte with recorded recovery.',
     ],
     'related_ops': [
         'MOVE copies, verifies, then removes the source in one recorded step.',
@@ -115,19 +115,7 @@ HINTS = {
         ],
         'priority': 100,
     },
-    'utf-8': {
-        'message': 'COPY only transfers UTF-8 text files for now.',
-        'why': 'Run recovery stores text, so a binary file could not be restored by REVERT.',
-        'example': [
-            'COPY projects/app',
-            'TO: icloud:projects/app',
-            'EXCLUDE: *.png, *.wav',
-        ],
-        'next': [
-            'Skip the named files with EXCLUDE, or keep only text with GLOB.',
-        ],
-        'priority': 95,
-    },
+
     'confirm: yes': {
         'message': 'This COPY needs CONFIRM: yes.',
         'why': 'Large copies and protected core paths are deliberate decisions.',

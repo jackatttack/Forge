@@ -369,6 +369,8 @@ def _json_safe(obj, _seen=None):
         _seen.add(obj_id)
         out = {}
         for key, value in obj.items():
+            if key == '_content_store':
+                continue
             safe_key = key
             if not isinstance(safe_key, str):
                 safe_key = str(safe_key)
@@ -396,58 +398,9 @@ def _json_safe(obj, _seen=None):
 
 
 def _collect_touched(run):
-    """Keep each path's initial state and its final recorded state.
-
-    The run-level list is chronological and authoritative. Result-only
-    records supplement paths absent from it, without replaying the duplicate
-    records normally present on both the run and its operation results.
-
-    Entries are keyed by (root, path) rather than path alone, because the
-    same relative path in two different roots is two different files.
-    """
-    items = [
-        dict(item) for item in run.get('touched_files') or []
-        if isinstance(item, dict)
-    ]
-
-    def relative_path(item):
-        value = str(item.get('rel') or item.get('file') or '').strip()
-        return os.path.normpath(value) if value else ''
-
-    def identity(item):
-        return (str(item.get('root') or ''), relative_path(item))
-
-    run_paths = {identity(item) for item in items}
-    for result in run.get('results') or []:
-        for item in result.get('touched') or []:
-            if isinstance(item, dict) and identity(item) not in run_paths:
-                items.append(dict(item))
-
-    combined = {}
-    order = []
-    for item in items:
-        key = identity(item)
-        root_name, rel = key
-        if not rel:
-            continue
-        if key not in combined:
-            order.append(key)
-            combined[key] = {
-                'rel': rel,
-                'root': root_name,
-                'kind': item.get('kind') or 'file',
-                'existed_before': bool(item.get('existed_before')),
-                'before': item.get('before') or '',
-            }
-
-        entry = combined[key]
-        entry['after'] = item.get('after') or ''
-        # Missing metadata stays unknown; do not guess absence from "".
-        entry['existed_after'] = item.get('existed_after')
-        entry['before_sha'] = _sha(entry['before'])
-        entry['after_sha'] = _sha(entry['after'])
-
-    return [combined[key] for key in order]
+    """Keep each root/path's original state and final recorded state."""
+    from .content_records import collect_changes
+    return collect_changes(run)
 
 MAX_STORED_RUNS = 100
 
@@ -603,6 +556,9 @@ def write_run(run, environment=None):
     _ensure(root)
     _ensure(snap_dir)
 
+    from .content_records import persist_run_contents, manifest_change
+
+    persist_run_contents(run, root)
     touched = _collect_touched(
         run
     )
@@ -610,6 +566,9 @@ def write_run(run, environment=None):
     manifest_touched = []
 
     for item in touched:
+        if 'before_content' in item or 'after_content' in item:
+            manifest_touched.append(manifest_change(item))
+            continue
         rel = item.get('rel') or ''
         root_name = str(
             item.get('root')

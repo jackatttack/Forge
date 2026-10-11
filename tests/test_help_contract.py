@@ -898,7 +898,7 @@ class ForgeHelpRendering(ForgeCase):
             'Copy a directory',
             'TO names the destination itself',
             'replace: make the destination match the source',
-            'Binary files are not supported yet',
+            'Binary files are supported automatically',
             'Use MOVE',
         ):
             self.assertIn(phrase, preview)

@@ -14,7 +14,7 @@ TO always names the destination itself, never a folder to copy "into":
 Every transfer runs in two phases:
 
     plan    Resolve paths, list files, apply filters, and check conflicts,
-            protected paths, the file limit and UTF-8 readability.
+            protected paths, the file limit and byte-exact snapshots.
             Nothing is written. Any problem refuses the whole transfer.
     apply   Write destination files, remove destination extras for
             OVERWRITE: replace, and for MOVE verify every copy before
@@ -25,8 +25,11 @@ so the packet's Changed files, DIFF and REVERT all cover it. Directories are
 not recorded: reverting a transfer removes created files but leaves any
 folders it created, exactly as with WRITE.
 
-Phase 1 limitation: files must be UTF-8 text, because Forge run recovery
-stores text. A file that is not UTF-8 refuses the transfer and is named.
+All ordinary files are transferred byte-for-byte. Binary and large-file
+snapshots are streamed to temporary storage and persisted with the run.
+Each destination write is staged and verified before atomic replacement.
+Observable source and destination drift is refused; this is not a lock
+against concurrent writers or a crash-atomic multi-file transaction.
 """
 
 import fnmatch
@@ -81,22 +84,23 @@ class TransferRefused(Exception):
 
 
 class PlannedFile(object):
-    """One source file and the destination it will be written to."""
+    """One immutable source snapshot and its expected destination state."""
 
-    def __init__(self, relative, source_path, destination_path, text,
+    def __init__(self, relative, source_path, destination_path, content,
                  destination_existed, destination_before):
         self.relative = relative
         self.source_path = source_path
         self.destination_path = destination_path
-        self.text = text
+        self.content = content
         self.destination_existed = destination_existed
         self.destination_before = destination_before
 
     @property
     def action(self):
+        from .file_content import same_content
         if not self.destination_existed:
             return 'create'
-        if self.destination_before == self.text:
+        if same_content(self.destination_before, self.content):
             return 'unchanged'
         return 'replace'
 
@@ -192,15 +196,23 @@ def read_options(parsed_op):
 # --- the transfer ------------------------------------------------------------
 
 def execute_transfer(ctx, parsed_op, result, op_name):
-    """Plan the whole transfer, then apply it or report the dry run."""
+    """Plan snapshots first, then apply changes with per-file atomic writes."""
+    from .content_records import run_content_store
     source = (parsed_op.get('target') or '').strip()
     options = read_options(parsed_op)
+    options['content_store'] = run_content_store(ctx['run'])
 
     try:
         plan = build_plan(ctx, op_name, source, options)
     except TransferRefused as refusal:
         result['status'] = refusal.status
         result['message'] = refusal.message
+        return
+    except (OSError, ValueError) as error:
+        result['status'] = 'FAILED_IO'
+        result['message'] = '%s planning refused before mutation: %s' % (
+            op_name, error,
+        )
         return
 
     if options['dry_run']:
@@ -209,7 +221,7 @@ def execute_transfer(ctx, parsed_op, result, op_name):
 
     try:
         apply_plan(ctx, plan, result)
-    except (OSError, UnicodeError) as error:
+    except (OSError, ValueError) as error:
         result['status'] = 'FAILED_IO'
         result['message'] = (
             '%s stopped after %d recorded change(s): %s: %s. '
@@ -265,47 +277,62 @@ def build_plan(ctx, op_name, source, options):
 
 
 def apply_plan(ctx, plan, result):
-    """Write, remove and (for MOVE) clear the sources, recording every file."""
+    """Install exact snapshots, then verify all copies before source removal."""
+    from .file_content import atomic_install, text_content
     destination_root = plan.destination_root_name or ''
     source_root = plan.source_root_name or ''
+    empty = text_content('')
 
     for planned in plan.files:
         if planned.action == 'unchanged':
             continue
-        _write_exact(planned.destination_path, planned.text)
+
+        def recheck_destination():
+            _assert_state(
+                planned.destination_path, planned.destination_existed,
+                planned.destination_before,
+            )
+
+        atomic_install(
+            planned.destination_path, planned.content,
+            before_replace=recheck_destination,
+        )
         _record(
             ctx, result, plan,
             plan.destination_rel(planned.relative), destination_root,
-            planned.destination_before, planned.text,
+            planned.destination_before, planned.content,
             existed_before=planned.destination_existed, existed_after=True,
         )
 
     for removal in plan.removals:
+        _assert_state(removal.destination_path, True, removal.before)
         os.remove(removal.destination_path)
         _record(
             ctx, result, plan,
             plan.destination_rel(removal.relative), destination_root,
-            removal.before, '',
+            removal.before, empty,
             existed_before=True, existed_after=False,
         )
 
     if not plan.is_move:
         return
 
-    # Verify every copy before removing any source.
+    # Check the entire set before deleting any source. An unchanged
+    # destination still needs verification because another writer may edit it.
     for planned in plan.files:
-        if _read_or_none(planned.destination_path) != planned.text:
-            raise OSError(
-                'Copy does not match its source: '
-                + (planned.relative or plan.destination)
-            )
+        _assert_state(planned.destination_path, True, planned.content)
+        _assert_state(planned.source_path, True, planned.content)
 
     for planned in plan.files:
+        # Recheck immediately before this removal as well. These checks do
+        # not lock out concurrent writers; they refuse observable drift.
+        _assert_state(planned.destination_path, True, planned.content)
+        _assert_state(planned.source_path, True, planned.content)
         os.remove(planned.source_path)
         _record(
             ctx, result, plan,
             plan.source_rel(planned.relative), source_root,
-            planned.text, '',
+            planned.content, empty,
             existed_before=True, existed_after=False,
         )
 
@@ -348,27 +375,13 @@ def _plan_single_file(plan):
             + plan.destination,
         )
 
-    text = _read_or_none(plan.source_path)
-    if text is None:
-        raise TransferRefused(
-            'FAILED_NOT_TEXT',
-            'Source is not UTF-8 text: %s (binary transfer is not supported '
-            'yet)' % plan.source,
-        )
-
-    not_text = []
+    store = plan.options['content_store']
+    content = store.capture(plan.source_path)
     existed, before = _destination_state(
-        plan.destination_path, plan.destination, not_text,
+        plan.destination_path, plan.destination, store,
     )
-    if not_text:
-        raise TransferRefused(
-            'FAILED_NOT_TEXT',
-            'Destination is not UTF-8 text, so replacing it could not be '
-            'recorded: ' + plan.destination,
-        )
-
     planned = PlannedFile(
-        '', plan.source_path, plan.destination_path, text, existed, before,
+        '', plan.source_path, plan.destination_path, content, existed, before,
     )
     if planned.action == 'replace' and plan.options['policy'] == 'no':
         raise TransferRefused(
@@ -379,6 +392,7 @@ def _plan_single_file(plan):
 
 def _plan_directory(plan):
     options = plan.options
+    store = options['content_store']
 
     if (
         os.path.exists(plan.destination_path)
@@ -389,30 +403,21 @@ def _plan_directory(plan):
             'Destination exists but is not a directory: ' + plan.destination,
         )
 
-    not_text = []
     conflicts = []
     planned_relatives = set()
-
     for relative, source_file in _walk(
         plan.source_path, options, plan.filtered, 'source',
     ):
-        text = _read_or_none(source_file)
-        if text is None:
-            not_text.append(relative)
-            continue
-
+        content = store.capture(source_file)
         destination_file = os.path.join(
             plan.destination_path, *relative.split('/')
         )
-        existed, before = _destination_state(
-            destination_file, relative, not_text,
-        )
+        existed, before = _destination_state(destination_file, relative, store)
         planned = PlannedFile(
-            relative, source_file, destination_file, text, existed, before,
+            relative, source_file, destination_file, content, existed, before,
         )
         if planned.action == 'replace' and options['policy'] == 'no':
             conflicts.append(relative)
-
         plan.files.append(planned)
         planned_relatives.add(relative)
 
@@ -420,22 +425,11 @@ def _plan_directory(plan):
         for relative, destination_file in _walk(
             plan.destination_path, options, None, 'destination',
         ):
-            if relative in planned_relatives:
-                continue
-            before = _read_or_none(destination_file)
-            if before is None:
-                not_text.append('(destination) ' + relative)
-                continue
-            plan.removals.append(
-                PlannedRemoval(relative, destination_file, before)
-            )
+            if relative not in planned_relatives:
+                plan.removals.append(PlannedRemoval(
+                    relative, destination_file, store.capture(destination_file),
+                ))
 
-    if not_text:
-        raise TransferRefused(
-            'FAILED_NOT_TEXT',
-            'Only UTF-8 text files can be transferred yet; not text: %s. '
-            'Skip them with EXCLUDE or narrow with GLOB.' % _name_some(not_text),
-        )
     if conflicts:
         raise TransferRefused(
             'FAILED_EXISTS',
@@ -444,24 +438,20 @@ def _plan_directory(plan):
         )
 
 
-def _destination_state(path, label, not_text):
-    """Return (existed, text) for one destination file."""
+def _destination_state(path, label, store):
+    """Snapshot an existing regular destination, preserving absence explicitly."""
+    from .file_content import text_content
     if os.path.islink(path):
         raise TransferRefused(
             'FAILED_INVALID_PATH', 'Destination is a symlink: ' + label,
         )
     if not os.path.lexists(path):
-        return False, ''
+        return False, text_content('')
     if not os.path.isfile(path):
         raise TransferRefused(
             'FAILED_EXISTS', 'Destination path is not a file: ' + label,
         )
-
-    before = _read_or_none(path)
-    if before is None:
-        not_text.append('(destination) ' + label)
-        return True, ''
-    return True, before
+    return True, store.capture(path)
 
 
 def _walk(top, options, filtered, label):
@@ -619,7 +609,8 @@ def _report(result, plan, dry_run):
 
 def _record(ctx, result, plan, relative, root_name, before, after,
             existed_before, existed_after):
-    record_touched(ctx, result, touched_file(
+    from .content_records import content_change
+    record_touched(ctx, result, content_change(
         relative, before, after,
         existed_before=existed_before, existed_after=existed_after,
         root=root_name,
@@ -627,22 +618,18 @@ def _record(ctx, result, plan, relative, root_name, before, after,
     plan.completed += 1
 
 
-def _read_or_none(path):
-    """Exact UTF-8 text, or None when the bytes are not UTF-8."""
-    with open(path, 'rb') as handle:
-        data = handle.read()
-    try:
-        return data.decode('utf-8')
-    except UnicodeDecodeError:
-        return None
+def _assert_state(path, existed, content):
+    """Refuse observable drift or file-type substitution before mutation."""
+    from .file_content import matches_file
+    if not existed:
+        if os.path.lexists(path):
+            raise OSError('Destination appeared since planning: ' + path)
+        return
+    if not os.path.lexists(path) or not matches_file(path, content):
+        raise OSError('File changed since planning: ' + path)
 
 
-def _write_exact(path, text):
-    parent = os.path.dirname(path)
-    if parent and not os.path.isdir(parent):
-        os.makedirs(parent)
-    with open(path, 'wb') as handle:
-        handle.write(text.encode('utf-8'))
+
 
 
 def _remove_empty_directories(top):

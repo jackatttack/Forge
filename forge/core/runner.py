@@ -218,6 +218,8 @@ def run_text(
             run,
             environment=environment,
         )
+        from forge.core.content_records import release_content_store
+        release_content_store(run)
 
     emit_event(
         on_event,

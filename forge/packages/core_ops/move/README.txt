@@ -59,8 +59,21 @@ If the move stops part-way, every change made before it is recorded, and
 REVERT undoes the partial move. Sources are never removed until every copy
 has been verified.
 
-Binary files are not supported yet; a file that is not UTF-8 refuses the
-move and is named.
+Binary files are supported automatically, with no extra directive.
+Files are moved byte-for-byte, including original text line endings.
+Binary and large files use chunked I/O and file-backed recovery snapshots;
+DIFF shows their byte counts and SHA-256 checksums.
+
+Destination writes are staged and verified before atomic replacement.
+Before any source is removed, MOVE checks every destination and every
+current source against the planned snapshots. It also rechecks the source
+and its copy immediately before each removal. Observable changes stop the
+move, preserving the changed source.
+
+These checks do not lock out concurrent writers. Completed changes rely on
+normal end-of-bundle run storage; the whole move is not crash-atomic.
+REVERT refuses newer edits and damaged snapshots, and is itself reversible.
+DRY_RUN may create temporary snapshots but changes no source or destination.
 
 ## Directives
 
@@ -78,7 +91,7 @@ MOVE refuses without changing anything when:
 - the source is missing, is a symlink, or contains symlinks
 - a path escapes its root, or the source and destination overlap
 - a differing destination file exists and OVERWRITE is no
-- a file is not UTF-8 text
+- a source or existing destination cannot be snapshotted
 - the change count or a protected path needs CONFIRM: yes
 
 ## Related operations
