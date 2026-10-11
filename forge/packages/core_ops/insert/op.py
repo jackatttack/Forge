@@ -282,6 +282,9 @@ def _normalise_position(value):
     return aliases.get(pos, pos)
 
 
+EFFECT = 'workspace'
+
+
 def validate(parsed_op):
     """
     Static rules for INSERT, checked before any op in the bundle runs.
@@ -487,7 +490,15 @@ def _execute_plain_file(ctx, parsed_op, result):
         result['message'] = 'File not found: ' + target
         return
 
-    before = read_text(abs_path)
+    from forge.core.file_safety import NotTextFile, load_for_edit
+
+    try:
+        source = load_for_edit(abs_path)
+    except NotTextFile as e:
+        result['status'] = 'FAILED_IO'
+        result['message'] = str(e)
+        return
+    before = source['text']
     lines = before.splitlines()
     pos = _normalise_position(directives.get('POSITION'))
     anchor = str(directives.get('ANCHOR') or '')
@@ -536,10 +547,10 @@ def _execute_plain_file(ctx, parsed_op, result):
         result['message'] = '%s: %s' % (type(e).__name__, e)
         return
 
-    from forge.core.file_safety import checked_write, CompileBlocked
+    from forge.core.file_safety import CompileBlocked, commit_edit, edit_change
 
     try:
-        checked_write(abs_path, after)
+        written = commit_edit(source, after)
     except CompileBlocked as e:
         result['status'] = 'FAILED_COMPILE'
         result['message'] = (
@@ -547,11 +558,12 @@ def _execute_plain_file(ctx, parsed_op, result):
             'File untouched.' % (e.lineno, e.msg)
         )
         return
+    except OSError as e:
+        result['status'] = 'FAILED_IO'
+        result['message'] = 'Could not write file: %s. File untouched.' % e
+        return
     target_root, target_rel = split_root_prefix(target)
-    touched = touched_file(
-        target_rel, before, after, existed_before=True,
-        root=target_root or '',
-    )
+    touched = edit_change(target_rel, source, written, root=target_root or '')
     record_touched(ctx, result, touched)
 
     mode = ('anchor-%s' if anchor else 'line-%s') % pos
@@ -642,6 +654,15 @@ def _execute_ast(ctx, parsed_op, result):
         result['message'] = err
         return
 
+    from forge.core.file_safety import NotTextFile, load_for_edit
+
+    try:
+        source = load_for_edit(file_abs)
+    except NotTextFile as e:
+        result['status'] = 'FAILED_IO'
+        result['message'] = str(e)
+        return
+    before = source['text']
     all_lines = before.splitlines()
     start = int(resolved.get('start') or 1)
     end = int(resolved.get('end') or start)
@@ -730,10 +751,10 @@ def _execute_ast(ctx, parsed_op, result):
         result['message'] = '%s: %s' % (type(e).__name__, e)
         return
 
-    from forge.core.file_safety import checked_write, CompileBlocked
+    from forge.core.file_safety import CompileBlocked, commit_edit, edit_change
 
     try:
-        checked_write(file_abs, after)
+        written = commit_edit(source, after)
     except CompileBlocked as e:
         result['status'] = 'FAILED_COMPILE'
         result['message'] = (
@@ -741,11 +762,12 @@ def _execute_ast(ctx, parsed_op, result):
             'File untouched.' % (e.lineno, e.msg)
         )
         return
+    except OSError as e:
+        result['status'] = 'FAILED_IO'
+        result['message'] = 'Could not write file: %s. File untouched.' % e
+        return
     file_root, file_rel = split_root_prefix(file_target)
-    touched = touched_file(
-        file_rel, before, after, existed_before=True,
-        root=file_root or '',
-    )
+    touched = edit_change(file_rel, source, written, root=file_root or '')
     record_touched(ctx, result, touched)
 
     # Count what actually landed. The body's edge blank lines are trimmed

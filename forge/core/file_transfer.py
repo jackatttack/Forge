@@ -35,7 +35,6 @@ against concurrent writers or a crash-atomic multi-file transaction.
 import fnmatch
 import os
 
-from forge.core.core_guard import has_confirm, target_is_protected
 from forge.core.file_safety import (
     record_touched,
     safe_target,
@@ -271,7 +270,6 @@ def build_plan(ctx, op_name, source, options):
             'Source is not an ordinary file or directory: ' + source,
         )
 
-    _check_protection(plan)
     _check_file_limit(plan)
     return plan
 
@@ -498,24 +496,11 @@ def _walk(top, options, filtered, label):
             yield relative, full_path
 
 
-def _check_protection(plan):
-    """Require CONFIRM when the transfer changes a protected core path."""
-    if plan.options['confirmed']:
-        return
-
-    changed = []
-    if plan.destination_root_name is None:
-        changed.extend(plan.destination_rel(p.relative) for p in plan.files)
-        changed.extend(plan.destination_rel(r.relative) for r in plan.removals)
-    if plan.is_move and plan.source_root_name is None:
-        changed.extend(plan.source_rel(p.relative) for p in plan.files)
-
-    protected = [path for path in changed if target_is_protected(path)]
-    if protected:
-        raise TransferRefused(
-            'FAILED_NEEDS_CONFIRM',
-            'Protected core paths need CONFIRM: yes: ' + _name_some(protected),
-        )
+def has_confirm(parsed_op):
+    """Return True when the op's CONFIRM directive carries an affirmative value."""
+    directives = (parsed_op or {}).get('directives') or {}
+    value = str(directives.get('CONFIRM') or '').strip().lower()
+    return value in ('yes', 'true', '1', 'confirm', 'overwrite')
 
 
 def _check_file_limit(plan):

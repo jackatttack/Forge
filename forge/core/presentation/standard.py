@@ -31,36 +31,21 @@ def _counts(run):
 
 
 def _changed_files(run):
-    seen = set()
+    """Return one label per changed file, identified by root and path.
 
-    for item in (run or {}).get('touched_files') or []:
-        if not isinstance(item, dict):
-            continue
+    The shared change collector owns file identity, so a.txt and
+    icloud:a.txt count as two files here, exactly as they do in the
+    packet, run storage and DIFF.
+    """
+    # Imported here so this module keeps no module-level dependencies.
+    from forge.core.content_records import collect_changes
 
-        path = str(
-            item.get('rel')
-            or item.get('file')
-            or ''
-        ).strip()
-
-        if path:
-            seen.add(path)
-
-    for result in (run or {}).get('results') or []:
-        for item in result.get('touched') or []:
-            if not isinstance(item, dict):
-                continue
-
-            path = str(
-                item.get('rel')
-                or item.get('file')
-                or ''
-            ).strip()
-
-            if path:
-                seen.add(path)
-
-    return sorted(seen)
+    labels = []
+    for change in collect_changes(run):
+        root = change.get('root') or ''
+        relative = change.get('rel') or ''
+        labels.append(root + ':' + relative if root else relative)
+    return sorted(labels)
 
 
 

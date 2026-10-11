@@ -125,6 +125,9 @@ HINTS = {
 }
 
 
+EFFECT = 'read'
+
+
 def validate(parsed_op):
     if not (parsed_op.get('target') or '').strip():
         return ['READ requires a target path or AST target']

@@ -187,6 +187,14 @@ def _last_lines(text, count):
     return '\n'.join(lines[hidden:]), hidden
 
 
+EFFECT = 'execute'
+
+# A script exiting non-zero is an observation reported in the packet, not a
+# broken step, so it does not stop later operations. STOP_ON_FAIL: yes makes
+# it a gate.
+OWN_FAILURE_BLOCKS = False
+
+
 def validate(parsed_op):
     target = (
         parsed_op.get('target')

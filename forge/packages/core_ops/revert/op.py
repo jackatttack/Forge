@@ -71,6 +71,9 @@ HINTS = {
 }
 
 
+EFFECT = 'workspace'
+
+
 def validate(parsed_op):
     args = (
         (

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Recovery must preserve newer work and record its own changes."""
 
+import json
 import os
 import shutil
 import unittest
@@ -155,10 +156,6 @@ class RevertSafety(ForgeCase):
             + '\n\n'
             + replace_text('b.txt', 'original b', 'edited b')
         )
-        # Take the snapshot location from the manifest rather than
-        # assuming a layout: snapshot paths are namespaced by root, and
-        # this test is about refusing a damaged snapshot, not about where
-        # snapshots happen to live.
         manifest, error = run_storage.read_manifest(
             self.project_root,
             original['stamp'],
@@ -166,15 +163,21 @@ class RevertSafety(ForgeCase):
         )
         self.assertIsNone(error)
 
-        snapshot_rel = ''
-        for item in manifest['touched']:
+        # Small text originals live inline in the manifest with a checksum.
+        # Damage b.txt's recorded original but keep its checksum, so the
+        # evidence no longer verifies.
+        manifest_path = os.path.join(original['artifact_dir'], 'manifest.json')
+        with open(manifest_path, encoding='utf-8') as handle:
+            stored = json.load(handle)
+        damaged = False
+        for item in stored['touched']:
             if item.get('rel') == 'b.txt':
-                snapshot_rel = item.get('snapshot_rel') or ''
-        self.assertTrue(snapshot_rel)
-
-        snapshot = os.path.join(original['artifact_dir'], snapshot_rel)
-        with open(snapshot, 'w', encoding='utf-8') as handle:
-            handle.write('damaged snapshot\n')
+                item['before_content']['text'] = 'damaged original\n'
+                item['before'] = 'damaged original\n'
+                damaged = True
+        self.assertTrue(damaged)
+        with open(manifest_path, 'w', encoding='utf-8') as handle:
+            json.dump(stored, handle)
 
         recovery = self.revert(original)
         self.assertNotEqual(recovery['status'], 'APPLIED')

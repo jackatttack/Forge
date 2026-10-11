@@ -152,6 +152,16 @@ _TIMEOUT_DEFAULT = 20
 _PREVIEW_LIMIT = 80
 
 
+def effect(parsed_op):
+    """Execution effect for failure gating; see forge.core.operation_policy.
+
+    Downloads write a project file. Every other mode only reads the network.
+    """
+    directives = (parsed_op or {}).get('directives') or {}
+    mode = str(directives.get('MODE') or 'fetch').strip().lower()
+    return 'read' if mode in ('fetch', 'probe', 'json') else 'workspace'
+
+
 def validate(parsed_op):
     errors = []
     target = (parsed_op.get('target') or '').strip()

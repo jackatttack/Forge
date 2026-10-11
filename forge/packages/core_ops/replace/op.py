@@ -311,6 +311,9 @@ def _has_block_pair(parsed_op):
     return 'OLD' in blocks or 'NEW' in blocks
 
 
+EFFECT = 'workspace'
+
+
 def validate(parsed_op):
     errors = []
     target = (parsed_op.get('target') or '').strip()
@@ -411,8 +414,18 @@ def _execute_ast(ctx, parsed_op, result):
         )
         return
 
+    from forge.core.file_safety import (
+        NotTextFile, commit_edit, edit_change, load_for_edit,
+    )
+
     file_abs = resolved.get('file_abs')
-    before = read_text(file_abs)
+    try:
+        source = load_for_edit(file_abs)
+    except NotTextFile as e:
+        result['status'] = 'FAILED_IO'
+        result['message'] = str(e)
+        return
+    before = source['text']
 
     start_offset = resolved.get('start_offset')
     end_offset = resolved.get('end_offset')
@@ -438,13 +451,17 @@ def _execute_ast(ctx, parsed_op, result):
         return
 
     try:
-        checked_write(file_abs, after)
+        written = commit_edit(source, after)
     except CompileBlocked as e:
         result['status'] = 'FAILED_COMPILE'
         result['message'] = (
             'Patch refused: result would not compile. Line %s: %s. '
             'File untouched.' % (e.lineno, e.msg)
         )
+        return
+    except OSError as e:
+        result['status'] = 'FAILED_IO'
+        result['message'] = 'Could not write file: %s. File untouched.' % e
         return
 
     try:
@@ -453,13 +470,7 @@ def _execute_ast(ctx, parsed_op, result):
         rel = resolved.get('file_ref') or file_ref
 
     target_root, _ = split_root_prefix(file_target)
-    touched = touched_file(
-        rel,
-        before,
-        after,
-        existed_before=True,
-        root=target_root or '',
-    )
+    touched = edit_change(rel, source, written, root=target_root or '')
     record_touched(ctx, result, touched)
 
     result['status'] = 'APPLIED'
@@ -519,12 +530,15 @@ def _execute_file_range(ctx, parsed_op, result):
         result['message'] = err
         return
 
+    from forge.core.file_safety import load_for_edit
+
     try:
-        before = read_text(abs_path)
+        source = load_for_edit(abs_path)
     except Exception as e:
         result['status'] = 'FAILED_IO'
         result['message'] = 'File not found or unreadable: %s: %s' % (type(e).__name__, e)
         return
+    before = source['text']
 
     start, end = _parse_lines(directives.get('LINES'))
     after, err = _replace_range(before, start, end, parsed_op.get('body') or '')
@@ -534,10 +548,10 @@ def _execute_file_range(ctx, parsed_op, result):
         result['message'] = err
         return
 
-    from forge.core.file_safety import checked_write, CompileBlocked
+    from forge.core.file_safety import CompileBlocked, commit_edit, edit_change
 
     try:
-        checked_write(abs_path, after)
+        written = commit_edit(source, after)
     except CompileBlocked as e:
         result['status'] = 'FAILED_COMPILE'
         result['message'] = (
@@ -551,10 +565,7 @@ def _execute_file_range(ctx, parsed_op, result):
         return
 
     rel_root, rel_path = split_root_prefix(rel)
-    touched = touched_file(
-        rel_path, before, after, existed_before=True,
-        root=rel_root or '',
-    )
+    touched = edit_change(rel_path, source, written, root=rel_root or '')
     record_touched(ctx, result, touched)
 
     result['status'] = 'APPLIED'
@@ -589,7 +600,15 @@ def _execute_block(ctx, parsed_op, result):
         result['message'] = 'File not found: ' + target
         return
 
-    before = read_text(abs_path)
+    from forge.core.file_safety import NotTextFile, load_for_edit
+
+    try:
+        source = load_for_edit(abs_path)
+    except NotTextFile as e:
+        result['status'] = 'FAILED_IO'
+        result['message'] = str(e)
+        return
+    before = source['text']
     count = before.count(old)
 
     if count == 0:
@@ -624,10 +643,10 @@ def _execute_block(ctx, parsed_op, result):
         after = old.join(parts[:occurrence]) + new + old.join(parts[occurrence:])
         replaced = 1
 
-    from forge.core.file_safety import checked_write, CompileBlocked
+    from forge.core.file_safety import CompileBlocked, commit_edit, edit_change
 
     try:
-        checked_write(abs_path, after)
+        written = commit_edit(source, after)
     except CompileBlocked as e:
         result['status'] = 'FAILED_COMPILE'
         result['message'] = (
@@ -635,11 +654,12 @@ def _execute_block(ctx, parsed_op, result):
             'File untouched.' % (e.lineno, e.msg)
         )
         return
+    except OSError as e:
+        result['status'] = 'FAILED_IO'
+        result['message'] = 'Could not write file: %s. File untouched.' % e
+        return
     target_root, target_rel = split_root_prefix(target)
-    touched = touched_file(
-        target_rel, before, after, existed_before=True,
-        root=target_root or '',
-    )
+    touched = edit_change(target_rel, source, written, root=target_root or '')
     record_touched(ctx, result, touched)
 
     result['status'] = 'APPLIED'

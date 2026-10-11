@@ -276,12 +276,16 @@ class MoveDirectories(TransferCase):
 
 class DeleteIsExact(TransferCase):
 
-    def test_delete_refuses_a_binary_file_rather_than_record_garbage(self):
-        self.put(self.project_root, 'art.png', b'\x89PNG\xff\x00')
+    def test_delete_records_a_binary_file_exactly_and_revert_restores_it(self):
+        original = b'\x89PNG\xff\x00'
+        self.put(self.project_root, 'art.png', original)
         run = self.run_bundle('DELETE art.png')
+        self.assertEqual(self.last(run)['status'], 'APPLIED')
+        self.assertFalse(self.exists(self.project_root, 'art.png'))
 
-        self.assertEqual(self.last(run)['status'], 'FAILED_NOT_TEXT')
-        self.assertTrue(self.exists(self.project_root, 'art.png'))
+        self.revert(run)
+        with open(os.path.join(self.project_root, 'art.png'), 'rb') as handle:
+            self.assertEqual(handle.read(), original)
 
     def test_delete_then_revert_restores_crlf_exactly(self):
         self.put(self.project_root, 'notes.txt', 'one\r\ntwo\r\n')

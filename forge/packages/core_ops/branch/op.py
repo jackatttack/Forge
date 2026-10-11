@@ -100,6 +100,19 @@ HINTS = {
     },
 }
 
+
+def effect(parsed_op):
+    """Execution effect for failure gating; see forge.core.operation_policy."""
+    from forge.core.operation_policy import subcommand_word
+
+    command = subcommand_word(parsed_op)
+    if command == 'list':
+        return 'read'
+    if command == 'restore':
+        return 'workspace'
+    return 'forge_state'
+
+
 def validate(parsed_op):
     args = ((parsed_op.get('directives') or {}).get('ARGS') or parsed_op.get('target') or '').strip()
     if not args:

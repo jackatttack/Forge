@@ -298,6 +298,15 @@ def _known_op_names():
         return set()
 
 
+def effect(parsed_op):
+    """Execution effect for failure gating; see forge.core.operation_policy."""
+    from forge.core.operation_policy import subcommand_word
+
+    if subcommand_word(parsed_op) in ('list', 'tags', 'show'):
+        return 'read'
+    return 'forge_state'
+
+
 def validate(parsed_op):
     directives = (parsed_op or {}).get('directives') or {}
     raw_args = str(directives.get('ARGS') or '').strip()

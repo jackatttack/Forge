@@ -709,6 +709,9 @@ def _globs(directives):
     ]
 
 
+EFFECT = 'read'
+
+
 def validate(parsed_op):
     errors = []
     target = (parsed_op.get('target') or '').strip()

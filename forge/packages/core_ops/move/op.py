@@ -73,8 +73,7 @@ HELP = {
         ),
         'DRY_RUN': 'With yes, plan and list the move without changing anything.',
         'CONFIRM': (
-            'With yes, allow a move that changes more than 200 files or '
-            'touches protected core paths.'
+            'With yes, allow a move that changes more than 200 files.'
         ),
     },
     'internal_directives': [],
@@ -118,7 +117,7 @@ HINTS = {
 
     'confirm: yes': {
         'message': 'This MOVE needs CONFIRM: yes.',
-        'why': 'Large moves and protected core paths are deliberate decisions.',
+        'why': 'Large moves are deliberate decisions.',
         'example': [
             'MOVE projects/big',
             'TO: icloud:projects/big',
@@ -154,6 +153,9 @@ HINTS = {
         'priority': 80,
     },
 }
+
+
+EFFECT = 'workspace'
 
 
 def validate(parsed_op):

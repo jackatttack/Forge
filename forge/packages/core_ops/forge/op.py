@@ -202,6 +202,9 @@ HINTS = {
 }
 
 
+EFFECT = 'read'
+
+
 def validate(parsed_op):
     return []
 

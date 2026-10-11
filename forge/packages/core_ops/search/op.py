@@ -787,6 +787,9 @@ def _execute_multi_pattern(result, root, abs_path, target, patterns, scope):
     }
 
 
+EFFECT = 'read'
+
+
 def validate(parsed_op):
     errors = []
     raw_target = (parsed_op.get('target') or '').strip()

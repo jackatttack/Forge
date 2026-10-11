@@ -58,8 +58,8 @@ A dry run plans and lists the copy without writing anything.
 
 ## Limits and confirmation
 
-A copy that would change more than 200 files needs CONFIRM: yes, as does a
-copy that changes protected core paths. Check big copies with DRY_RUN first.
+A copy that would change more than 200 files needs CONFIRM: yes. Check big
+copies with DRY_RUN first.
 
 ## Planning before writing
 

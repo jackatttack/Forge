@@ -130,6 +130,9 @@ HINTS = {
 }
 
 
+EFFECT = 'workspace'
+
+
 def validate(parsed_op):
     errors = []
 
@@ -213,13 +216,18 @@ def execute(ctx, parsed_op, result):
         )
         return
 
-    before = (
-        read_text(abs_path)
-        if existed_before
-        else ''
-    )
+    # Keep the exact original, text or binary, so REVERT can restore it.
+    from forge.core.file_safety import load_for_overwrite, new_file_source
 
-    if existed_before and before == body:
+    source = (
+        load_for_overwrite(ctx, abs_path)
+        if existed_before
+        else new_file_source(abs_path)
+    )
+    is_text = source['text'] is not None
+    before = source['original'].get('text', '') if is_text else ''
+
+    if existed_before and is_text and before == body:
         result['status'] = 'APPLIED'
         result['message'] = (
             'File already has requested content: '
@@ -261,17 +269,19 @@ def execute(ctx, parsed_op, result):
         )
     )
 
+    from forge.core.file_safety import commit_edit, edit_change
+
     try:
-        if allow_broken:
-            write_text(
-                abs_path,
-                body,
-            )
-        else:
-            checked_write(
-                abs_path,
-                body,
-            )
+        written = commit_edit(
+            source,
+            body,
+            compile_python=not allow_broken,
+        )
+
+    except OSError as e:
+        result['status'] = 'FAILED_IO'
+        result['message'] = 'Could not write file: %s. File untouched.' % e
+        return
 
     except CompileBlocked as e:
         result['status'] = 'FAILED_COMPILE'
@@ -288,11 +298,10 @@ def execute(ctx, parsed_op, result):
 
     root_name, relative = split_root_prefix(target)
 
-    touched = touched_file(
+    touched = edit_change(
         relative,
-        before,
-        body,
-        existed_before=existed_before,
+        source,
+        written,
         root=root_name or '',
     )
 

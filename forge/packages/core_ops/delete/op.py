@@ -166,6 +166,9 @@ def _has_old_block(parsed_op):
     return 'OLD' in (parsed_op.get('blocks') or {})
 
 
+EFFECT = 'workspace'
+
+
 def validate(parsed_op):
     errors = []
     target = (parsed_op.get('target') or '').strip()
@@ -248,24 +251,14 @@ def _execute_file_delete(ctx, target, result):
         result['message'] = 'Target exists but is not a file: ' + target
         return
 
-    # Read exactly: a lossy "before" would make REVERT restore garbage.
-    try:
-        before = read_text_exact(abs_path)
-    except UnicodeDecodeError:
-        result['status'] = 'FAILED_NOT_TEXT'
-        result['message'] = (
-            'Only UTF-8 text files can be deleted with recovery; not text: '
-            + target
-        )
-        return
+    # Keep the exact original, text or binary, so REVERT can restore it.
+    from forge.core.file_safety import deletion_change, load_for_overwrite
 
+    source = load_for_overwrite(ctx, abs_path)
     os.remove(abs_path)
 
     target_root, target_rel = split_root_prefix(target)
-    touched = touched_file(
-        target_rel, before, '', existed_before=True, existed_after=False,
-        root=target_root or '',
-    )
+    touched = deletion_change(target_rel, source, root=target_root or '')
     record_touched(ctx, result, touched)
 
     result['status'] = 'APPLIED'
@@ -287,7 +280,15 @@ def _execute_lines_delete(ctx, target, parsed_op, result):
         result['message'] = 'File not found: ' + target
         return
 
-    before = read_text(abs_path)
+    from forge.core.file_safety import NotTextFile, load_for_edit
+
+    try:
+        source = load_for_edit(abs_path)
+    except NotTextFile as e:
+        result['status'] = 'FAILED_IO'
+        result['message'] = str(e)
+        return
+    before = source['text']
     start, end = _parse_lines((parsed_op.get('directives') or {}).get('LINES'))
     after, err = _replace_range_with_empty(before, start, end)
     if err:
@@ -296,10 +297,10 @@ def _execute_lines_delete(ctx, target, parsed_op, result):
         result['message'] = err
         return
 
-    from forge.core.file_safety import checked_write, CompileBlocked
+    from forge.core.file_safety import CompileBlocked, commit_edit, edit_change
 
     try:
-        checked_write(abs_path, after)
+        written = commit_edit(source, after)
     except CompileBlocked as e:
         result['status'] = 'FAILED_COMPILE'
         result['message'] = (
@@ -307,8 +308,13 @@ def _execute_lines_delete(ctx, target, parsed_op, result):
             'File untouched.' % (e.lineno, e.msg)
         )
         return
+    except OSError as e:
+        result['status'] = 'FAILED_IO'
+        result['message'] = 'Could not write file: %s. File untouched.' % e
+        return
 
-    touched = touched_file(target, before, after, existed_before=True)
+    target_root, target_rel = split_root_prefix(target)
+    touched = edit_change(target_rel, source, written, root=target_root or '')
     record_touched(ctx, result, touched)
 
     result['status'] = 'APPLIED'
@@ -334,7 +340,15 @@ def _execute_block_delete(ctx, target, parsed_op, result):
     blocks = parsed_op.get('blocks') or {}
     old = blocks.get('OLD')
 
-    before = read_text(abs_path)
+    from forge.core.file_safety import NotTextFile, load_for_edit
+
+    try:
+        source = load_for_edit(abs_path)
+    except NotTextFile as e:
+        result['status'] = 'FAILED_IO'
+        result['message'] = str(e)
+        return
+    before = source['text']
     count = before.count(old)
 
     if count == 0:
@@ -366,10 +380,10 @@ def _execute_block_delete(ctx, target, parsed_op, result):
         after = old.join(parts[:occurrence]) + old.join(parts[occurrence:])
         deleted = 1
 
-    from forge.core.file_safety import checked_write, CompileBlocked
+    from forge.core.file_safety import CompileBlocked, commit_edit, edit_change
 
     try:
-        checked_write(abs_path, after)
+        written = commit_edit(source, after)
     except CompileBlocked as e:
         result['status'] = 'FAILED_COMPILE'
         result['message'] = (
@@ -377,12 +391,13 @@ def _execute_block_delete(ctx, target, parsed_op, result):
             'File untouched.' % (e.lineno, e.msg)
         )
         return
+    except OSError as e:
+        result['status'] = 'FAILED_IO'
+        result['message'] = 'Could not write file: %s. File untouched.' % e
+        return
 
     target_root, target_rel = split_root_prefix(target)
-    touched = touched_file(
-        target_rel, before, after, existed_before=True,
-        root=target_root or '',
-    )
+    touched = edit_change(target_rel, source, written, root=target_root or '')
     record_touched(ctx, result, touched)
 
     result['status'] = 'APPLIED'

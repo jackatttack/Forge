@@ -12,8 +12,7 @@ run['errors'] so the runner can classify the whole run as FAILED.
 import time
 import traceback
 
-from forge.core.core_guard import check as core_guard_check
-from forge.core.core_guard import is_mutating_op
+from forge.core.operation_policy import resolve_policy
 from forge.core.events import emit_event
 from forge.core.models import make_result
 from forge.core.registry import get_op
@@ -188,64 +187,31 @@ def execute_ops(
     stop_reason = ''
     total_ops = len(parsed_ops)
 
-    def parsed_is_mutating(parsed_op):
-        return is_mutating_op((parsed_op or {}).get('op'))
+    def policy_for(parsed_op):
+        """Resolve this op's declared effect; see forge.core.operation_policy."""
+        return resolve_policy(get_op((parsed_op or {}).get('op')), parsed_op)
 
-    # Ops whose own failure does not stop later mutating ops.
-    continue_after_own_failure = ('RUN',)
+    def parsed_is_mutating(parsed_op):
+        # 'mutating' survives as the progress-event field name. It now means
+        # any effect other than read, including undeclared extensions.
+        return not policy_for(parsed_op)['runs_after_failure']
 
     def failure_blocks(parsed_op):
         """
-        Return True when this op's failure should stop later mutating ops.
+        Return True when this op's failure should stop later effectful ops.
 
-        A failed RUN is an observation, not a half-applied edit: its exit
-        status and output are already in the packet, so later edits and
-        test runs still execute. A failed edit op (WRITE, REPLACE, ...)
-        still stops every mutating op after it, including RUN.
+        STOP_ON_FAIL and assertion directives always gate. Otherwise the
+        op's declared policy decides: read ops never block, and RUN
+        declares that its own non-zero exit is an observation reported in
+        the packet rather than a broken step.
         """
-        op = ((parsed_op or {}).get('op') or '').upper()
         if requests_stop_on_failure(parsed_op):
             return True
-        return parsed_is_mutating(parsed_op) and op not in continue_after_own_failure
+        return policy_for(parsed_op)['own_failure_blocks']
 
     def parsed_can_continue_after_failure(parsed_op):
-        """
-        Return True for diagnostic ops that should still run after failure.
-
-        RUN is deliberately absent. It compiles and executes arbitrary
-        project Python, so it can do anything a mutating op can do, and
-        core_guard already classifies it as mutating. Letting it proceed
-        after an earlier mutating failure would defeat the stop.
-
-        This name list is a known design wart: portable Forge should not
-        need to know which operations are diagnostic, let alone the
-        subcommands of a host extension such as GIT. The intended
-        replacement is per-op policy declared in the operation contract.
-        """
-        op = str((parsed_op or {}).get('op') or '').strip().upper()
-        target = str((parsed_op or {}).get('target') or '').strip()
-        command = target.split()[0].lower() if target else ''
-
-        if op in (
-            'FORGE',
-            'READ',
-            'MAP',
-            'SEARCH',
-            'DIFF',
-        ):
-            return True
-
-        if op == 'GIT' and command in (
-            'status',
-            'branches',
-            'commits',
-            'files',
-            'file',
-            'diff',
-        ):
-            return True
-
-        return False
+        """Return True for read-only ops, which still run after a failure."""
+        return policy_for(parsed_op)['runs_after_failure']
 
     def result_failed(result):
         status = str((result or {}).get('status') or '').strip().upper()
@@ -316,34 +282,6 @@ def execute_ops(
                 total=total_ops,
                 started_at=started_at,
             )
-            ctx['last'] = result
-            continue
-
-        try:
-            ok, msg = core_guard_check(parsed_op)
-        except Exception as e:
-            ok = False
-            msg = (
-                'Core guard raised: %s: %s\n'
-                'WHY: mutating ops are blocked when the guard cannot answer.'
-            ) % (type(e).__name__, e)
-
-        if not ok:
-            result['status'] = 'FAILED_CORE_GUARD'
-            result['message'] = msg
-            _finish_result(
-                run,
-                results,
-                mod,
-                result,
-                on_event=on_event,
-                index=index,
-                total=total_ops,
-                started_at=started_at,
-            )
-            if failure_blocks(parsed_op):
-                stop_mutating = True
-                stop_reason = '%s on %s' % (op_name, target or '?')
             ctx['last'] = result
             continue
 

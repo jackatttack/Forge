@@ -212,3 +212,148 @@ def record_touched(ctx, result, touched):
     run = (ctx or {}).get('run')
     if run is not None:
         run.setdefault('touched_files', []).append(touched)
+
+
+# --- exact text edits ---------------------------------------------------------
+#
+# Text-editing operations load a file with load_for_edit, transform the text
+# view, then commit_edit and record edit_change. The original bytes are kept
+# exactly, so REVERT restores them; untouched line endings and any BOM are
+# written back as they were; the write is staged and atomically installed
+# after checking the file has not changed since it was loaded.
+
+class NotTextFile(ValueError):
+    """Raised when a text edit targets a file that is not valid UTF-8."""
+
+    def __init__(self, path):
+        super().__init__(
+            'Not valid UTF-8 text, so it cannot be edited as text: %s. '
+            'Nothing was changed. WRITE with CONFIRM: overwrite can replace '
+            'the whole file.' % path
+        )
+
+
+def load_for_edit(path):
+    """Load a text file for editing, keeping what is needed to write it back.
+
+    Returns a dict:
+        path, existed  the file and whether it existed (always True here)
+        text           the editing view
+        newline        '\\r\\n' when the view must be converted back on commit
+        original       exact content description of the bytes on disk
+
+    When every line break in the file is CRLF, the view uses LF so bundle
+    text (always LF) matches, and commit_edit converts back. Files with LF
+    or mixed line endings are edited exactly as stored, because converting
+    a mixed file would change lines the edit never touched. A BOM stays in
+    the view as U+FEFF and is written back unchanged.
+    """
+    from forge.core.file_content import text_content
+
+    with open(path, 'rb') as handle:
+        data = handle.read()
+    try:
+        exact = data.decode('utf-8')
+    except UnicodeDecodeError:
+        raise NotTextFile(path)
+
+    crlf_count = data.count(b'\r\n')
+    all_crlf = crlf_count > 0 and crlf_count == data.count(b'\n')
+    return {
+        'path': path,
+        'existed': True,
+        'text': exact.replace('\r\n', '\n') if all_crlf else exact,
+        'newline': '\r\n' if all_crlf else '\n',
+        'original': text_content(exact),
+    }
+
+
+def load_for_overwrite(ctx, path):
+    """Load any existing file that WRITE may replace in full.
+
+    Text files are described exactly as text. Anything else is kept as a
+    byte snapshot in the run's content store, so REVERT can restore it.
+    WRITE replaces the whole file, so no line-ending conversion applies.
+    """
+    try:
+        source = load_for_edit(path)
+    except NotTextFile:
+        from forge.core.content_records import run_content_store
+        from forge.core.file_content import ContentStore
+
+        run = (ctx or {}).get('run')
+        store = run_content_store(run) if run is not None else ContentStore()
+        source = {
+            'path': path,
+            'existed': True,
+            'text': None,
+            'original': store.capture(path),
+        }
+    source['newline'] = '\n'
+    return source
+
+
+def new_file_source(path):
+    """Describe a file that does not exist yet, for commit_edit."""
+    from forge.core.file_content import text_content
+
+    return {
+        'path': path,
+        'existed': False,
+        'text': '',
+        'newline': '\n',
+        'original': text_content(''),
+    }
+
+
+def commit_edit(source, text, compile_python=True):
+    """Write the edited view back exactly and return its content description.
+
+    Raises CompileBlocked before touching disk when a .py result would not
+    compile, and OSError when the file changed since it was loaded or the
+    staged write fails. In every failure case the file is left as it was.
+    """
+    from forge.core.file_content import atomic_install, matches_file, text_content
+
+    path = source['path']
+    text = text or ''
+    if source.get('newline') == '\r\n':
+        text = text.replace('\r\n', '\n').replace('\n', '\r\n')
+
+    if compile_python and str(path).endswith('.py'):
+        try:
+            compile(text, str(path), 'exec')
+        except SyntaxError as e:
+            raise CompileBlocked(str(path), e.lineno, e.msg)
+
+    def still_as_loaded():
+        if source['existed']:
+            if not matches_file(path, source['original']):
+                raise OSError('File changed while it was being edited: ' + path)
+        elif os.path.lexists(path):
+            raise OSError('File appeared while it was being created: ' + path)
+
+    content = text_content(text)
+    atomic_install(path, content, before_replace=still_as_loaded)
+    return content
+
+
+def edit_change(relative, source, written, root=''):
+    """Record a committed edit with its exact original and final content."""
+    from forge.core.content_records import content_change
+
+    return content_change(
+        relative, source['original'], written,
+        existed_before=source['existed'], existed_after=True, root=root,
+    )
+
+
+def deletion_change(relative, source, root=''):
+    """Record a deleted file with its exact original content."""
+    from forge.core.content_records import content_change
+    from forge.core.file_content import text_content
+
+    return content_change(
+        relative, source['original'], text_content(''),
+        existed_before=True, existed_after=False, root=root,
+    )

@@ -45,9 +45,8 @@ files the source lacks.
 
 ## Limits and confirmation
 
-A move that would change more than 200 files needs CONFIRM: yes, as does a
-move that changes protected core paths. A move counts both the destination
-writes and the source removals.
+A move that would change more than 200 files needs CONFIRM: yes. A move
+counts both the destination writes and the source removals.
 
 ## Recovery
 
