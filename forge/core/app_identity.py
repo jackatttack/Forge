@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Which app is running Forge: pythonista, pythonide or unknown.
+Which app is running Forge: pythonista, pythonide, juno or unknown.
 
 Identity only, read from sys.executable; no paths and no configuration.
 Used to print App: in the packet and to check an optional ENV: header
@@ -15,10 +15,12 @@ KNOWN_APPS = ('pythonista', 'pythonide', 'juno')
 
 
 def detect_app():
-    """Return 'pythonista', 'pythonide' or 'unknown'."""
+    """Return 'pythonista', 'pythonide', 'juno' or 'unknown'."""
     executable = str(sys.executable or '')
     if 'Python IDE' in executable:
         return 'pythonide'
     if 'Pythonista' in executable:
         return 'pythonista'
+    if 'Juno.app' in executable:
+        return 'juno'
     return 'unknown'

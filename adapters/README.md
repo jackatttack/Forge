@@ -19,9 +19,11 @@ An adapter may provide:
 
 The portable runtime remains unchanged.
 
-Current adapter:
+Current adapters:
 
-    pythonista/
+    pythonista/   Pythonista: forge_entry.py launcher and console UI
+    pythonide/    PythonIDE: forge-entry.py and a Rich live dashboard
+    juno/         Juno: forge_entry.py and a ctypes clipboard
 
 Future environments can be added as siblings rather than branching or
 special-casing the Forge core.

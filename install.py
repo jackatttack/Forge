@@ -75,6 +75,26 @@ PYTHONIDE_ADAPTER_FILES = (
     ),
 )
 
+JUNO_LAUNCHER_MARKER = 'portable-forge-juno-launcher-v1'
+JUNO_LAUNCHER_NAME = 'forge_entry.py'
+
+JUNO_CLIPBOARD_MARKER = 'portable-forge-juno-clipboard-v1'
+JUNO_CLIPBOARD_NAME = 'juno_clipboard.py'
+
+JUNO_ADAPTER_FILES = (
+    (
+        JUNO_LAUNCHER_NAME,
+        JUNO_LAUNCHER_MARKER,
+    ),
+    (
+        JUNO_CLIPBOARD_NAME,
+        JUNO_CLIPBOARD_MARKER,
+    ),
+)
+
+# Juno imports packages from Documents/site-packages.
+JUNO_SITE_PACKAGES_NAME = 'site-packages'
+
 
 def absolute(path):
     return os.path.abspath(
@@ -405,64 +425,55 @@ def open_pythonista_launcher(path):
             ),
         )
 
-def pythonide_adapter_source(
-    source_root,
-    filename,
-):
+
+def adapter_source(source_root, adapter, filename):
+    """Path of one adapter file in the repository: adapters/<adapter>/<file>."""
     return os.path.join(
-        absolute(
-            source_root
-        ),
+        absolute(source_root),
         'adapters',
-        'pythonide',
+        adapter,
         filename,
     )
 
 
-def pythonide_adapter_preflight(
+def adapter_files_preflight(
     source_root,
-    workspace,
+    adapter,
+    files,
+    destination_root,
+    label,
     force=False,
 ):
-    workspace = absolute(
-        workspace
-    )
+    """
+    Plan copying one adapter's marked files into destination_root.
 
+    files is a sequence of (filename, marker). Before anything is written,
+    refuses a destination that is not a file, an unmarked file of the same
+    name, or a different marked file without force. label names the app in
+    messages, for example 'PythonIDE'. Returns one plan dict per file.
+    """
+    destination_root = absolute(destination_root)
     plans = []
 
-    for filename, marker in PYTHONIDE_ADAPTER_FILES:
-        source = pythonide_adapter_source(
-            source_root,
-            filename,
-        )
+    for filename, marker in files:
+        source = adapter_source(source_root, adapter, filename)
 
-        if not os.path.isfile(
-            source
-        ):
+        if not os.path.isfile(source):
             raise RuntimeError(
-                'PythonIDE adapter source was not found: '
-                + source
+                '%s adapter source was not found: %s' % (label, source)
             )
 
-        source_text = _read_text(
-            source
-        )
+        source_text = _read_text(source)
 
         if marker not in source_text:
             raise RuntimeError(
-                'PythonIDE adapter source is missing its '
-                'Portable Forge marker: '
-                + filename
+                '%s adapter source is missing its Portable Forge marker: %s'
+                % (label, filename)
             )
 
-        destination = os.path.join(
-            workspace,
-            filename,
-        )
+        destination = os.path.join(destination_root, filename)
 
-        if not os.path.exists(
-            destination
-        ):
+        if not os.path.exists(destination):
             plans.append({
                 'source': source,
                 'destination': destination,
@@ -471,18 +482,13 @@ def pythonide_adapter_preflight(
             })
             continue
 
-        if not os.path.isfile(
-            destination
-        ):
+        if not os.path.isfile(destination):
             raise RuntimeError(
                 'Portable Forge refuses to replace an existing '
-                'non-file PythonIDE adapter path:\n'
-                + destination
+                'non-file %s adapter path:\n%s' % (label, destination)
             )
 
-        destination_text = _read_text(
-            destination
-        )
+        destination_text = _read_text(destination)
 
         if destination_text == source_text:
             plans.append({
@@ -496,18 +502,18 @@ def pythonide_adapter_preflight(
         if marker not in destination_text:
             raise RuntimeError(
                 'Portable Forge refuses to overwrite an unrecognised '
-                'PythonIDE adapter file:\n%s\n'
-                'No PythonIDE adapter files were changed.'
-                % destination
+                '%s adapter file:\n%s\n'
+                'No %s adapter files were changed.'
+                % (label, destination, label)
             )
 
         if not force:
             raise RuntimeError(
-                'A different Portable Forge PythonIDE adapter already '
+                'A different Portable Forge %s adapter already '
                 'exists:\n%s\n'
                 'Use --force only when deliberately updating this '
                 'marked Portable Forge adapter.'
-                % destination
+                % (label, destination)
             )
 
         plans.append({
@@ -520,64 +526,96 @@ def pythonide_adapter_preflight(
     return plans
 
 
+def install_adapter_files(plans, destination_root):
+    """Copy planned adapter files, each atomically; return every destination."""
+    os.makedirs(absolute(destination_root), exist_ok=True)
+    installed = []
+
+    for plan in plans:
+        destination = plan['destination']
+
+        if plan['write']:
+            temporary = destination + '.portable-forge-new'
+            try:
+                shutil.copyfile(plan['source'], temporary)
+                os.replace(temporary, destination)
+            finally:
+                if os.path.exists(temporary):
+                    os.remove(temporary)
+
+        installed.append(destination)
+
+    return installed
+
+
+def pythonide_adapter_source(
+    source_root,
+    filename,
+):
+    return adapter_source(source_root, 'pythonide', filename)
+
+
+def pythonide_adapter_preflight(
+    source_root,
+    workspace,
+    force=False,
+):
+    return adapter_files_preflight(
+        source_root,
+        'pythonide',
+        PYTHONIDE_ADAPTER_FILES,
+        workspace,
+        'PythonIDE',
+        force=force,
+    )
+
+
 def install_pythonide_adapter(
     source_root,
     workspace,
     force=False,
 ):
-    workspace = absolute(
-        workspace
-    )
-
     plans = pythonide_adapter_preflight(
         source_root,
         workspace,
         force=force,
     )
+    return install_adapter_files(plans, workspace)
 
-    os.makedirs(
-        workspace,
-        exist_ok=True,
+
+def juno_adapter_preflight(
+    source_root,
+    documents,
+    force=False,
+):
+    return adapter_files_preflight(
+        source_root,
+        'juno',
+        JUNO_ADAPTER_FILES,
+        documents,
+        'Juno',
+        force=force,
     )
 
-    installed = []
 
-    for plan in plans:
-        destination = plan[
-            'destination'
-        ]
+def install_juno_adapter(
+    source_root,
+    documents,
+    force=False,
+):
+    """Copy forge_entry.py and juno_clipboard.py into Juno's Documents."""
+    plans = juno_adapter_preflight(
+        source_root,
+        documents,
+        force=force,
+    )
+    installed = install_adapter_files(plans, documents)
 
-        if plan[
-            'write'
-        ]:
-            temporary = (
-                destination
-                + '.portable-forge-new'
-            )
-
-            try:
-                shutil.copyfile(
-                    plan['source'],
-                    temporary,
-                )
-
-                os.replace(
-                    temporary,
-                    destination,
-                )
-
-            finally:
-                if os.path.exists(
-                    temporary
-                ):
-                    os.remove(
-                        temporary
-                    )
-
-        installed.append(
-            destination
-        )
-
+    # ops/ exists so FORGE config does not warn about a missing ops root.
+    os.makedirs(
+        os.path.join(absolute(documents), '.forge', 'ops'),
+        exist_ok=True,
+    )
     return installed
 
 
@@ -1299,6 +1337,15 @@ def parser():
     )
 
     result.add_argument(
+        '--juno-documents',
+        help=(
+            'Install for Juno: the runtime into DOCUMENTS/site-packages, '
+            'Forge home into DOCUMENTS/.forge, and the Juno adapter '
+            '(forge_entry.py, juno_clipboard.py) into DOCUMENTS.'
+        ),
+    )
+
+    result.add_argument(
         '--force',
         action='store_true',
         help=(
@@ -1316,29 +1363,57 @@ def main(argv=None):
     )
 
     pythonide_workspace = (
-        absolute(
-            args.pythonide_workspace
-        )
+        absolute(args.pythonide_workspace)
         if args.pythonide_workspace
         else None
     )
 
-    if pythonide_workspace:
+    juno_documents = (
+        absolute(args.juno_documents)
+        if args.juno_documents
+        else None
+    )
+
+    if pythonide_workspace and juno_documents:
+        raise RuntimeError(
+            '--pythonide-workspace cannot be combined with '
+            '--juno-documents.'
+        )
+
+    # An explicit app installation chooses its own target and Forge home.
+    explicit_option = (
+        '--pythonide-workspace' if pythonide_workspace
+        else '--juno-documents' if juno_documents
+        else None
+    )
+
+    if explicit_option:
         if args.target:
             raise RuntimeError(
                 '--target cannot be combined with '
-                '--pythonide-workspace.'
+                + explicit_option + '.'
             )
 
         if args.home:
             raise RuntimeError(
                 '--home cannot be combined with '
-                '--pythonide-workspace.'
+                + explicit_option + '.'
             )
 
+    if pythonide_workspace:
         target = pythonide_workspace
         forge_home = os.path.join(
             pythonide_workspace,
+            '.forge',
+        )
+
+    elif juno_documents:
+        target = os.path.join(
+            juno_documents,
+            JUNO_SITE_PACKAGES_NAME,
+        )
+        forge_home = os.path.join(
+            juno_documents,
             '.forge',
         )
 
@@ -1381,16 +1456,17 @@ def main(argv=None):
                 )
             )
 
-        # An explicit PythonIDE installation takes precedence over host
-        # autodetection. This avoids Pythonista-like compatibility modules in
-        # another host accidentally selecting the Pythonista launcher path.
+        # An explicit PythonIDE or Juno installation takes precedence over
+        # host autodetection. This avoids Pythonista-like compatibility
+        # modules in another host accidentally selecting the Pythonista
+        # launcher path.
         pythonista = (
             not pythonide_workspace
+            and not juno_documents
             and is_pythonista()
         )
 
         launcher_plan = None
-        pythonide_plan = None
 
         if pythonista:
             launcher_plan = pythonista_launcher_preflight(
@@ -1399,9 +1475,16 @@ def main(argv=None):
             )
 
         if pythonide_workspace:
-            pythonide_plan = pythonide_adapter_preflight(
+            pythonide_adapter_preflight(
                 source_root,
                 pythonide_workspace,
+                force=args.force,
+            )
+
+        if juno_documents:
+            juno_adapter_preflight(
+                source_root,
+                juno_documents,
                 force=args.force,
             )
 
@@ -1419,6 +1502,7 @@ def main(argv=None):
         launcher_open_error = ''
         launcher_should_open = False
         pythonide_files = []
+        juno_files = []
 
         if pythonista:
             launcher = install_pythonista_launcher(
@@ -1462,6 +1546,13 @@ def main(argv=None):
                 force=args.force,
             )
 
+        if juno_documents:
+            juno_files = install_juno_adapter(
+                source_root,
+                juno_documents,
+                force=args.force,
+            )
+
         print('')
         print(
             'Portable Forge installed.'
@@ -1494,6 +1585,26 @@ def main(argv=None):
                 os.path.join(
                     pythonide_workspace,
                     PYTHONIDE_LIVE_UI_NAME,
+                ),
+            )
+
+        if juno_files:
+            print(
+                'Juno Documents:',
+                juno_documents,
+            )
+            print(
+                'Juno launcher:',
+                os.path.join(
+                    juno_documents,
+                    JUNO_LAUNCHER_NAME,
+                ),
+            )
+            print(
+                'Juno clipboard:',
+                os.path.join(
+                    juno_documents,
+                    JUNO_CLIPBOARD_NAME,
                 ),
             )
 
@@ -1536,6 +1647,13 @@ def main(argv=None):
             print(
                 'Next: put a Forge bundle on the clipboard and run '
                 + PYTHONIDE_LAUNCHER_NAME
+            )
+
+        elif juno_files:
+            print(
+                'Next: restart the Juno kernel, put a Forge bundle on the '
+                'clipboard and run '
+                + JUNO_LAUNCHER_NAME
             )
 
         elif launcher:

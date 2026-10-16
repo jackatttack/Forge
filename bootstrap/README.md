@@ -49,3 +49,17 @@ installer logic.
 
 For the cleanest development setup, remove any existing PyPI-installed Portable
 Forge runtime before using this bootstrap.
+
+## Juno
+
+The bootstrap is:
+
+    juno.py
+
+It runs install.py with --juno-documents, pointing at Juno's Documents
+folder (found from wherever the notebook runs). That installs the runtime
+into Documents/site-packages, Forge home into Documents/.forge, and the Juno
+adapter (forge_entry.py and juno_clipboard.py) into Documents. It tracks
+jackatttack/Forge main, like the PythonIDE bootstrap.
+
+Restart the Juno kernel after installing or updating.
