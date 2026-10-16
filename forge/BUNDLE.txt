@@ -30,6 +30,26 @@ submission to be refused. Nothing runs.
 Fences written inside BEGIN_/END_ blocks remain literal body content.
 
 
+OPTIONAL ENV HEADER
+-------------------
+
+The first non-blank line may name the app the bundle is meant for:
+
+    ENV: pythonide
+    MAP projects
+    DEPTH: 2
+
+Known apps are pythonista, pythonide and juno. The key and value ignore
+case and whitespace, so `env : Python IDE` also works. The header may sit
+above a Markdown fence or as the first line inside it.
+
+The header is for routing, for example by an iOS Shortcut that reads the
+clipboard's first line. Forge removes it before parsing. It never stops a
+bundle: if it names another app or an unknown one, the bundle still runs
+and the packet shows a Warning: line. Every packet shows App: with the app
+that actually ran it. Without a header, nothing changes.
+
+
 SHAPE
 -----
 

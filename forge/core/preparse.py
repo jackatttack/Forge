@@ -13,11 +13,15 @@ Current policy:
 - only a one-line submitted bundle can expand as an alias
 - real op names always win
 - aliases are loaded from the resolved <forge_home>/aliases.json
+- an optional ENV: <app> first line names the app a bundle is meant for;
+  it is removed before parsing and can only ever add a warning
 """
 
 import json
 import os
 import re
+
+from forge.core import app_identity
 
 
 _ALLOWED_FENCE_LABELS = set([
@@ -26,6 +30,53 @@ _ALLOWED_FENCE_LABELS = set([
     'text',
     'plaintext',
 ])
+
+
+# An optional first line naming the app a bundle is meant for, for example
+# "ENV: pythonide". Key and value are case-insensitive and whitespace is
+# ignored, so "env : Python IDE" also matches.
+_ENV_HEADER = re.compile(r'^\s*env\s*:\s*(\S.*?)\s*$', re.IGNORECASE)
+
+
+def take_env_header(bundle_text):
+    """
+    Return (text_without_header, app_name) for an optional ENV: header.
+
+    Only the first non-blank line can be the header. Without one, the text
+    comes back unchanged with app_name None.
+    """
+    text = str(bundle_text or '')
+    lines = text.splitlines()
+
+    for index, line in enumerate(lines):
+        if not line.strip():
+            continue
+        match = _ENV_HEADER.match(line)
+        if match is None:
+            return bundle_text, None
+        app_name = re.sub(r'\s+', '', match.group(1)).lower()
+        remaining = lines[:index] + lines[index + 1:]
+        return '\n'.join(remaining), app_name
+
+    return bundle_text, None
+
+
+def env_warning(bundle_app, running_app):
+    """Return a warning for an ENV: header that does not fit, else ''.
+
+    A mismatch only warns: the bundle still runs.
+    """
+    if bundle_app not in app_identity.KNOWN_APPS:
+        return (
+            'ENV: %s is not a known app (%s); Forge ran the bundle anyway.'
+            % (bundle_app, ', '.join(app_identity.KNOWN_APPS))
+        )
+    if running_app != 'unknown' and bundle_app != running_app:
+        return (
+            'Bundle is marked ENV: %s but ran in %s.'
+            % (bundle_app, running_app)
+        )
+    return ''
 
 
 def unwrap_fenced_bundle(bundle_text):
@@ -233,14 +284,20 @@ def expand_bundle(
 ):
     """Return (expanded_text, report).
 
-    report is a small dict suitable for adding to the run object. Empty report
-    means no expansion happened.
+    report is a small dict suitable for adding to the run object. It always
+    names the running app (app); other keys appear only when something
+    happened: an ENV: header (bundle_env, env_warning), an unwrapped fence,
+    or an alias expansion.
     """
-    working_text = bundle_text
-    report = {}
+    report = {
+        'app': app_identity.detect_app(),
+    }
+
+    # The header may sit above a fence or as the first line inside it.
+    working_text, bundle_app = take_env_header(bundle_text)
 
     fenced = unwrap_fenced_bundle(
-        bundle_text
+        working_text
     )
 
     if fenced is not None:
@@ -251,6 +308,14 @@ def expand_bundle(
             label
             or 'plain'
         )
+        if bundle_app is None:
+            working_text, bundle_app = take_env_header(working_text)
+
+    if bundle_app is not None:
+        report['bundle_env'] = bundle_app
+        warning = env_warning(bundle_app, report['app'])
+        if warning:
+            report['env_warning'] = warning
 
     expanded = try_expand_alias(
         working_text,

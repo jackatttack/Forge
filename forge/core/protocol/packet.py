@@ -204,7 +204,14 @@ def format_packet(run):
         lines.append('Run: ' + str(run.get('stamp')))
 
     lines.append('Mode: ' + str(run.get('mode') or 'dev'))
+
+    if run.get('app'):
+        lines.append('App: ' + str(run.get('app')))
+
     lines.append('Status: ' + str(run.get('status') or 'UNKNOWN'))
+
+    if run.get('env_warning'):
+        lines.append('Warning: ' + str(run.get('env_warning')))
 
     errors = run.get('errors') or []
 
