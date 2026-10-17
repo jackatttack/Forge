@@ -28,6 +28,9 @@ substitute for full-file replacement.
 - `CONFIRM: overwrite` permits replacement of a different existing file.
 - `ALLOW_BROKEN: yes` bypasses Python compilation for a deliberately invalid
   fixture.
+- `FINAL_NEWLINE: yes` ends the file with exactly one newline. Bundle bodies
+  drop trailing blank lines, so without it a written file never ends with a
+  newline. EXPORT sets it for source files that end with one.
 
 For example, a parser test may intentionally need invalid Python:
 

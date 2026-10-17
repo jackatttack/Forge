@@ -31,6 +31,7 @@ SPEC = {
         'CONFIRM',
         'ALLOW_BROKEN',
         'IF_VERSION',
+        'FINAL_NEWLINE',
     ]),
     'required_directives': set(),
 }
@@ -41,7 +42,8 @@ HELP = {
     'brief': (
         'Replacing different content needs CONFIRM: overwrite (the literal '
         'word) · IF_VERSION: missing means create only · Python must compile '
-        'unless ALLOW_BROKEN: yes.'
+        'unless ALLOW_BROKEN: yes · FINAL_NEWLINE: yes ends the file with '
+        'a newline.'
     ),
     'minimal_example': [
         'WRITE scratch/example.txt',
@@ -67,6 +69,10 @@ HELP = {
         'CONFIRM': (
             'Use the exact value overwrite to replace a different '
             'existing file in full.'
+        ),
+        'FINAL_NEWLINE': (
+            'With yes, end the file with one newline. Bundle bodies drop '
+            'trailing blank lines, so this is the only way to write one.'
         ),
     },
     'common_failures': [
@@ -149,6 +155,18 @@ def validate(parsed_op):
             'WRITE requires body content'
         )
 
+    final_newline = str(
+        (parsed_op.get('directives') or {}).get('FINAL_NEWLINE')
+        or ''
+    ).strip().lower()
+
+    if final_newline and final_newline not in (
+        'yes', 'no', 'true', 'false', '1', '0',
+    ):
+        errors.append(
+            'FINAL_NEWLINE must be yes or no'
+        )
+
     return errors
 
 
@@ -191,6 +209,13 @@ def execute(ctx, parsed_op, result):
         parsed_op.get('directives')
         or {}
     )
+
+    # The parser strips trailing blank lines from every body, so a body can
+    # never end with a newline. FINAL_NEWLINE: yes adds exactly one, before
+    # the unchanged check and compilation, so EXPORT can copy a file that
+    # ends with a newline byte for byte.
+    if _truthy(directives.get('FINAL_NEWLINE')):
+        body += '\n'
 
     root, abs_path, err = safe_target(
         ctx,

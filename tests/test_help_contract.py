@@ -872,6 +872,11 @@ class ForgeHelpRendering(ForgeCase):
             'CONFIRM',
             directives,
         )
+
+        self.assertIn(
+            'FINAL_NEWLINE',
+            directives,
+        )
     def test_copy_and_run_contracts(self):
         copy_contract = self.help_preview(
             'FORGE help COPY contract'
