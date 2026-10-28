@@ -225,7 +225,10 @@ def _install(project_root, entry):
             if exists:
                 os.chmod(staged, stat.S_IMODE(identity[2]))
             _recheck(project_root, entry)
+            from forge.core import host_hooks
+            host_hooks.before_write(path)
             os.replace(staged, path)
+            host_hooks.after_write(path)
         finally:
             if os.path.exists(staged):
                 os.remove(staged)

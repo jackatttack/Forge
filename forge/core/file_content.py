@@ -159,7 +159,10 @@ def atomic_install(path, content, before_replace=None):
             os.chmod(staged, stat.S_IMODE(information.st_mode))
         if before_replace is not None:
             before_replace()
+        from forge.core import host_hooks
+        host_hooks.before_write(path)
         os.replace(staged, path)
+        host_hooks.after_write(path)
     finally:
         if os.path.exists(staged):
             os.remove(staged)

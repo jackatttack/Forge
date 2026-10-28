@@ -143,11 +143,15 @@ def read_text(path):
 
 
 def write_text(path, text):
+    from forge.core import host_hooks
+
     parent = os.path.dirname(path)
     if parent and not os.path.isdir(parent):
         os.makedirs(parent)
+    host_hooks.before_write(path)
     with open(path, 'w', encoding='utf-8') as f:
         f.write(text or '')
+    host_hooks.after_write(path)
 
 def read_text_exact(path):
     """

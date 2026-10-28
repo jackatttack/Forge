@@ -67,6 +67,21 @@ def progress_renderer():
         return None
 
 
+def editor_tab_sync():
+    """
+    Keep open Pythonista editor tabs in step with files Forge writes.
+
+    Registers forge.adapters.pythonista.editor_tabs with core's host hooks.
+    Never required for Forge correctness: if it cannot load, Forge writes
+    files exactly as before.
+    """
+    try:
+        from forge.adapters.pythonista.editor_tabs import register_with_forge
+        register_with_forge()
+    except Exception:
+        pass
+
+
 
 def main():
     bundle = get_bundle_text()
@@ -77,6 +92,7 @@ def main():
         )
         return
 
+    editor_tab_sync()
     progress = progress_renderer()
 
     run = forge.run_text(
