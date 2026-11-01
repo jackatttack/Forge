@@ -60,11 +60,34 @@ def set_result_text(text):
 
 
 def progress_renderer():
+    """
+    Forge's console renderer, wrapped so the Forge Landing docks when the run
+    starts and fills in live. If the landing cannot load, the renderer keeps
+    its classic live console redraw instead.
+    """
     try:
         from forge.adapters.pythonista.console_ui import ForgeConsoleUI
-        return ForgeConsoleUI()
     except Exception:
         return None
+    try:
+        from forge.adapters.pythonista.landing.hook import make_listener
+        return make_listener(ForgeConsoleUI(live=False))
+    except Exception:
+        return ForgeConsoleUI()
+
+
+def show_landing(run, progress):
+    """
+    Dock the Forge Landing over the console after the run.
+
+    Presentation only: if it cannot load or dock, the console keeps the
+    text summary Forge already printed.
+    """
+    try:
+        from forge.adapters.pythonista.landing.hook import show_after_run
+        show_after_run(run, progress)
+    except Exception:
+        pass
 
 
 def editor_tab_sync():
@@ -118,6 +141,10 @@ def main():
     ):
         progress.print_clipboard_status(
             True
+        )
+        show_landing(
+            run,
+            progress,
         )
     else:
         # Presentation must never be required for Forge correctness.

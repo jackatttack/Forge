@@ -86,7 +86,11 @@ class ForgeConsoleUI(object):
     progress display visible without contaminating RUN stdout.
     """
 
-    def __init__(self):
+    def __init__(self, live=True):
+        # live=False: no mid-run redraws. Events and timings are still
+        # collected and the final summary still prints once; the Pythonista
+        # launcher uses this because the Forge Landing takes over after the run.
+        self.live = live
         self.stream = sys.stdout
 
         self.started = False
@@ -382,7 +386,7 @@ class ForgeConsoleUI(object):
 
         # The clock must continue while a Forge operation blocks the caller.
         # Do not start a display thread outside Pythonista's console host.
-        if console is not None and not self.finished:
+        if console is not None and not self.finished and self.live:
             self._timer_thread = threading.Thread(
                 target=self._timer_loop,
                 name="ForgeConsoleTimer",
