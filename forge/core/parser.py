@@ -14,6 +14,8 @@ This parser handles:
 - package SPEC shape validation
 """
 
+import re
+
 from forge.core.registry import OP_SPECS
 
 
@@ -52,6 +54,43 @@ PARTNER_MARKERS = {
     'OLD': ('BEGIN_NEW', 'END_NEW'),
     'NEW': ('BEGIN_OLD', 'END_OLD'),
 }
+
+# A tagged opener such as "BEGIN_BODY @fix" starts a block that closes only
+# at "END_BODY @fix". Bare markers inside it are plain text, so a bundle can
+# write or edit text that itself contains Forge markers (a stored bundle
+# being repaired before FORGE rerun, Forge's own docs and tests).
+# Tags are letters, digits, "_" and "-".
+_TAGGED_BEGIN = re.compile(r'^(BEGIN_[A-Z]+)[ \t]+@([A-Za-z0-9_-]+)$')
+
+
+def _match_begin_marker(line):
+    """Return (block_name, block_spec, tag) for a block opener, else None.
+
+    tag is '' for a bare opener such as BEGIN_BODY. Openers sit at column 0.
+    """
+    rstripped = line.rstrip()
+
+    if rstripped in _BEGIN_MARKERS:
+        block_name, block_spec = _BEGIN_MARKERS[rstripped]
+        return block_name, block_spec, ''
+
+    match = _TAGGED_BEGIN.match(rstripped)
+    if match and match.group(1) in _BEGIN_MARKERS:
+        block_name, block_spec = _BEGIN_MARKERS[match.group(1)]
+        return block_name, block_spec, match.group(2)
+
+    return None
+
+
+def _closes_block(line, end_marker):
+    """True when line is end_marker at column 0, ignoring trailing space.
+
+    end_marker may carry a tag ("END_BODY @fix"); the space before the tag
+    may be any run of spaces or tabs.
+    """
+    if line[:1].isspace():
+        return False
+    return line.split() == end_marker.split()
 
 
 def _is_directive(line):
@@ -147,14 +186,26 @@ def _validate_shape(ops):
     return errors
 
 
-def _read_block(lines, i, block_name, block_spec, op_name):
+def _read_block(lines, i, block_name, block_spec, op_name, tag='', target=''):
+    """Read one BEGIN_/END_ block whose opener is lines[i].
+
+    Returns (next_index, text, error). A tagged block closes only at its own
+    tagged end marker and skips the partner-marker check: the tag is the
+    author saying the text is data, markers included.
+    """
     end_marker = block_spec.get('end')
-    partner_markers = PARTNER_MARKERS.get(block_name, ())
+
+    if tag:
+        end_marker = '%s @%s' % (end_marker, tag)
+        partner_markers = ()
+    else:
+        partner_markers = PARTNER_MARKERS.get(block_name, ())
+
     begin_line = i + 1
     collected = []
     i += 1
 
-    while i < len(lines) and lines[i].rstrip() != end_marker:
+    while i < len(lines) and not _closes_block(lines[i], end_marker):
         if lines[i].rstrip() in partner_markers:
             return i, None, (
                 'Line %d: %s inside the %s block opened at line %d for %s\n'
@@ -164,19 +215,70 @@ def _read_block(lines, i, block_name, block_spec, op_name):
                 'NEXT:\n'
                 '- Close the %s block with %s on its own line.\n'
                 '- If the file really contains this line, use a LINES: range '
-                'REPLACE instead.'
+                'REPLACE instead.\n'
+                '- Or tag the block so markers inside it are plain text: '
+                'BEGIN_%s @raw ... END_%s @raw.'
                 % (
                     i + 1, lines[i].rstrip(), block_name, begin_line, op_name,
                     end_marker, block_name, end_marker,
+                    block_name, block_name,
                 )
             )
         collected.append(lines[i])
         i += 1
 
     if i >= len(lines):
-        return i, None, 'Missing %s for %s' % (end_marker, op_name)
+        return i, None, _missing_end_message(
+            collected, block_spec, end_marker, op_name, target, tag,
+        )
 
     return i + 1, '\n'.join(collected).rstrip(), None
+
+
+def _missing_end_message(collected, block_spec, end_marker, op_name,
+                         target, tag):
+    """
+    Explain an unclosed block well enough to repair it in one REPLACE.
+
+    Names the operation by its header, since a bundle may hold several of
+    the same op, and quotes lines instead of numbering them: a stripped
+    ENV: line shifts the parser's numbering away from the stored bundle.
+    In a bare block the first operation header at column 0 is almost
+    always where the end marker was lost. A tagged block holds Forge
+    syntax as data on purpose, so no header is guessed there.
+    """
+    header = ('%s %s' % (op_name, target)).strip()
+    lines = [
+        'Missing %s for %s' % (end_marker, header),
+        'WHY: the %s block under %s never closed, so it ran to the end of '
+        'the bundle.' % (block_spec.get('begin'), header),
+        'NEXT:',
+    ]
+
+    swallowed = ''
+    if not tag:
+        for line in collected:
+            if not line[:1].isspace() and _match_op_header(line)[0]:
+                swallowed = line.rstrip()
+                break
+
+    if swallowed:
+        lines.append(
+            '- %s probably belongs on its own line just before this line, '
+            'which starts the next operation: %s' % (end_marker, swallowed)
+        )
+    elif tag:
+        lines.append(
+            '- A tagged block closes only at %s, exactly, at column 0.'
+            % end_marker
+        )
+    else:
+        lines.append(
+            "- Add %s on its own line after the block's last content line."
+            % end_marker
+        )
+
+    return '\n'.join(lines)
 
 
 def parse_bundle(text):
@@ -242,10 +344,13 @@ def parse_bundle(text):
             if next_op:
                 break
 
-            rstripped = line.rstrip()
-            if rstripped in _BEGIN_MARKERS:
-                block_name, block_spec = _BEGIN_MARKERS[rstripped]
-                i, block_text, err = _read_block(lines, i, block_name, block_spec, op_name)
+            opener = _match_begin_marker(line)
+            if opener:
+                block_name, block_spec, tag = opener
+                i, block_text, err = _read_block(
+                    lines, i, block_name, block_spec, op_name,
+                    tag=tag, target=target,
+                )
                 if err:
                     errors.append(err)
                     break

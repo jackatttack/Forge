@@ -171,9 +171,23 @@ Forge syntax:
 
 That writes a file documenting REPLACE. It does not run REPLACE.
 
-Because of that, a body cannot contain its own END_BODY marker at column
-zero. When writing about Forge syntax, indent the example or build the
-text from separate lines in code.
+Because of that, a bare body cannot contain its own END_BODY marker at
+column zero. To write text that does, tag the block: a tagged block closes
+only at its matching tagged end marker, and bare markers inside it are
+plain text.
+
+    WRITE notes/example.txt
+    BEGIN_BODY @raw
+    REPLACE app.py::main
+    BEGIN_BODY
+    def main():
+        return True
+    END_BODY
+    END_BODY @raw
+
+Tags are @ followed by letters, digits, _ or -. All three blocks take them
+(BEGIN_OLD @fix ... END_OLD @fix). Indenting the example, or building the
+text from separate lines in code, still works too.
 
 
 WHOLE-BUNDLE PARSING

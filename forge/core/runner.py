@@ -31,6 +31,57 @@ from forge.core.registry import (
 from forge.core.run_storage import allocate_stamp, write_run
 
 
+def _repair_reference(run, environment, mode):
+    """
+    Return the repair line for a stored FAILED_PARSE run, else ''.
+
+    Names the stored bundle to fix and the rerun that replays it. A rerun
+    that failed points back at the run it replayed, because that run's
+    bundle is the one to repair. The path is shown through the longest
+    configured named root containing it (normally forge_home:), so it can
+    be pasted straight into a REPLACE.
+    """
+    import os
+    from forge.core import run_storage
+
+    from forge.core.preparse import rerun_stamp, take_env_header
+
+    # A rerun refused before it replayed anything has nothing to repair:
+    # its own stored bundle is only the rerun line.
+    submitted, _ = take_env_header(run.get('input_bundle') or '')
+    if not run.get('rerun_of') and rerun_stamp(submitted) is not None:
+        return ''
+
+    stamp = run.get('rerun_of') or run.get('stamp') or ''
+    if not stamp:
+        return ''
+
+    run_dir = run_storage._run_dir(
+        run.get('project_root'),
+        stamp,
+        mode=mode,
+        environment=environment,
+    )
+    path = os.path.abspath(os.path.join(run_dir, 'bundle.txt'))
+
+    best_name, best_root = '', ''
+    for name, root in ((environment or {}).get('roots') or {}).items():
+        root = os.path.abspath(str(root or ''))
+        inside = path.startswith(root.rstrip(os.sep) + os.sep)
+        if root and inside and len(root) > len(best_root):
+            best_name, best_root = name, root
+
+    if best_name:
+        shown = '%s:%s' % (
+            best_name,
+            os.path.relpath(path, best_root).replace(os.sep, '/'),
+        )
+    else:
+        shown = path
+
+    return 'REPLACE %s, then FORGE rerun %s' % (shown, stamp)
+
+
 def run_text(
     bundle_text,
     project_root=None,
@@ -131,6 +182,7 @@ def run_text(
             bundle_text,
             project_root=project_root,
             environment=environment,
+            mode=mode,
         )
     except Exception as e:
         expanded_bundle_text = bundle_text
@@ -202,6 +254,14 @@ def run_text(
         run.get('results') or [],
         run.get('errors') or [],
     )
+
+    if store and run['status'] == 'FAILED_PARSE':
+        # Only stored runs have a bundle to repair. A repair hint must
+        # never cost the packet, so any problem just leaves it out.
+        try:
+            run['repair'] = _repair_reference(run, environment, mode)
+        except Exception:
+            run['repair'] = ''
 
     run['packet'] = format_packet(
         run

@@ -213,6 +213,12 @@ def format_packet(run):
     if run.get('env_warning'):
         lines.append('Warning: ' + str(run.get('env_warning')))
 
+    if run.get('rerun_of'):
+        lines.append('Rerun of: ' + str(run.get('rerun_of')))
+
+    if run.get('repair'):
+        lines.append('Repair: ' + str(run.get('repair')))
+
     errors = run.get('errors') or []
 
     if errors:

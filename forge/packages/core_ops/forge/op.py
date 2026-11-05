@@ -197,6 +197,7 @@ HINTS = {
             'FORGE audit',
             'FORGE config',
             'FORGE runs',
+            'FORGE rerun <stamp>',
         ],
     },
 }
@@ -206,6 +207,15 @@ EFFECT = 'read'
 
 
 def validate(parsed_op):
+    # FORGE rerun is handled before parsing (forge/core/preparse.py), and
+    # only when it is the whole bundle. Reaching an op means it was mixed
+    # with other operations, so refuse it here, before anything runs.
+    words = str(_raw_args(parsed_op) or '').split()
+    if words and words[0] == 'rerun':
+        return [
+            'FORGE rerun must be the whole bundle: send '
+            'FORGE rerun <stamp> on its own.'
+        ]
     return []
 
 

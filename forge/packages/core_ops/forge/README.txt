@@ -191,9 +191,54 @@ Inspect one artifact from a known run:
 `latest` returns the newest packet and any stored human-facing surface.
 `show` requires an explicit run stamp.
 
+## Rerun a repaired bundle
+
+A bundle refused with FAILED_PARSE ran nothing. Forge keeps its exact text,
+so a large bundle with one small mistake can be repaired in place and
+replayed instead of resent.
+
+The packet of a stored FAILED_PARSE run names the file and the command:
+
+    Repair: REPLACE forge_home:artifacts/runs/<stamp>/bundle.txt, then FORGE rerun <stamp>
+
+The path uses the forge_home: root when host_roots is on, and is absolute
+otherwise. Repair it with an ordinary REPLACE or INSERT. When the repair
+touches marker lines themselves, such as a missing END_BODY, tag the
+edit's own blocks so those markers are plain text:
+
+    REPLACE forge_home:artifacts/runs/<stamp>/bundle.txt
+    BEGIN_OLD @fix
+    hello
+
+    READ app.py
+    END_OLD @fix
+    BEGIN_NEW @fix
+    hello
+    END_BODY
+
+    READ app.py
+    END_NEW @fix
+
+Then replay it, as the whole bundle:
+
+    FORGE rerun <stamp>
+
+The replay is a new run with its own stamp, and its packet shows
+`Rerun of: <stamp>`.
+
+- FORGE rerun must be the only line of its bundle; an ENV: line is fine.
+- Only FAILED_PARSE runs replay, because they ran nothing. A partly
+  applied run is never replayed.
+- If the replay fails to parse again, repair the original run's bundle and
+  rerun the original stamp. A rerun of a rerun is refused and names the
+  original.
+- Repairing edits the stored record of the failed run, which is safe
+  because that run changed nothing.
+
 ## Limits
 
-FORGE does not change project files or configuration.
+FORGE does not change project files or configuration. FORGE rerun replays
+a stored bundle as a new run; the replayed operations make the changes.
 
 `FORGE help <OP> contract` checks package structure and structured help
 metadata. It does not prove that every prose sentence or example is correct.
@@ -210,3 +255,7 @@ package is healthy, not how the operation works.
 
 After `FAILED_PARSE`, prefer the exact parser error, `FORGE bundle`, and the
 relevant operation help over guessed directives.
+
+When a large bundle fails to parse over a small mistake, repair the stored
+bundle named on the packet's Repair: line and send FORGE rerun <stamp>,
+rather than resending the whole bundle.

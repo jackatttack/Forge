@@ -126,6 +126,105 @@ def unwrap_fenced_bundle(bundle_text):
     return inner, label
 
 
+# "FORGE rerun <stamp>" as the whole bundle replays that run's stored
+# bundle, usually after repairing it in place with REPLACE. It is handled
+# here, before parsing, so the replay is an ordinary new run with its own
+# stamp and packet rather than a run nested inside another.
+_RERUN_LINE = re.compile(r'^FORGE[ \t]+rerun(?:[ \t]+(\S+))?$')
+
+# Only bundles refused at parse time are replayed: they ran nothing, so a
+# replay cannot repeat work. A partly applied run is never replayed.
+RERUNNABLE_STATUSES = ('FAILED_PARSE',)
+
+
+def rerun_stamp(bundle_text):
+    """
+    Return the stamp named by a whole-bundle FORGE rerun line, else None.
+
+    Returns '' for a rerun line with no stamp, so the caller can say so.
+    """
+    lines = [
+        line
+        for line in str(bundle_text or '').splitlines()
+        if line.strip()
+    ]
+    if len(lines) != 1:
+        return None
+    match = _RERUN_LINE.match(lines[0].strip())
+    if match is None:
+        return None
+    return match.group(1) or ''
+
+
+def load_rerun_bundle(
+    stamp,
+    project_root=None,
+    environment=None,
+    mode='dev',
+):
+    """
+    Return (bundle_text, bundle_app) for the stored bundle of run stamp.
+
+    The stored text is the raw submission, so its own ENV: header and fence
+    are removed here exactly as for a fresh bundle. Raises ValueError, with
+    the next step, when the run cannot be replayed.
+    """
+    from forge.core import run_storage
+
+    if not stamp:
+        raise ValueError(
+            'FORGE rerun needs a run stamp: FORGE rerun <stamp>. '
+            'FORGE runs lists recent runs.'
+        )
+
+    stored = run_storage.read_text(
+        project_root,
+        stamp,
+        'bundle.txt',
+        mode=mode,
+        environment=environment,
+    )
+    if stored is None or not stored.strip():
+        raise ValueError(
+            'No stored bundle for run %s. FORGE runs lists recent runs.'
+            % stamp
+        )
+
+    text, bundle_app = take_env_header(stored)
+    fenced = unwrap_fenced_bundle(text)
+    if fenced is not None:
+        text = fenced[0]
+        if bundle_app is None:
+            text, bundle_app = take_env_header(text)
+
+    earlier = rerun_stamp(text)
+    if earlier is not None:
+        raise ValueError(
+            'Run %s was itself FORGE rerun %s. Repair the bundle of run %s '
+            'and send FORGE rerun %s.' % (stamp, earlier, earlier, earlier)
+        )
+
+    manifest, manifest_error = run_storage.read_manifest(
+        project_root,
+        stamp,
+        mode=mode,
+        environment=environment,
+    )
+    if manifest is None:
+        raise ValueError(
+            'Cannot replay run %s: %s' % (stamp, manifest_error)
+        )
+    status = manifest.get('status') or 'UNKNOWN'
+    if status not in RERUNNABLE_STATUSES:
+        raise ValueError(
+            'Run %s finished %s. FORGE rerun replays only FAILED_PARSE runs, '
+            'which ran nothing; send a fresh bundle instead.'
+            % (stamp, status)
+        )
+
+    return text, bundle_app
+
+
 def aliases_path(project_root=None, environment=None):
     """Compatibility wrapper around canonical Forge alias storage."""
     from forge.core.aliases import (
@@ -281,6 +380,7 @@ def expand_bundle(
     bundle_text,
     project_root=None,
     environment=None,
+    mode='dev',
 ):
     """Return (expanded_text, report).
 
@@ -310,6 +410,18 @@ def expand_bundle(
         )
         if bundle_app is None:
             working_text, bundle_app = take_env_header(working_text)
+
+    stamp = rerun_stamp(working_text)
+    if stamp is not None:
+        working_text, stored_app = load_rerun_bundle(
+            stamp,
+            project_root=project_root,
+            environment=environment,
+            mode=mode,
+        )
+        report['rerun_of'] = stamp
+        if bundle_app is None:
+            bundle_app = stored_app
 
     if bundle_app is not None:
         report['bundle_env'] = bundle_app
