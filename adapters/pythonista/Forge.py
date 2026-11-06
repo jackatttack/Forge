@@ -13,8 +13,10 @@ forge.adapters.pythonista.console_ui.
 
 import os
 
-import clipboard
 import forge
+# Clipboard through UIPasteboard, not Pythonista's clipboard module: that
+# module can deadlock with the docked Forge Landing (see pasteboard.py).
+from forge.adapters.pythonista import pasteboard
 
 
 PORTABLE_FORGE_PYTHONISTA_LAUNCHER = 'portable-forge-pythonista-launcher-v1'
@@ -29,7 +31,7 @@ PROJECT_ROOT = os.path.abspath(
 
 def get_bundle_text():
     return str(
-        clipboard.get()
+        pasteboard.get_text()
         or ''
     )
 
@@ -52,7 +54,7 @@ def _clipboard_safe_text(text):
 
 
 def set_result_text(text):
-    clipboard.set(
+    pasteboard.set_text(
         _clipboard_safe_text(
             text
         )

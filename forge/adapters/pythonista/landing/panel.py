@@ -20,12 +20,12 @@ import math
 import os
 import time
 
-import clipboard
 import console
 import editor
 import ui
 from objc_util import ObjCClass, on_main_thread
 
+from .. import pasteboard
 from .detail_html import change_html
 from .model import TONE_GLYPH, spaced, status_tone
 
@@ -70,7 +70,10 @@ PULSE_SPEED = 5.0
 LANDING_TAG = 47011           # every docked landing carries this view tag
 LANDING_EXTRA_INSET = COLLAPSED_HEIGHT + 12
 KEEP_ALIVE_NAME = '_forge_landing'
-BASE_INSET_NAME = '_forge_landing_base_inset'
+# The points the docked landing added to the console's bottom inset. Only
+# this share is ever added or taken away, so other docked views (consolekit
+# panels, Editor Deck) keep whatever inset they added themselves.
+INSET_SHARE_NAME = '_forge_landing_inset_share'
 
 
 def ease_out(progress):
@@ -484,9 +487,7 @@ class LandingPanel(ui.View):
 
     def close(self, sender=None):
         try:
-            insets = self.text_view.contentInset()
-            self.text_view.setContentInset_((insets.top, insets.left,
-                                             self.base_bottom, insets.right))
+            give_back_inset(self.text_view)
         except Exception:
             pass
         self.objc_instance.removeFromSuperview()
@@ -565,11 +566,11 @@ class LandingPanel(ui.View):
 
     # Actions
     def copy_packet(self, sender):
-        clipboard.set(self.model.packet)
+        pasteboard.set_text(self.model.packet)
         console.hud_alert('Packet copied')
 
     def copy_diff(self, sender):
-        clipboard.set('ENV: pythonista\nDIFF %s' % self.model.stamp)
+        pasteboard.set_text('ENV: pythonista\nDIFF %s' % self.model.stamp)
         console.hud_alert('DIFF bundle copied')
 
     def open_last_edit(self, sender):
@@ -606,33 +607,40 @@ class LandingPanel(ui.View):
 
 
 # --- Docking ----------------------------------------------------------------
+
+
+def adjust_inset(text_view, delta):
+    """Add delta to the console's bottom inset, keeping what others added."""
+    if not delta:
+        return
+    insets = text_view.contentInset()
+    text_view.setContentInset_((insets.top, insets.left, insets.bottom + delta, insets.right))
+
+
+def give_back_inset(text_view):
+    """Take away the inset the docked landing added, exactly once."""
+    share = getattr(builtins, INSET_SHARE_NAME, 0) or 0
+    setattr(builtins, INSET_SHARE_NAME, 0)
+    adjust_inset(text_view, -share)
+
+
 def prepare_dock():
     """Find the console and remove every docked landing.
 
     Landings are found by view tag, so one whose Python object was lost (an
-    orphan from an earlier run) is removed too. Returns (text_view, base
-    bottom inset), or (None, None) when there is no console. The base inset
-    is remembered so docking never stacks padding run after run.
+    orphan from an earlier run) is removed too, and the inset the last one
+    added is given back. Returns (text_view, current bottom inset), or
+    (None, None) when there is no console.
     """
     text_view = find_console_text_view()
     if text_view is None:
         return None, None
-    had_landing = False
     for view in list(text_view.superview().subviews()):
         if view.tag() == LANDING_TAG:
             view.removeFromSuperview()
-            had_landing = True
     setattr(builtins, KEEP_ALIVE_NAME, None)
-    current = text_view.contentInset().bottom
-    stored = getattr(builtins, BASE_INSET_NAME, None)
-    if not had_landing:
-        base = current
-        setattr(builtins, BASE_INSET_NAME, base)
-    elif stored is not None:
-        base = stored
-    else:
-        base = max(current - LANDING_EXTRA_INSET, 0)
-    return text_view, base
+    give_back_inset(text_view)
+    return text_view, text_view.contentInset().bottom
 
 
 def panel_size(text_view):
@@ -645,9 +653,8 @@ def attach(panel, text_view, base_bottom):
     frame = text_view.frame()
     panel.frame = (frame.origin.x + SIDE_MARGIN, frame.origin.y + TOP_MARGIN,
                    panel.width, panel.height)
-    insets = text_view.contentInset()
-    text_view.setContentInset_((insets.top, insets.left,
-                                base_bottom + LANDING_EXTRA_INSET, insets.right))
+    adjust_inset(text_view, LANDING_EXTRA_INSET)
+    setattr(builtins, INSET_SHARE_NAME, LANDING_EXTRA_INSET)
     panel.objc_instance.setTag_(LANDING_TAG)
     text_view.superview().addSubview_(panel.objc_instance)
     setattr(builtins, KEEP_ALIVE_NAME, panel)
