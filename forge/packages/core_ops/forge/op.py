@@ -149,7 +149,8 @@ HELP = {
     'brief': (
         'FORGE ops [all] · help <OP> [full] · bundle · docs, search docs '
         '<query> · runs, runs latest, runs show <stamp> · audit · config · '
-        'boot.'
+        'boot · after a failure: rerun <stamp> (nothing ran) or resume '
+        '<stamp> (partly applied).'
     ),
     'minimal_example': [
         'FORGE',
@@ -198,6 +199,7 @@ HINTS = {
             'FORGE config',
             'FORGE runs',
             'FORGE rerun <stamp>',
+            'FORGE resume <stamp>',
         ],
     },
 }
@@ -210,11 +212,12 @@ def validate(parsed_op):
     # FORGE rerun is handled before parsing (forge/core/preparse.py), and
     # only when it is the whole bundle. Reaching an op means it was mixed
     # with other operations, so refuse it here, before anything runs.
+    # FORGE resume works the same way (forge/core/resume.py).
     words = str(_raw_args(parsed_op) or '').split()
-    if words and words[0] == 'rerun':
+    if words and words[0] in ('rerun', 'resume'):
         return [
-            'FORGE rerun must be the whole bundle: send '
-            'FORGE rerun <stamp> on its own.'
+            'FORGE %s must be the whole bundle: send '
+            'FORGE %s <stamp> on its own.' % (words[0], words[0])
         ]
     return []
 

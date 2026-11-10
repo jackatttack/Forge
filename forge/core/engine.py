@@ -147,6 +147,7 @@ def execute_ops(
     run,
     environment=None,
     on_event=None,
+    carried=None,
 ):
     environment = (
         environment
@@ -173,14 +174,31 @@ def execute_ops(
         check_pin,
         is_versioned_op,
         note_version_after,
+        pins_for_resume,
         snapshot_pins,
     )
     from forge.core.bundle_controls import requests_stop_on_failure
 
+    # FORGE resume passes the operations that already applied in the run
+    # being resumed (forge.core.resume). They are listed, not executed.
+    carried = carried or {}
+    carried_results = list(carried.get('results') or [])
+    carried_count = len(carried_results)
+    carried_stamp = str(carried.get('stamp') or '')
+
     try:
         pin_snapshot = snapshot_pins(ctx, parsed_ops)
+        if carried_results:
+            pin_snapshot = pins_for_resume(
+                ctx, parsed_ops, pin_snapshot, carried,
+            )
     except Exception:
         pin_snapshot = {}
+
+    if run is not None:
+        # Kept with the stored run so FORGE resume can check later pins
+        # against the workspace this bundle started from.
+        run['pin_snapshot'] = dict(pin_snapshot)
 
     results = []
     stop_mutating = False
@@ -248,6 +266,30 @@ def execute_ops(
         )
 
         started_at = time.monotonic()
+
+        if index <= carried_count:
+            # This operation applied in the run being resumed. It keeps
+            # its line in the packet, so the packet still shows one line
+            # per operation of the bundle, but it is not executed again.
+            original = carried_results[index - 1] or {}
+            applied_in = original.get('carried_from') or carried_stamp
+            result['status'] = 'APPLIED'
+            result['message'] = 'Applied in run %s; not run again' % applied_in
+            result['carried_from'] = applied_in
+            if original.get('version_after'):
+                result['version_after'] = original.get('version_after')
+            _finish_result(
+                run,
+                results,
+                None,
+                result,
+                on_event=on_event,
+                index=index,
+                total=total_ops,
+                started_at=started_at,
+            )
+            ctx['last'] = result
+            continue
 
         if (
             stop_mutating

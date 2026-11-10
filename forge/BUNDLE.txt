@@ -213,6 +213,11 @@ carries the information needed to diagnose the failure.
 RUN is not read-only. It executes arbitrary project Python, so it does
 not continue after a failure.
 
+To carry on, fix the cause and send FORGE resume <stamp> as the whole
+bundle. It replays the stored bundle from the first operation that did not
+apply, without repeating the ones that did. The failed run's packet names
+the command on its Resume: line.
+
 
 WRITING BUNDLES FOR A CHAT LOOP
 -------------------------------

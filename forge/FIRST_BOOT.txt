@@ -40,6 +40,7 @@ ESSENTIAL RULES
   relevant tests. RUN executes in-process; do not RUN the active launcher.
 - Read statuses, errors, hints and previews before retrying. Initial parse
   rejection executes nothing; execution failures may follow applied work.
+  A failed packet's Repair: or Resume: line names the command to carry on.
 - Use BRANCH before risky work when useful. Inspect recovery contracts before
   using REVERT. Do not assume arbitrary program effects can be undone.
 - Respect project instructions, runtime requirements and human-owned code.

@@ -22,6 +22,20 @@ Make the smallest correction supported by that evidence. Avoid blindly
 resending a partially applied bundle: earlier operations may already have
 changed its assumptions.
 
+A failed packet names the way to carry on, near its top:
+
+- Repair: appears when the bundle was refused at parse time and nothing
+  ran. REPLACE the broken lines in the stored bundle it names, then send
+  FORGE rerun <stamp>.
+- Resume: appears when the bundle applied in part and later operations
+  were skipped. Fix the cause (repair the failing operation in the stored
+  bundle, or fix the project with an ordinary bundle), then send FORGE
+  resume <stamp>. Applied operations are not run again.
+
+Each is sent alone as the whole bundle. A FAILED packet with no Resume:
+line has no single place to carry on from: send a fresh bundle for what is
+left.
+
 Use FORGE runs to locate stored runs. Prefer a known stamp when inspecting
 the particular run that failed:
 

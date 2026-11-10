@@ -45,14 +45,22 @@ def _repair_reference(run, environment, mode):
     from forge.core import run_storage
 
     from forge.core.preparse import rerun_stamp, take_env_header
+    from forge.core.resume import resume_stamp
 
-    # A rerun refused before it replayed anything has nothing to repair:
-    # its own stored bundle is only the rerun line.
+    # A rerun or resume refused before it replayed anything has nothing
+    # to repair: its own stored bundle is only that one line.
     submitted, _ = take_env_header(run.get('input_bundle') or '')
     if not run.get('rerun_of') and rerun_stamp(submitted) is not None:
         return ''
+    if not run.get('resume_of') and resume_stamp(submitted) is not None:
+        return ''
 
-    stamp = run.get('rerun_of') or run.get('stamp') or ''
+    stamp = (
+        run.get('bundle_origin')
+        or run.get('rerun_of')
+        or run.get('stamp')
+        or ''
+    )
     if not stamp:
         return ''
 
@@ -79,6 +87,12 @@ def _repair_reference(run, environment, mode):
     else:
         shown = path
 
+    if run.get('resume_of'):
+        # A resumed run whose repaired bundle no longer parses: repair the
+        # same stored bundle, then resume the same run again.
+        return 'REPLACE %s, then FORGE resume %s' % (
+            shown, run.get('resume_of'),
+        )
     return 'REPLACE %s, then FORGE rerun %s' % (shown, stamp)
 
 
@@ -204,6 +218,12 @@ def run_text(
             preparse_report
         )
 
+    # FORGE resume: the operations that already applied in the resumed
+    # run. Only their count stays on the run; the rest is working data.
+    carried = run.pop('resume_carried', None)
+    if carried:
+        run['resume_carried_count'] = len(carried.get('results') or [])
+
     parsed = parse_bundle(
         expanded_bundle_text
     )
@@ -217,6 +237,15 @@ def run_text(
         (run.get('errors') or [])
         + (parsed.get('errors') or [])
     )
+
+    if carried and not run['errors']:
+        # The carried operations are not run again, so the stored bundle
+        # must still describe them exactly.
+        from forge.core.resume import changed_prefix_problem
+
+        problem = changed_prefix_problem(run['parsed_ops'], carried)
+        if problem:
+            run['errors'].append('FAILED_PARSE | RESUME :: ' + problem)
 
     run['parse_hints'] = (
         render_parse_hints(
@@ -248,6 +277,7 @@ def run_text(
             run,
             environment=environment,
             on_event=on_event,
+            carried=carried,
         )
 
     run['status'] = final_status(
@@ -262,6 +292,16 @@ def run_text(
             run['repair'] = _repair_reference(run, environment, mode)
         except Exception:
             run['repair'] = ''
+
+    if store and run['status'] == 'FAILED':
+        # Only stored runs can be resumed. Like the repair hint, this must
+        # never cost the packet, so any problem just leaves it out.
+        try:
+            from forge.core.resume import resume_reference
+
+            run['resume'] = resume_reference(run, environment, mode)
+        except Exception:
+            run['resume'] = ''
 
     run['packet'] = format_packet(
         run

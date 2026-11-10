@@ -219,6 +219,19 @@ def format_packet(run):
     if run.get('repair'):
         lines.append('Repair: ' + str(run.get('repair')))
 
+    if run.get('resume_of'):
+        carried_count = int(run.get('resume_carried_count') or 0)
+        if carried_count == 1:
+            note = ' (op 1 applied there; not run again)'
+        elif carried_count > 1:
+            note = ' (ops 1-%d applied there; not run again)' % carried_count
+        else:
+            note = ''
+        lines.append('Resume of: ' + str(run.get('resume_of')) + note)
+
+    if run.get('resume'):
+        lines.append('Resume: ' + str(run.get('resume')))
+
     errors = run.get('errors') or []
 
     if errors:

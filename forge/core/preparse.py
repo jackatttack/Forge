@@ -429,8 +429,32 @@ def expand_bundle(
             mode=mode,
         )
         report['rerun_of'] = stamp
+        # The run whose bundle.txt holds the text this run executed, so
+        # FORGE resume can find it again.
+        report['bundle_origin'] = stamp
         if bundle_app is None:
             bundle_app = stored_app
+
+    # "FORGE resume <stamp>" as the whole bundle carries on a partly
+    # applied run from the operation that failed. See forge.core.resume.
+    from forge.core import resume
+
+    resume_of = resume.resume_stamp(working_text)
+    if resume_of is not None and 'rerun_of' not in report:
+        loaded = resume.load(
+            resume_of,
+            project_root=project_root,
+            environment=environment,
+            mode=mode,
+        )
+        working_text = loaded['text']
+        report['resume_of'] = resume_of
+        report['bundle_origin'] = loaded['origin']
+        # Taken back out of the run by the runner: the operations that
+        # already applied, for the engine to carry instead of executing.
+        report['resume_carried'] = loaded['carried']
+        if bundle_app is None:
+            bundle_app = loaded['bundle_app']
 
     if bundle_app is not None:
         report['bundle_env'] = bundle_app

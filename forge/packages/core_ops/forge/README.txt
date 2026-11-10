@@ -228,17 +228,50 @@ The replay is a new run with its own stamp, and its packet shows
 
 - FORGE rerun must be the only line of its bundle; an ENV: line is fine.
 - Only FAILED_PARSE runs replay, because they ran nothing. A partly
-  applied run is never replayed.
+  applied run is carried on with FORGE resume instead (below).
 - If the replay fails to parse again, repair the original run's bundle and
   rerun the original stamp. A rerun of a rerun is refused and names the
   original.
 - Repairing edits the stored record of the failed run, which is safe
   because that run changed nothing.
 
+## Resume a partly applied run
+
+A bundle that fails part-way leaves its earlier operations applied and its
+later ones skipped. Its packet names the way to carry on:
+
+    Resume: FORGE resume <stamp> carries on at op 16 of 23 (DELETE app.py); to change an op first, REPLACE forge_home:artifacts/runs/<stamp>/bundle.txt
+
+Fix the cause first. If the failing operation itself was wrong (an OLD block
+that did not match), repair it in the stored bundle named on that line. If
+the bundle was right and the project was wrong (a failing test behind
+STOP_ON_FAIL), fix the project with an ordinary bundle. Then send, as the
+whole bundle:
+
+    FORGE resume <stamp>
+
+The operations that already applied are not run again; everything from the
+first one that did not apply runs. The resumed run is a new run whose packet
+shows `Resume of: <stamp>` and still lists every operation of the bundle.
+
+- FORGE resume must be the only line of its bundle; an ENV: line is fine.
+- Only a FAILED run with one place to carry on from can resume: after its
+  first operation that did not apply, only read-only operations applied.
+  The Resume: line appears only on runs that qualify.
+- The operations that already applied must be unchanged in the stored
+  bundle. Edit only the failing operation and those after it.
+- A pin (IF_VERSION) on a file an applied operation already changed still
+  passes, as long as nothing else has touched that file since.
+- If the resumed run fails again, resume that run's stamp.
+- A FAILED_PARSE run ran nothing: use FORGE rerun for it.
+- REVERT works per run: the original run and each resumed run are
+  reverted separately, newest first.
+
 ## Limits
 
-FORGE does not change project files or configuration. FORGE rerun replays
-a stored bundle as a new run; the replayed operations make the changes.
+FORGE does not change project files or configuration. FORGE rerun and
+FORGE resume replay a stored bundle as a new run; the replayed operations
+make the changes.
 
 `FORGE help <OP> contract` checks package structure and structured help
 metadata. It does not prove that every prose sentence or example is correct.
@@ -259,3 +292,7 @@ relevant operation help over guessed directives.
 When a large bundle fails to parse over a small mistake, repair the stored
 bundle named on the packet's Repair: line and send FORGE rerun <stamp>,
 rather than resending the whole bundle.
+
+When a bundle fails part-way (Status: FAILED with skipped operations), the
+packet's Resume: line names the command. Fix the cause, then send FORGE
+resume <stamp> rather than rewriting the remaining operations by hand.

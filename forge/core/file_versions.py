@@ -126,6 +126,35 @@ def check_pin(ctx, parsed_op, snapshot):
     ) % (pin or '(empty)')
 
 
+def pins_for_resume(ctx, parsed_ops, snapshot, carried):
+    """Return the pin snapshot a resumed bundle is checked against.
+
+    Pins name the version the model read before the bundle first ran. The
+    operations carried over from the resumed run have changed some of
+    those files since, so a later pin in the same bundle would look stale.
+    Where a file still has exactly the version the last carried operation
+    left behind, nothing else has touched it, and its pin is checked
+    against the version the original run started from. Any other file is
+    checked as it stands now.
+    """
+    original = carried.get('pin_snapshot') or {}
+
+    left_behind = {}
+    for parsed_op, result in zip(parsed_ops or [], carried.get('results') or []):
+        version = (result or {}).get('version_after')
+        if not version:
+            continue
+        abs_path, error = target_file(ctx, parsed_op.get('target'))
+        if not error:
+            left_behind[abs_path] = version
+
+    adjusted = dict(snapshot or {})
+    for abs_path, current in list(adjusted.items()):
+        if abs_path in original and left_behind.get(abs_path) == current:
+            adjusted[abs_path] = original[abs_path]
+    return adjusted
+
+
 def note_version_after(ctx, parsed_op, result):
     """Append the version a successful mutation left behind to its result."""
     try:
