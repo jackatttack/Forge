@@ -35,19 +35,23 @@ Forge hands back a **packet** (abridged here):
 Run: 20260905_192043
 Mode: dev
 Status: FAILED
+Outcome: 2 applied · 1 failed · 0 skipped · first failure at op 3 of 3
 
-Errors:
-- FAILED_RUNTIME | RUN :: Script exited with code 1
+=== OPS ===
+1. APPLIED | READ | billing.py :: Lines 1-10
+2. APPLIED | REPLACE | billing.py::calculate_total :: Replaced lines 6-10
+3. FAILED_RUNTIME | RUN | tests/test_billing.py
 
-Ops:
-- APPLIED | READ | billing.py :: Lines 1-10
-- APPLIED | REPLACE | billing.py::calculate_total :: Replaced billing.py::calculate_total lines 6-10
-- FAILED_RUNTIME | RUN | tests/test_billing.py :: Script exited with code 1
+=== FAILURE ===
+Op 3 · RUN tests/test_billing.py · FAILED_RUNTIME
+Script exited with code 1
+Its output is under OUTPUT, op 3.
 
-Changed files:
+=== CHANGED ===
 - billing.py — modified · 10 -> 7 lines
 
-=== PREVIEW ===
+=== OUTPUT ===
+--- op 3 · RUN tests/test_billing.py ---
 ...
 AttributeError: 'Item' object has no attribute 'price'
 
@@ -60,7 +64,7 @@ Errors: 1
 ```
 
 The run status is `FAILED` because the test failed; the edit itself applied
-successfully, and `Changed files` confirms that `billing.py` changed.
+successfully, and the CHANGED section confirms that `billing.py` changed.
 
 You paste that back into the chat.
 

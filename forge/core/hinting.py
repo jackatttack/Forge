@@ -261,7 +261,7 @@ ENGINE_STATUS_HINTS = {
         ),
         'next': [
             'Fix the first failure listed in Errors, then rerun what was skipped.',
-            'FORGE resume <stamp> does that without repeating what applied; the Resume: line near the top of this packet gives the exact command.',
+            'FORGE resume <stamp> does that without repeating what applied; the Resume: line near the top of this packet gives the exact command. It can be the last line of the bundle that makes the fix.',
         ],
     },
     'SKIPPED_STALE_READ': {

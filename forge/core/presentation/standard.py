@@ -148,6 +148,15 @@ def format_summary(run):
         ),
     ]
 
+    chain = run.get('chain') or []
+    if len(chain) > 1:
+        # A bundle that ended with FORGE rerun or FORGE resume ran as two
+        # runs. The counts here cover both.
+        lines.insert(
+            1,
+            'Runs: ' + ' then '.join(str(stamp) for stamp in chain),
+        )
+
     errors = run.get('errors') or []
 
     if errors:

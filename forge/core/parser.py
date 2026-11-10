@@ -63,6 +63,21 @@ PARTNER_MARKERS = {
 _TAGGED_BEGIN = re.compile(r'^(BEGIN_[A-Z]+)[ \t]+@([A-Za-z0-9_-]+)$')
 
 
+def bundle_lines(text):
+    """Split bundle text into lines at newlines only.
+
+    str.splitlines() also breaks at form feeds, U+2028 and several other
+    characters. Inside a body or an OLD block those are content: splitting
+    there silently turned them into newlines, so a file was written, or a
+    block matched, with text the bundle never contained. Only \\n, \\r\\n
+    and \\r end a line here. A final newline does not add an empty line.
+    """
+    lines = str(text or '').replace('\r\n', '\n').replace('\r', '\n').split('\n')
+    if lines and lines[-1] == '':
+        lines.pop()
+    return lines
+
+
 def _match_begin_marker(line):
     """Return (block_name, block_spec, tag) for a block opener, else None.
 
@@ -282,7 +297,7 @@ def _missing_end_message(collected, block_spec, end_marker, op_name,
 
 
 def parse_bundle(text):
-    lines = (text or '').splitlines()
+    lines = bundle_lines(text)
     ops = []
     errors = []
     i = 0
@@ -363,7 +378,7 @@ def parse_bundle(text):
                     if body_lines:
                         errors.append('Duplicate body for %s' % op_name)
                         break
-                    body_lines = block_text.splitlines()
+                    body_lines = block_text.split('\n') if block_text else []
                 else:
                     blocks[block_name] = block_text
 

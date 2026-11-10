@@ -35,6 +35,21 @@ def requests_stop_on_failure(parsed_op):
     return any(name in directives for name in ASSERTION_DIRECTIVES)
 
 
+def gate_name(parsed_op):
+    """Return the directive that makes this op a gate, or ''.
+
+    'STOP_ON_FAIL', or an assertion directive such as 'EXPECT_HITS'. The
+    packet uses it to tell a stop the bundle asked for from a broken edit.
+    """
+    directives = (parsed_op or {}).get('directives') or {}
+    if str(directives.get(STOP_DIRECTIVE) or '').strip().lower() in TRUE_VALUES:
+        return STOP_DIRECTIVE
+    for name in ASSERTION_DIRECTIVES:
+        if name in directives:
+            return name
+    return ''
+
+
 def parse_count_expectation(text):
     """
     Parse an expected count such as '0', '>0' or '<=5'.

@@ -44,6 +44,7 @@ def _repair_reference(run, environment, mode):
     import os
     from forge.core import run_storage
 
+    from forge.core.follow_on import SAME_BUNDLE_NOTE
     from forge.core.preparse import rerun_stamp, take_env_header
     from forge.core.resume import resume_stamp
 
@@ -90,13 +91,15 @@ def _repair_reference(run, environment, mode):
     if run.get('resume_of'):
         # A resumed run whose repaired bundle no longer parses: repair the
         # same stored bundle, then resume the same run again.
-        return 'REPLACE %s, then FORGE resume %s' % (
-            shown, run.get('resume_of'),
+        return 'REPLACE %s, then FORGE resume %s%s' % (
+            shown, run.get('resume_of'), SAME_BUNDLE_NOTE,
         )
-    return 'REPLACE %s, then FORGE rerun %s' % (shown, stamp)
+    return 'REPLACE %s, then FORGE rerun %s%s' % (
+        shown, stamp, SAME_BUNDLE_NOTE,
+    )
 
 
-def run_text(
+def _run_one(
     bundle_text,
     project_root=None,
     mode='dev',
@@ -105,6 +108,8 @@ def run_text(
     forge_home=None,
     capabilities=None,
     on_event=None,
+    follow_on='',
+    preceded_by='',
 ):
     """
     Execute one Forge bundle using resolved environmental context.
@@ -169,6 +174,13 @@ def run_text(
     run['environment'] = dict(
         environment
     )
+
+    # A bundle that ends with FORGE rerun or FORGE resume runs as two runs
+    # (see run_text). Each records its place in the pair for its packet.
+    if follow_on:
+        run['follow_on'] = follow_on
+    if preceded_by:
+        run['preceded_by'] = preceded_by
 
     run['stamp'] = allocate_stamp(
         project_root,
@@ -285,6 +297,9 @@ def run_text(
         run.get('errors') or [],
     )
 
+    if follow_on and run['status'] != 'APPLIED':
+        run['follow_on_skipped'] = True
+
     if store and run['status'] == 'FAILED_PARSE':
         # Only stored runs have a bundle to repair. A repair hint must
         # never cost the packet, so any problem just leaves it out.
@@ -336,3 +351,77 @@ def run_text(
     )
 
     return run
+
+
+def run_text(
+    bundle_text,
+    project_root=None,
+    mode='dev',
+    store=True,
+    environment=None,
+    forge_home=None,
+    capabilities=None,
+    on_event=None,
+):
+    """
+    Execute one submitted bundle and return its run.
+
+    Nearly every bundle is one run (see _run_one). A bundle that ends with
+    FORGE rerun <stamp> or FORGE resume <stamp> is two: the operations
+    before that line run first, and only if they all apply does the rerun
+    or resume start, as a second run with its own stamp. A repair and its
+    replay then share one round trip, while each half is still parsed in
+    full before it executes.
+
+    Both runs are stored separately. The returned run joins their results
+    and packets, and ``on_event`` sees one continuous run, so a host
+    presents a single outcome. See forge.core.follow_on.
+    """
+    from forge.core.follow_on import ChainedEvents, combine, split_follow_on
+
+    shared = dict(
+        project_root=project_root,
+        mode=mode,
+        store=store,
+        environment=environment,
+        forge_home=forge_home,
+        capabilities=capabilities,
+    )
+
+    split = split_follow_on(bundle_text)
+    if split is None:
+        return _run_one(bundle_text, on_event=on_event, **shared)
+
+    first_text, follow_text, follow_line = split
+    started_at = time.monotonic()
+    events = ChainedEvents(on_event)
+
+    first = _run_one(
+        first_text,
+        on_event=events,
+        follow_on=follow_line,
+        **shared
+    )
+    if first.get('status') != 'APPLIED':
+        # The fix did not land, so the replay never starts.
+        events.finish()
+        return first
+
+    events.start_follow_on(len(first.get('results') or []))
+    second = _run_one(
+        follow_text,
+        on_event=events,
+        preceded_by=first.get('stamp') or '',
+        **shared
+    )
+
+    combined = combine(first, second)
+    events.finish(
+        stamp=combined.get('stamp') or '',
+        status=combined.get('status') or '',
+        result_count=len(combined.get('results') or []),
+        error_count=len(combined.get('errors') or []),
+        packet_bytes=combined.get('packet_bytes') or 0,
+        elapsed_seconds=round(time.monotonic() - started_at, 6),
+    )
+    return combined

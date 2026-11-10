@@ -46,19 +46,38 @@ def _run_row(stamp, packet):
     """
     One FORGE runs line: stamp, status, op counts, changed files, first op.
 
-    Stored packets hold the Ops and Changed files lists; the summary footer
-    is added later by the presenter. So the counts come from those lists,
-    which every stored run has, old or new. A missing packet gives just the
-    stamp.
+    Stored packets hold the operation and changed-file lists; the summary
+    footer is added later by the presenter. So the counts come from those
+    lists, which every stored run has. Both packet layouts are read: the
+    structured one ("=== OPS ===", numbered lines) and the earlier one
+    ("Ops:", dashed lines), since stored runs keep the layout they were
+    written in. A missing packet gives just the stamp.
     """
+    sections = {
+        '=== OPS ===': 'ops',
+        'Ops:': 'ops',
+        '=== CHANGED ===': 'changed',
+        'Changed files:': 'changed',
+        'Errors:': 'errors',
+    }
+
+    def ops_entry(line):
+        """The 'STATUS | OP | target' text of an operation line, else ''."""
+        if line.startswith('- '):
+            return line[2:]
+        number, dot, rest = line.partition('. ')
+        if dot and number.isdigit():
+            return rest
+        return ''
+
     status = ''
     applied = skipped = failed = changed = 0
     first_op = ''
     section = ''
 
     for line in (packet or '').splitlines():
-        if line in ('Ops:', 'Changed files:', 'Errors:'):
-            section = line
+        if line in sections:
+            section = sections[line]
             continue
         if not line.strip() or line.startswith('==='):
             section = ''
@@ -67,8 +86,8 @@ def _run_row(stamp, packet):
             status = line[len('Status: '):].strip()
             continue
 
-        if section == 'Ops:' and line.startswith('- '):
-            parts = line[2:].split(' | ')
+        if section == 'ops':
+            parts = ops_entry(line).split(' | ')
             op_status = parts[0].strip()
             # Older packets could carry a multi-line message inside the Ops
             # list; only lines starting with a real status token are ops.
@@ -83,7 +102,7 @@ def _run_row(stamp, packet):
                 failed += 1
             if not first_op:
                 first_op = (parts[1] + ' ' + parts[2].split(' :: ')[0]).strip()
-        elif section == 'Changed files:' and line.startswith('- '):
+        elif section == 'changed' and line.startswith('- '):
             changed += 1
 
     pieces = [stamp]
@@ -216,8 +235,9 @@ def validate(parsed_op):
     words = str(_raw_args(parsed_op) or '').split()
     if words and words[0] in ('rerun', 'resume'):
         return [
-            'FORGE %s must be the whole bundle: send '
-            'FORGE %s <stamp> on its own.' % (words[0], words[0])
+            'FORGE %s must be the whole bundle or its last line: send '
+            'FORGE %s <stamp> on its own, or end the bundle with it.'
+            % (words[0], words[0])
         ]
     return []
 

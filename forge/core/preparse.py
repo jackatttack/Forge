@@ -22,6 +22,7 @@ import os
 import re
 
 from forge.core import app_identity
+from forge.core.parser import bundle_lines
 
 
 _ALLOWED_FENCE_LABELS = set([
@@ -46,7 +47,7 @@ def take_env_header(bundle_text):
     comes back unchanged with app_name None.
     """
     text = str(bundle_text or '')
-    lines = text.splitlines()
+    lines = bundle_lines(text)
 
     for index, line in enumerate(lines):
         if not line.strip():
@@ -91,7 +92,7 @@ def unwrap_fenced_bundle(bundle_text):
         or ''
     ).strip()
 
-    lines = stripped.splitlines()
+    lines = bundle_lines(stripped)
 
     if len(lines) < 3:
         return None
@@ -327,7 +328,7 @@ def try_expand_alias(
     if not stripped:
         return None
 
-    lines = stripped.splitlines()
+    lines = bundle_lines(stripped)
 
     # Aliases are command shortcuts, not macro expansion inside real bundles.
     if len(lines) != 1:

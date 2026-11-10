@@ -177,7 +177,10 @@ def execute_ops(
         pins_for_resume,
         snapshot_pins,
     )
-    from forge.core.bundle_controls import requests_stop_on_failure
+    from forge.core.bundle_controls import (
+        gate_name,
+        requests_stop_on_failure,
+    )
 
     # FORGE resume passes the operations that already applied in the run
     # being resumed (forge.core.resume). They are listed, not executed.
@@ -439,6 +442,11 @@ def execute_ops(
         if result_failed(result) and failure_blocks(parsed_op):
             stop_mutating = True
             stop_reason = '%s on %s' % (op_name, target or '?')
+            # Record when the bundle asked for this stop, so the packet
+            # can tell a gate from a broken edit.
+            gate = gate_name(parsed_op)
+            if gate:
+                result['gate'] = gate
 
         ctx['last'] = result
 

@@ -218,6 +218,10 @@ bundle. It replays the stored bundle from the first operation that did not
 apply, without repeating the ones that did. The failed run's packet names
 the command on its Resume: line.
 
+FORGE resume <stamp> or FORGE rerun <stamp> may also be the last line of a
+bundle. The operations before it (the fix) run first, and the replay starts
+only if they all apply, so a fix and its replay take one round trip.
+
 
 WRITING BUNDLES FOR A CHAT LOOP
 -------------------------------

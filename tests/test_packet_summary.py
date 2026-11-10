@@ -61,9 +61,9 @@ class MultiLineMessages(unittest.TestCase):
             'status': 'APPLIED',
             'message': 'PROJECT: Demo\nPath: projects/demo\nStatus: active',
         })
-        ops, _, preview = packet.partition('=== PREVIEW ===')
+        ops, _, preview = packet.partition('=== OUTPUT ===')
         self.assertIn(
-            '- APPLIED | PROJECTS | brief demo :: PROJECT: Demo (continued in PREVIEW)',
+            '1. APPLIED | PROJECTS | brief demo :: PROJECT: Demo (continued in OUTPUT)',
             ops,
         )
         self.assertNotIn('Path: projects/demo', ops)
@@ -77,8 +77,8 @@ class MultiLineMessages(unittest.TestCase):
             'message': 'Lines 1-4',
             'preview': 'notes.txt [lines 1-4]',
         })
-        self.assertIn('- APPLIED | READ | notes.txt :: Lines 1-4\n', packet)
-        self.assertNotIn('continued in PREVIEW', packet)
+        self.assertIn('1. APPLIED | READ | notes.txt :: Lines 1-4\n', packet)
+        self.assertNotIn('continued in OUTPUT', packet)
 
 
 class HintKeyMatching(unittest.TestCase):
@@ -207,6 +207,32 @@ class RunRows(unittest.TestCase):
 
     def test_missing_packet_gives_the_stamp(self):
         self.assertEqual(self.row(''), '- 20260101_000000')
+
+    def test_structured_packet_gives_the_same_row(self):
+        """Stored runs keep the layout they were written in, so both read."""
+        packet = '\n'.join([
+            '=== FORGE RUN ===',
+            'Run: 20260101_000000',
+            'Mode: dev',
+            'Status: FAILED',
+            'Outcome: 1 applied · 1 failed · 0 skipped · first failure at op 2 of 2',
+            '',
+            '=== OPS ===',
+            '1. APPLIED | WRITE | notes.txt :: Created file',
+            '2. FAILED_NOT_FOUND | REPLACE | app.py',
+            '',
+            '=== FAILURE ===',
+            'Op 2 · REPLACE app.py · FAILED_NOT_FOUND',
+            'LINES out of range',
+            '',
+            '=== CHANGED ===',
+            '- notes.txt — created · 1 lines',
+        ])
+        self.assertEqual(
+            self.row(packet),
+            '- 20260101_000000  FAILED  1 applied · 0 skipped · 1 failed'
+            '  changed 1 file  first: WRITE notes.txt',
+        )
 
 
 if __name__ == '__main__':

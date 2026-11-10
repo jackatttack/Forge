@@ -371,8 +371,8 @@ def resume_reference(run, environment, mode):
         mode,
     )
     return (
-        'FORGE resume %s carries on at op %d of %d (%s); to change an op '
-        'first, REPLACE %s'
+        'FORGE resume %s carries on at op %d of %d (%s). To change an op '
+        'first, REPLACE %s and end that bundle with the FORGE resume line'
         % (
             stamp,
             index + 1,

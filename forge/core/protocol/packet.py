@@ -5,8 +5,75 @@ Portable LLM-facing Forge packet renderer.
 This module is part of the environment-independent Forge protocol.
 
 It must not import Surface or any platform-specific integration.
+
+Layout, top to bottom:
+
+    === FORGE RUN ===   identity and status, then one line per fact the
+                        reader acts on (Outcome, Repair, Resume, ...)
+    === OPS ===         one numbered line per operation
+    === FAILURE ===     only when something failed: each failure once,
+                        with its fix steps
+    === CHANGED ===     only when files changed
+    === OUTPUT ===      only when operations produced something to read,
+                        each block labelled with its operation
+
+Rules the layout keeps:
+
+- Each fact appears once. A failure's explanation lives under FAILURE; its
+  OPS line carries only the status, and skipped operations carry no
+  reason of their own.
+- Everything refers to operations by their number in OPS.
+- The first line and the Run, Mode, App and Status lines never change
+  shape, so a tool can rely on them. FORGE runs reads OPS and CHANGED.
 """
 
+import re
+
+
+# ----- Editable settings ------------------------------------------------
+
+# Fix steps shown per failure. An op's hint may offer more; the first few
+# are the ones written for the common case.
+MAX_FIX_STEPS = 4
+
+# Ops whose preview only restates their OPS line (mode, counts, bytes).
+# Such a preview is left out of OUTPUT. A preview with real content, such
+# as landed lines, is always shown.
+QUIET_OPS = ('WRITE', 'REPLACE', 'DELETE')
+
+
+# ----- Fixed vocabulary -------------------------------------------------
+
+APPLIED = 'APPLIED'
+
+# Engine status for an op that never ran because an earlier one failed.
+SKIPPED_AFTER_FAILURE = 'SKIPPED_AFTER_FAILURE'
+
+# Section labels a rendered hint is made of (forge.core.hinting).
+_HINT_HEADERS = (
+    'HINT:', 'WHY:', 'RULE:', 'EXAMPLE:', 'DIRECTIVES:', 'NEXT:', 'HELP:',
+    'See:',
+)
+
+# The fallback hint restates the error and adds only general advice.
+_GENERIC_HINT = 'no specific recovery hint matched'
+
+# Steps that apply to every refusal and so tell the reader nothing new.
+_FILLER_STEPS = (
+    'Read the parser error exactly before changing the bundle.',
+    'Do not guess Forge directives or syntax.',
+    'Change the operation so it satisfies this rule, then rerun it.',
+)
+
+_HELP_COMMAND = re.compile(r'^(FORGE (?:help [A-Z_]+(?: full)?|ops|bundle))\b')
+
+# A preview line that is only a label and a value, or a byte count.
+_SUMMARY_LINE = re.compile(
+    r'^(?:[A-Za-z][A-Za-z _-]*: \S.*|\d+ bytes(?: written)?)$'
+)
+
+
+# ----- Changed files ----------------------------------------------------
 
 def _packet_line_count(text):
     return len((text or '').splitlines())
@@ -27,27 +94,7 @@ def _packet_changed_ranges(before, after):
     if not nums:
         return 'none'
 
-    ranges = []
-    start = nums[0]
-    prev = nums[0]
-
-    for n in nums[1:]:
-        if n == prev + 1:
-            prev = n
-            continue
-        ranges.append((start, prev))
-        start = prev = n
-
-    ranges.append((start, prev))
-
-    parts = []
-    for a, b in ranges:
-        if a == b:
-            parts.append(str(a))
-        else:
-            parts.append('%d-%d' % (a, b))
-
-    return ', '.join(parts)
+    return _number_ranges(nums)
 
 
 def _packet_collect_touched(run):
@@ -61,12 +108,13 @@ def _packet_collect_touched(run):
 
 
 def _format_changed_files(run):
+    """Return the CHANGED section's lines, or [] when nothing changed."""
     touched = _packet_collect_touched(run)
 
     if not touched:
         return []
 
-    lines = ['', 'Changed files:']
+    lines = ['', '=== CHANGED ===']
 
     for item in touched:
         rel = item.get('shown') or item.get('rel') or '?'
@@ -120,26 +168,17 @@ def _format_changed_files(run):
 
         lines.append('- %s — %s' % (rel, summary))
 
-    lines.append('')
-    lines.append(
-        'Use DIFF current for compact details. '
-        'Use DIFF current MODE: full for line-by-line diff.'
-    )
-
     return lines
-
-
-# Engine status whose hint is identical for every op it lands on.
-SKIPPED_AFTER_FAILURE = 'SKIPPED_AFTER_FAILURE'
 
 
 def collapse_skip_errors(errors):
     """
-    Return the Errors lines with repeated after-failure skips merged.
+    Return a run's error lines with repeated after-failure skips merged.
 
     Every op skipped after a failure records the same error apart from its
     op name. Real failures stay exactly as recorded; two or more skips
-    become one line with a count, placed where the first skip was.
+    become one line with a count, placed where the first skip was. The
+    standard summary counts errors this way.
     """
     skip_prefix = SKIPPED_AFTER_FAILURE + ' |'
     skips = [err for err in errors if str(err).startswith(skip_prefix)]
@@ -159,45 +198,72 @@ def collapse_skip_errors(errors):
     return collapsed
 
 
-def _format_shared_skip_hint(skipped_results):
-    """
-    Render one hint block for several ops skipped after the same failure.
+# ----- Small helpers ------------------------------------------------------
 
-    Every skipped op carries the same engine hint, so it is shown once,
-    headed by how many ops were skipped and which came first. The Ops list
-    still names every skipped op, so nothing is lost.
-    """
-    first = skipped_results[0]
-    return [
-        '%s: %s ops skipped (first: %s %s; all listed under Ops)' % (
-            SKIPPED_AFTER_FAILURE,
-            len(skipped_results),
-            first.get('op') or '?',
-            first.get('target') or '?',
-        ),
-        str(first.get('hint')).rstrip(),
-    ]
+def _status(result):
+    return str((result or {}).get('status') or 'UNKNOWN').strip().upper()
 
 
-def _preview_text(result):
-    """
-    The PREVIEW text for one result.
-
-    The Ops summary keeps one line per op, so a multi-line message (a
-    PROJECTS brief, for example) is shown here in full, ahead of any
-    preview the op also produced.
-    """
-    message = str(result.get('message') or '')
-    preview = str(result.get('preview') or '').rstrip()
-    if '\n' in message.strip():
-        return message.rstrip() + ('\n' + preview if preview else '')
-    return preview
+def _label(result):
+    """'REPLACE app.py::main', or 'GIT upload' for a targetless op."""
+    detail = result.get('target') or result.get('args') or ''
+    return ('%s %s' % (result.get('op') or '?', detail)).strip()
 
 
-def format_packet(run):
-    """Return the complete deterministic AI-facing Forge packet."""
-    run = run or {}
+def _number_ranges(numbers):
+    """[2, 3, 4, 7] -> '2-4, 7'."""
+    numbers = sorted(numbers)
+    ranges = []
+    start = prev = numbers[0]
 
+    for number in numbers[1:]:
+        if number == prev + 1:
+            prev = number
+            continue
+        ranges.append((start, prev))
+        start = prev = number
+    ranges.append((start, prev))
+
+    return ', '.join(
+        str(a) if a == b else '%d-%d' % (a, b)
+        for a, b in ranges
+    )
+
+
+def _brief_message(first_line, target):
+    """Drop the target from an op's message: its OPS line already names it."""
+    target = str(target or '')
+    if len(target) < 4:
+        return first_line
+    for lead in (' in ', ' into ', ': ', ' '):
+        needle = lead + target
+        if needle in first_line:
+            return first_line.replace(needle, '', 1)
+    return first_line
+
+
+# ----- Header -------------------------------------------------------------
+
+def _outcome_line(results):
+    """Counts and the first failure, for a run where something did not apply."""
+    statuses = [_status(result) for result in results]
+    if not statuses or all(status == APPLIED for status in statuses):
+        return ''
+
+    applied = statuses.count(APPLIED)
+    skipped = len([s for s in statuses if s.startswith('SKIPPED')])
+    failed = len(statuses) - applied - skipped
+    first = next(
+        number for number, status in enumerate(statuses, 1)
+        if status != APPLIED
+    )
+    return (
+        'Outcome: %d applied · %d failed · %d skipped · first failure at '
+        'op %d of %d' % (applied, failed, skipped, first, len(statuses))
+    )
+
+
+def _header_lines(run, results):
     lines = ['=== FORGE RUN ===']
 
     if run.get('stamp'):
@@ -209,6 +275,10 @@ def format_packet(run):
         lines.append('App: ' + str(run.get('app')))
 
     lines.append('Status: ' + str(run.get('status') or 'UNKNOWN'))
+
+    outcome = _outcome_line(results)
+    if outcome:
+        lines.append(outcome)
 
     if run.get('env_warning'):
         lines.append('Warning: ' + str(run.get('env_warning')))
@@ -232,117 +302,291 @@ def format_packet(run):
     if run.get('resume'):
         lines.append('Resume: ' + str(run.get('resume')))
 
+    # A bundle that ended with FORGE rerun or FORGE resume ran as two
+    # runs; each packet says where it sits in the pair.
+    if run.get('preceded_by'):
+        lines.append(
+            'Follows: %s (the run before it in this packet)'
+            % run.get('preceded_by')
+        )
+
+    if run.get('follow_on'):
+        if run.get('follow_on_skipped'):
+            lines.append(
+                'Follow-on: %s was not started, because this run did not '
+                'apply' % run.get('follow_on')
+            )
+        else:
+            lines.append(
+                'Follow-on: %s (the next run in this packet)'
+                % run.get('follow_on')
+            )
+
+    return lines
+
+
+# ----- OPS ------------------------------------------------------------------
+
+def _ops_lines(results):
+    """One numbered line per operation.
+
+    An applied op shows the first line of its message. A failed or skipped
+    op shows only its status: the explanation is under FAILURE, once.
+    """
+    lines = []
+    for number, result in enumerate(results, 1):
+        status = _status(result)
+        line = '%d. %s | %s | %s' % (
+            number,
+            status,
+            result.get('op') or '?',
+            result.get('target') or result.get('args') or '?',
+        )
+
+        message = str(result.get('message') or '').strip()
+        if status == APPLIED and message:
+            first_line, _, rest = message.partition('\n')
+            line += ' :: ' + _brief_message(first_line, result.get('target'))
+            if rest.strip():
+                line += ' (continued in OUTPUT)'
+
+        lines.append(line)
+    return lines
+
+
+# ----- FAILURE ----------------------------------------------------------------
+
+def _hint_parts(hint_text):
+    """Return what the packet shows from a rendered hint.
+
+    {'steps': fix steps, 'directives': directive help lines, 'help': one
+    FORGE help command}. A hint's opening line, reason and examples are
+    left out: the failure's own message already says what went wrong.
+    """
+    text = str(hint_text or '')
+    generic = _GENERIC_HINT in text
+    steps, directives, help_command = [], [], ''
+    section = ''
+
+    for raw in text.splitlines():
+        line = raw.strip()
+        header = next(
+            (name for name in _HINT_HEADERS if line.startswith(name)), '',
+        )
+        if header:
+            section = header
+            continue
+        if not line:
+            continue
+
+        if section == 'HELP:':
+            help_command = help_command or line
+        elif section == 'DIRECTIVES:' and line.startswith('- '):
+            directives.append(line[2:].strip())
+        elif section == 'NEXT:' and line.startswith('- '):
+            step = line[2:].strip()
+            command = _HELP_COMMAND.match(step)
+            if command:
+                help_command = help_command or command.group(1)
+            elif not generic and step not in _FILLER_STEPS:
+                steps.append(step)
+
+    return {
+        'steps': steps[:MAX_FIX_STEPS],
+        'directives': directives,
+        'help': help_command,
+    }
+
+
+def _guidance_lines(parts):
+    lines = []
+    if parts['directives']:
+        lines.append('Directives:')
+        lines.extend('- ' + text for text in parts['directives'])
+    if parts['steps']:
+        lines.append('Fix:')
+        lines.extend('- ' + step for step in parts['steps'])
+    if parts['help']:
+        lines.append('Help: ' + parts['help'])
+    return lines
+
+
+def _blocker_number(results):
+    """The op whose failure caused the skips: the last failed op before the
+    first skipped one. 0 when nothing was skipped."""
+    statuses = [_status(result) for result in results]
+    if SKIPPED_AFTER_FAILURE not in statuses:
+        return 0
+    first_skip = statuses.index(SKIPPED_AFTER_FAILURE) + 1
+    for number in range(first_skip - 1, 0, -1):
+        if statuses[number - 1] not in (APPLIED, SKIPPED_AFTER_FAILURE):
+            return number
+    return 0
+
+
+def _failure_lines(results):
+    """Each failed operation once: what went wrong, how to fix it, and
+    which later operations were skipped because of it."""
+    skipped = [
+        number for number, result in enumerate(results, 1)
+        if _status(result) == SKIPPED_AFTER_FAILURE
+    ]
+    blocker = _blocker_number(results)
+    skipped_text = ''
+    if skipped:
+        skipped_text = '%s %s' % (
+            'op' if len(skipped) == 1 else 'ops',
+            _number_ranges(skipped),
+        )
+
+    lines = []
+    for number, result in enumerate(results, 1):
+        status = _status(result)
+        if status in (APPLIED, SKIPPED_AFTER_FAILURE):
+            continue
+
+        if lines:
+            lines.append('')
+        lines.append('Op %d · %s · %s' % (number, _label(result), status))
+
+        message = str(result.get('message') or '').strip()
+        if message:
+            lines.append(message)
+
+        data = result.get('data')
+        traceback_text = ''
+        if isinstance(data, dict):
+            traceback_text = str(data.get('traceback') or '').strip()
+        if traceback_text:
+            lines.append('Traceback (last lines):')
+            lines.append(traceback_text)
+
+        lines.extend(_guidance_lines(_hint_parts(result.get('hint'))))
+
+        if _output_text(result):
+            lines.append('Its output is under OUTPUT, op %d.' % number)
+
+        if number == blocker and skipped_text:
+            gate = str(result.get('gate') or '')
+            lines.append(
+                'Skipped because of it%s: %s.'
+                % (' (%s gate)' % gate if gate else '', skipped_text)
+            )
+
+    if skipped_text and not blocker:
+        lines.append('Skipped after an earlier failure: %s.' % skipped_text)
+
+    return lines
+
+
+def _refusal_lines(run, errors):
+    """A bundle refused before execution: the errors, then where to look."""
+    lines = ['Nothing ran: the bundle was refused before execution.']
+    prefix = 'FAILED_PARSE | '
+
+    for error in errors:
+        text = str(error or '').strip()
+        if text.startswith(prefix):
+            text = text[len(prefix):]
+        if text:
+            lines.append('')
+            lines.append(text)
+
+    parts = {'steps': [], 'directives': [], 'help': ''}
+    for hint in run.get('parse_hints') or []:
+        if not isinstance(hint, dict):
+            continue
+        found = _hint_parts(hint.get('hint'))
+        for key in ('steps', 'directives'):
+            for item in found[key]:
+                if item not in parts[key]:
+                    parts[key].append(item)
+        parts['help'] = parts['help'] or found['help']
+
+    guidance = _guidance_lines(parts)
+    if guidance:
+        lines.append('')
+        lines.extend(guidance)
+
+    return lines
+
+
+# ----- OUTPUT -----------------------------------------------------------------
+
+def _is_summary_only(result, preview):
+    """True when a quiet op's preview adds nothing to its OPS line."""
+    if str(result.get('op') or '').upper() not in QUIET_OPS:
+        return False
+    return all(
+        _SUMMARY_LINE.match(line)
+        for line in preview.splitlines()[1:]
+    )
+
+
+def _output_text(result):
+    """What one operation contributes to OUTPUT, or ''.
+
+    The op's preview, unless it only restates the OPS line. An applied op's
+    multi-line message (a PROJECTS brief, for example) is shown in full
+    ahead of it; a failed op's message is under FAILURE instead.
+    """
+    status = _status(result)
+    message = str(result.get('message') or '')
+    preview = str(result.get('preview') or '').rstrip()
+
+    if preview and status == APPLIED and _is_summary_only(result, preview):
+        preview = ''
+
+    if status == APPLIED and '\n' in message.strip():
+        return message.rstrip() + ('\n' + preview if preview else '')
+    return preview
+
+
+def _output_lines(results):
+    lines = []
+    for number, result in enumerate(results, 1):
+        text = _output_text(result)
+        if not text:
+            continue
+        lines.append('--- op %d · %s ---' % (number, _label(result)))
+        lines.append(text)
+    return lines
+
+
+# ----- The packet ---------------------------------------------------------------
+
+def format_packet(run):
+    """Return the complete deterministic AI-facing Forge packet."""
+    run = run or {}
+    results = run.get('results') or []
     errors = run.get('errors') or []
 
-    if errors:
-        lines.append('')
-        lines.append('Errors:')
-
-        for err in collapse_skip_errors(errors):
-            lines.append('- ' + str(err))
+    lines = _header_lines(run, results)
 
     lines.append('')
-    lines.append('Ops:')
+    lines.append('=== OPS ===')
+    lines.extend(_ops_lines(results) or ['(none)'])
 
-    results = run.get('results') or []
-
-    if not results:
-        lines.append('- none')
+    if results:
+        failure = _failure_lines(results)
+        if not failure and errors:
+            failure = [str(error) for error in errors]
+    elif errors:
+        failure = _refusal_lines(run, errors)
     else:
-        for result in results:
-            line = '- %s | %s | %s' % (
-                result.get('status') or 'UNKNOWN',
-                result.get('op') or '?',
-                result.get('target') or result.get('args') or '?',
-            )
+        failure = []
 
-            message = str(result.get('message') or '').strip()
-            if message:
-                first_line, _, rest = message.partition('\n')
-                line += ' :: ' + first_line
-                if rest.strip():
-                    # One line per op; the rest is shown by _preview_text.
-                    line += ' (continued in PREVIEW)'
-
-            lines.append(line)
-
-    changed = _format_changed_files(run)
-
-    if changed:
-        lines.extend(changed)
-
-    hinted = [
-        hint
-        for hint in (
-            run.get('parse_hints')
-            or []
-        )
-        if (
-            isinstance(
-                hint,
-                dict,
-            )
-            and hint.get(
-                'hint'
-            )
-        )
-    ]
-
-    # One failure can skip dozens of later ops, each carrying the same
-    # engine hint. Show that hint once with a count instead of per op.
-    skipped_with_hint = [
-        result
-        for result in results
-        if result.get('hint')
-        and result.get('status') == SKIPPED_AFTER_FAILURE
-    ]
-    collapse_skips = len(skipped_with_hint) > 1
-
-    hinted.extend([
-        result
-        for result in results
-        if result.get('hint')
-        and not (
-            collapse_skips
-            and result.get('status') == SKIPPED_AFTER_FAILURE
-        )
-    ])
-
-    if hinted or collapse_skips:
+    if failure:
         lines.append('')
-        lines.append('=== HINTS ===')
+        lines.append('=== FAILURE ===')
+        lines.extend(failure)
 
-        for result in hinted:
-            # A parse-failure hint has no target, so show the op alone
-            # rather than a bare "?" after it.
-            heading = ' '.join(
-                str(part) for part in (
-                    result.get('op') or '?',
-                    result.get('target') or result.get('args') or '',
-                )
-                if part
-            )
-            lines.append(heading)
-            lines.append(
-                str(result.get('hint')).rstrip()
-            )
+    lines.extend(_format_changed_files(run))
 
-        if collapse_skips:
-            lines.extend(
-                _format_shared_skip_hint(skipped_with_hint)
-            )
-
-    previews = [
-        text
-        for text in (_preview_text(result) for result in results)
-        if text
-    ]
-
-    if previews:
+    output = _output_lines(results)
+    if output:
         lines.append('')
-        lines.append('=== PREVIEW ===')
-
-        for text in previews:
-            lines.append(text)
+        lines.append('=== OUTPUT ===')
+        lines.extend(output)
 
     return '\n'.join(lines).rstrip() + '\n'
