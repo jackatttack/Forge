@@ -141,7 +141,8 @@ A directive is an uppercase key, a colon, and a value:
     CONFIRM: overwrite
 
 Directives belong to the operation above them. Each op accepts its own
-set; FORGE help <OP> lists them.
+set; FORGE help <OP> lists them. A directive may appear once per
+operation; repeating one is a parse error.
 
 
 BLOCKS

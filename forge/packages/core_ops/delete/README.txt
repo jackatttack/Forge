@@ -61,8 +61,22 @@ Delete every exact match only with explicit confirmation:
 DELETE refuses directory paths with “target exists but is not a file”. Name
 individual files explicitly instead.
 
-AST deletion such as `DELETE app.py::main` is not supported. Use READ to
-inspect the containing lines and then delete an explicit range or exact block.
+A Python target deletes one whole definition: a function, a class, a method
+or an assignment.
+
+    DELETE app.py::main
+
+    DELETE app.py::Board.reset
+
+    DELETE app.py::@SETTING
+
+The definition's own lines go, decorators included, with the blank lines
+directly above it. A comment block directly above is not part of the
+definition and stays. A Python target cannot be combined with LINES or an
+OLD block. If the definition shares a line with other code, DELETE refuses
+with FAILED_UNSUPPORTED; delete it with an exact OLD block instead. Deleting
+the only statement in a class or function body fails the compile check and
+leaves the file untouched.
 
 ## Failures
 

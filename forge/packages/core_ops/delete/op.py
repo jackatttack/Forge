@@ -6,10 +6,9 @@ Public deletion verb for Forge.
 
 DELETE removes existing things deliberately:
 - whole files
+- whole Python definitions (path::Target)
 - explicit file line ranges
 - exact old text blocks
-
-AST deletion can be added later once the semantics are proven.
 """
 
 import os
@@ -30,10 +29,12 @@ HELP = {
     'brief': (
         'A whole file, LINES: a-b, or an exact BEGIN_OLD block · repeated '
         'OLD needs OCCURRENCE: N, or ALL: yes with CONFIRM: yes · '
-        'IF_VERSION pins.'
+        'path::Target removes a whole Python definition · IF_VERSION pins.'
     ),
     'minimal_example': [
         'DELETE scratch/example.txt',
+        '',
+        'DELETE app.py::old_helper',
         '',
         'DELETE docs/example.txt',
         'LINES: 12-15',
@@ -72,7 +73,7 @@ HELP = {
     },
     'common_failures': [
         'The target does not exist or is a directory.',
-        'An AST target was supplied; AST deletion is not supported.',
+        'A path::Target was not found, or shares its line with other code.',
         'The exact OLD block matched zero or several times.',
         'ALL: yes was supplied without CONFIRM: yes.',
         'The deletion would leave invalid Python.',
@@ -121,6 +122,13 @@ HINTS = {
         'next': [
             'Use OCCURRENCE: N instead when only one repeated match should be removed.',
             'Use ALL: yes only when every exact match is intentionally being deleted.',
+        ],
+    },
+    'shares a line': {
+        'message': 'The definition shares a line with other code, so nothing was deleted.',
+        'why': 'DELETE path::Target removes whole lines, which would take the other code with it.',
+        'next': [
+            'Delete it with an exact BEGIN_OLD block instead.',
         ],
     },
     'not found': {
@@ -184,11 +192,14 @@ def validate(parsed_op):
     ):
         errors.append('DELETE ALL: yes requires CONFIRM: yes')
 
-    if '::' in target:
-        errors.append('DELETE does not support AST targets yet')
-
     has_lines = 'LINES' in directives
     has_old = _has_old_block(parsed_op)
+
+    if '::' in target and (has_lines or has_old):
+        errors.append(
+            'DELETE path::Target removes the whole definition; '
+            'it cannot be combined with LINES or BEGIN_OLD'
+        )
 
     if has_lines and has_old:
         errors.append('DELETE cannot use both LINES and BEGIN_OLD')
@@ -407,11 +418,147 @@ def _execute_block_delete(ctx, target, parsed_op, result):
     result['data'] = {'path': target, 'mode': 'block', 'deleted': deleted, 'matches': count}
 
 
+def _other_code_on_its_lines(text, resolved):
+    """Return other code sharing the definition's first or last line, or ''.
+
+    Deleting whole lines is only safe when the definition owns them. A
+    trailing comment belongs to the definition and goes with it.
+    """
+    start_offset = resolved.get('start_offset')
+    end_offset = resolved.get('end_offset')
+    if start_offset is None or end_offset is None:
+        return ''
+
+    line_start = text.rfind('\n', 0, start_offset) + 1
+    before_it = text[line_start:start_offset].strip()
+
+    line_end = text.find('\n', end_offset)
+    if line_end < 0:
+        line_end = len(text)
+    after_it = text[end_offset:line_end].strip()
+    if after_it.startswith('#'):
+        after_it = ''
+
+    return before_it or after_it
+
+
+def _first_line_to_cut(lines, first_line):
+    """Return the line to cut from.
+
+    The blank lines directly above the definition go with it, so the
+    spacing below it is left for whatever now follows the code above.
+    """
+    cut_from = first_line
+    while cut_from > 1 and not lines[cut_from - 2].strip():
+        cut_from -= 1
+    return cut_from
+
+
+def _execute_target_delete(ctx, target, result):
+    """Delete one whole Python definition named by path::Target.
+
+    The definition's own lines go, decorators included, with the blank
+    lines directly above it. A comment block directly above is not part
+    of the definition and stays. The result is compile-checked before it
+    is written, so deleting the only statement in a body is refused.
+    """
+    from forge.core.ast_tools import resolve_ast_target
+    from forge.core.file_safety import (
+        CompileBlocked, NotTextFile, commit_edit, edit_change, load_for_edit,
+    )
+
+    file_target, _separator, ast_target = target.partition('::')
+
+    root, file_abs, err = safe_target(ctx, file_target)
+    if err:
+        result['status'] = 'FAILED_INVALID_PATH'
+        result['message'] = err
+        return
+
+    try:
+        file_ref = os.path.relpath(file_abs, root)
+    except Exception:
+        file_ref = split_root_prefix(file_target)[1]
+
+    resolved = resolve_ast_target(root, file_ref + '::' + ast_target)
+    if not resolved or not resolved.get('ok'):
+        result['status'] = (resolved or {}).get('code') or 'FAILED_NOT_FOUND'
+        result['message'] = (
+            (resolved or {}).get('error') or ('Target not found: ' + target)
+        )
+        return
+
+    try:
+        source = load_for_edit(resolved.get('file_abs'))
+    except NotTextFile as e:
+        result['status'] = 'FAILED_IO'
+        result['message'] = str(e)
+        return
+    before = source['text']
+
+    other_code = _other_code_on_its_lines(before, resolved)
+    if other_code:
+        result['status'] = 'FAILED_UNSUPPORTED'
+        result['message'] = (
+            'Target shares a line with other code (%s), so its whole lines '
+            'cannot be removed. Delete it with an exact BEGIN_OLD block '
+            'instead. File untouched.' % other_code
+        )
+        return
+
+    first_line = int(resolved.get('first_line') or resolved.get('start') or 1)
+    last_line = int(resolved.get('end') or first_line)
+    cut_from = _first_line_to_cut(before.splitlines(), first_line)
+
+    after, err = _replace_range_with_empty(before, cut_from, last_line)
+    if err:
+        result['status'] = 'FAILED_NOT_FOUND'
+        result['message'] = err
+        return
+
+    try:
+        written = commit_edit(source, after)
+    except CompileBlocked as e:
+        result['status'] = 'FAILED_COMPILE'
+        result['message'] = (
+            'Delete refused: result would not compile. Line %s: %s. '
+            'File untouched.' % (e.lineno, e.msg)
+        )
+        return
+    except OSError as e:
+        result['status'] = 'FAILED_IO'
+        result['message'] = 'Could not write file: %s. File untouched.' % e
+        return
+
+    target_root, target_rel = split_root_prefix(file_target)
+    touched = edit_change(target_rel, source, written, root=target_root or '')
+    record_touched(ctx, result, touched)
+
+    kind = resolved.get('kind') or 'definition'
+    result['status'] = 'APPLIED'
+    result['message'] = 'Deleted %s lines %d-%d' % (target, cut_from, last_line)
+    result['preview'] = (
+        'DELETE %s\nmode: ast\nkind: %s\nlines: %d-%d'
+        % (target, kind, cut_from, last_line)
+    )
+    result['file'] = file_target
+    result['data'] = {
+        'path': file_target,
+        'mode': 'ast',
+        'target': ast_target,
+        'kind': kind,
+        'start': cut_from,
+        'end': last_line,
+    }
+
+
 def execute(ctx, parsed_op, result):
     target = (parsed_op.get('target') or '').strip()
     directives = parsed_op.get('directives') or {}
 
-    if 'LINES' in directives:
+    if '::' in target:
+        _execute_target_delete(ctx, target, result)
+    elif 'LINES' in directives:
         _execute_lines_delete(ctx, target, parsed_op, result)
     elif _has_old_block(parsed_op):
         _execute_block_delete(ctx, target, parsed_op, result)

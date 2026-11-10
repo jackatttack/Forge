@@ -278,31 +278,40 @@ def alias_info_bundle(name):
     return 'ALIAS show %s' % name
 
 
+# A placeholder in an alias expansion: $1, $2 ... (one word), $* (every
+# word), $-1 (the last word) or $^ (every word but the last).
+_ALIAS_PLACEHOLDER = re.compile(r'\$(\*|\^|-1|\d+)')
+
+
 def substitute_alias_args(expansion, args_str):
+    """Fill an alias expansion's placeholders from the words typed after it.
+
+    Every placeholder is filled in one pass, so $10 is the tenth word (not
+    the first followed by a 0) and a word that itself looks like a
+    placeholder is never expanded again. A positional placeholder with no
+    matching word becomes empty.
+    """
     args_str = str(args_str or '').strip()
 
     if not args_str:
-        if re.search(r'\$\d+', expansion) or '$*' in expansion or '$^' in expansion or '$-1' in expansion:
+        if _ALIAS_PLACEHOLDER.search(expansion):
             raise ValueError('Alias requires arguments but none were supplied.')
         return expansion
 
     arg_list = args_str.split()
-    last_arg = arg_list[-1] if arg_list else ''
-    all_but_last = ' '.join(arg_list[:-1])
 
-    out = expansion
-    out = out.replace('$*', args_str)
-    out = out.replace('$-1', last_arg)
-    out = out.replace('$^', all_but_last)
+    def fill(match):
+        name = match.group(1)
+        if name == '*':
+            return args_str
+        if name == '-1':
+            return arg_list[-1]
+        if name == '^':
+            return ' '.join(arg_list[:-1])
+        index = int(name)
+        return arg_list[index - 1] if 1 <= index <= len(arg_list) else ''
 
-    for idx, arg in enumerate(arg_list, 1):
-        out = out.replace('$%d' % idx, arg)
-
-    out = re.sub(r'\$\d+', '', out)
-    out = out.replace('$*', '')
-    out = out.replace('$^', '')
-    out = out.replace('$-1', '')
-    return out
+    return _ALIAS_PLACEHOLDER.sub(fill, expansion)
 
 
 def try_expand_alias(

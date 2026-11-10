@@ -291,6 +291,15 @@ def resolve_ast_target(project_root, target_ref, default_file=None):
             'kind': kind,
             'start': getattr(node, 'lineno', 1),
             'end': end_lineno(node),
+            # The first line the definition occupies, decorators included.
+            # 'start' is the def or class line itself.
+            'first_line': min(
+                [getattr(node, 'lineno', 1)]
+                + [
+                    getattr(decorator, 'lineno', getattr(node, 'lineno', 1))
+                    for decorator in getattr(node, 'decorator_list', [])
+                ]
+            ),
             'start_offset': start_offset,
             'end_offset': end_offset,
             'source_text': src,

@@ -371,7 +371,20 @@ def parse_bundle(text):
 
             if stripped and _is_directive(line):
                 key, value = line.split(':', 1)
-                directives[key.strip()] = value.strip()
+                key = key.strip()
+                if key in directives:
+                    # The second value used to replace the first without a
+                    # word, so the op ran with a setting nobody reading
+                    # the bundle could predict.
+                    errors.append(
+                        'Duplicate directive at line %d under %s: %s\n'
+                        'WHY: %s was already set to %r for this operation.\n'
+                        'NEXT:\n'
+                        '- Keep one %s line.'
+                        % (i + 1, op_name, key, key, directives[key], key)
+                    )
+                    break
+                directives[key] = value.strip()
                 i += 1
                 continue
 

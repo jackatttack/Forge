@@ -167,7 +167,44 @@ def validate(parsed_op):
             'FINAL_NEWLINE must be yes or no'
         )
 
+    compile_error = _preflight_compile_error(parsed_op)
+    if compile_error:
+        errors.append(compile_error)
+
     return errors
+
+
+def _preflight_compile_error(parsed_op):
+    """Return why a Python body cannot compile, or '' when it can.
+
+    A WRITE body is the complete file, so this check needs nothing from
+    disk and runs before any operation in the bundle. A bundle refused
+    here has changed nothing and can be repaired and replayed with
+    FORGE rerun, instead of stopping half applied at the broken file.
+    execute() still compile-checks as the last line of defence.
+    """
+    target = (parsed_op.get('target') or '').strip()
+    directives = parsed_op.get('directives') or {}
+    body = parsed_op.get('body') or ''
+
+    if not target.endswith('.py') or not body:
+        return ''
+    if _truthy(directives.get('ALLOW_BROKEN')):
+        return ''
+    if _truthy(directives.get('FINAL_NEWLINE')):
+        body += '\n'
+
+    try:
+        compile(body, target, 'exec')
+    except SyntaxError as e:
+        return (
+            'WRITE refused: %s would not compile. Line %s: %s. '
+            'Use ALLOW_BROKEN: yes only for deliberate broken fixtures.'
+            % (target, e.lineno, e.msg)
+        )
+    except ValueError as e:
+        return 'WRITE refused: %s would not compile: %s' % (target, e)
+    return ''
 
 
 def _truthy(value):
