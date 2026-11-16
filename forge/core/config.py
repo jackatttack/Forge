@@ -45,6 +45,12 @@ DEFAULT_CONFIG = {
     # Forge resolves every path against project_root unless the user
     # deliberately configures otherwise.
     'roots': {},
+
+    # Optional host presentation module, as a dotted import name. Empty
+    # means the host's built-in presentation. Core only validates and
+    # carries this value; a host adapter decides what to do with it
+    # (forge/adapters/pythonista/presenter.py).
+    'presenter': '',
 }
 
 
@@ -348,6 +354,32 @@ def _validate_roots(roots):
             )
 
 
+def _validate_presenter(presenter):
+    """
+    Validate the optional host presenter: '' or a dotted module name.
+
+    Core never imports it. The value is checked here so a typo fails at
+    configuration time with a clear message, not as a silent fallback to
+    the built-in presentation.
+    """
+    if not isinstance(presenter, str):
+        raise ValueError(
+            'Forge config "presenter" must be a string module name.'
+        )
+
+    name = presenter.strip()
+
+    if not name:
+        return
+
+    if not all(part.isidentifier() for part in name.split('.')):
+        raise ValueError(
+            'Forge config "presenter" must be a dotted module name, for '
+            'example "my_package.forge_presenter"; got %r.'
+            % presenter
+        )
+
+
 def normalise_config(config=None):
     """Merge supplied config over defaults and validate version 1."""
     incoming = dict(
@@ -361,6 +393,7 @@ def normalise_config(config=None):
         'storage',
         'features',
         'roots',
+        'presenter',
     }
 
     unknown = set(
@@ -407,6 +440,10 @@ def normalise_config(config=None):
 
     _validate_roots(
         merged['roots']
+    )
+
+    _validate_presenter(
+        merged['presenter']
     )
 
     return merged
@@ -565,4 +602,9 @@ def resolve_config(
             home,
             config,
         ),
+
+        # Dotted module name of the host presenter, or '' for built-in.
+        'presenter': config[
+            'presenter'
+        ].strip(),
     }

@@ -1600,6 +1600,13 @@ def _config(ctx, result):
             )
             or ''
         ),
+        'presenter: '
+        + str(
+            environment.get(
+                'presenter'
+            )
+            or '(none)'
+        ),
         '',
         'storage:',
     ]

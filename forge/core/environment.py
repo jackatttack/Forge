@@ -34,6 +34,7 @@ def make_environment(
     config_path=None,
     roots=None,
     ops_root=None,
+    presenter=None,
 ):
     """Build one normalised environment dictionary."""
     project_root = _required_path(
@@ -169,6 +170,12 @@ def make_environment(
             caps
         ),
         'config_path': resolved_config_path,
+        # Dotted module name of the host presenter from forge.json, or ''.
+        # Carried for FORGE config; core never imports it.
+        'presenter': str(
+            presenter
+            or ''
+        ).strip(),
     }
 
 
@@ -306,6 +313,10 @@ def normalise_environment(
 
         ops_root=source.get(
             'ops_root'
+        ),
+
+        presenter=source.get(
+            'presenter'
         ),
 
         storage=storage_settings,

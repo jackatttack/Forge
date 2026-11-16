@@ -63,14 +63,25 @@ def set_result_text(text):
 
 def progress_renderer():
     """
-    Forge's console renderer, wrapped so the Forge Landing docks when the run
-    starts and fills in live. If the landing cannot load, the renderer keeps
-    its classic live console redraw instead.
+    The run's on_event listener: Forge's console renderer, wrapped by
+    whatever presents the run.
+
+    A presenter named in forge.json comes first (see
+    forge.adapters.pythonista.presenter). Otherwise the built-in Forge
+    Landing docks when the run starts and fills in live. If neither can
+    load, the renderer keeps its classic live console redraw.
     """
     try:
         from forge.adapters.pythonista.console_ui import ForgeConsoleUI
     except Exception:
         return None
+    try:
+        from forge.adapters.pythonista import presenter
+        listener = presenter.make_listener(ForgeConsoleUI)
+        if listener is not None:
+            return listener
+    except Exception:
+        pass
     try:
         from forge.adapters.pythonista.landing.hook import make_listener
         return make_listener(ForgeConsoleUI(live=False))
@@ -80,16 +91,21 @@ def progress_renderer():
 
 def show_landing(run, progress):
     """
-    Dock the Forge Landing over the console after the run.
+    Show the finished run: the configured presenter, or the Forge Landing
+    docked over the console.
 
-    Presentation only: if it cannot load or dock, the console keeps the
+    Presentation only: if nothing can load or dock, the console keeps the
     text summary Forge already printed.
     """
     try:
-        from forge.adapters.pythonista.landing.hook import show_after_run
-        show_after_run(run, progress)
+        from forge.adapters.pythonista import presenter
+        presenter.show_after_run(run, progress)
     except Exception:
-        pass
+        try:
+            from forge.adapters.pythonista.landing.hook import show_after_run
+            show_after_run(run, progress)
+        except Exception:
+            pass
 
 
 def editor_tab_sync():

@@ -123,6 +123,20 @@ This shows the resolved project root, Forge home, artifact storage, alias
 registry, host environment, and any configured named roots. It never prints
 credentials.
 
+## Presenter
+
+A host may show a finished run its own way. On Pythonista the launcher
+docks the built-in Forge Landing. forge.json can name a module to show
+the run instead:
+
+    {"config_version": 1, "presenter": "my_package.forge_presenter"}
+
+The module offers show_after_run(run, progress) and returns True when it
+showed the run. If it is missing, fails or returns False, the built-in
+landing shows the run, so a presenter can never cost you the result.
+FORGE config shows the configured name. The contract is described in
+forge/adapters/pythonista/presenter.py. Other hosts ignore the setting.
+
 ## Named roots
 
 By default every path in a bundle resolves against the project root.

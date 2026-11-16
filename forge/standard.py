@@ -140,6 +140,9 @@ def standard_environment(
         ops_root=resolved[
             'ops_root'
         ],
+        presenter=resolved[
+            'presenter'
+        ],
         config_path=resolved[
             'config_path'
         ],
