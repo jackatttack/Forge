@@ -945,6 +945,16 @@ class Landing(object):
         self.window.set_title(TITLE)
 
 
+# Which Anvil this is: tools/install.py writes installed_build.py into the
+# installed copy, and tools/probe_loaded.py compares it with what the
+# running session has loaded. A copy not installed that way (the source, or
+# the Anvil bundled with Forge) says 'unstamped'.
+try:
+    from .installed_build import BUILD as ANVIL_BUILD
+except ImportError:
+    ANVIL_BUILD = 'unstamped'
+
+
 # One Landing for the session. The module lives in site-packages, so it and
 # the window survive between Forge runs.
 _landing = None

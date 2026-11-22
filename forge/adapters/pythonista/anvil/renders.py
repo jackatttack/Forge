@@ -91,13 +91,17 @@ class RenderContext(object):
 
 
 def detail_html(page, row, context):
-    """row's output rendered for its op, or None for the plain preview."""
+    """row's output rendered for its op, or None for the plain preview.
+
+    Edit ops often carry no data, only result['touched'], so a row with a
+    result is offered to its renderer too; renderers return None when what
+    they need is missing."""
     data = getattr(row, 'data', None)
     renderer = RENDERERS.get(row.op)
-    if not data or renderer is None:
+    if renderer is None or not (data or getattr(row, 'result', None)):
         return None
     try:
-        return renderer(page, row, data, context)
+        return renderer(page, row, data or {}, context)
     except Exception:            # a render must never cost the output
         return None
 
@@ -227,6 +231,8 @@ def search_html(page, row, data, context):
 # --- READ -------------------------------------------------------------------
 
 def read_html(page, row, data, context):
+    if data.get('mode') == 'targets':
+        return targets_html(page, row, data, context)
     lines = data.get('lines')
     path = str(data.get('path') or row.path or '').split('::')[0]
     if not isinstance(lines, list) or not lines or not path:
@@ -244,6 +250,131 @@ def read_html(page, row, data, context):
     label = '%s  ·  lines %d-%d%s' % (path, start, start + len(lines) - 1,
                                       ' of %d' % total if isinstance(total, int) else '')
     return code_rows_html(page, label, context.open_item(path, start), [block], is_python(path))
+
+
+TARGETS_SHOWN = 150          # rows of a READ TARGETS list drawn before "… more"
+TARGET_START = re.compile(r'\[(\d+)')
+
+
+def targets_html(page, row, data, context):
+    """READ with TARGETS: yes. Each target a code row at its line, indented
+    under its class, its doc as a comment; a tap opens the file there."""
+    targets = data.get('targets')
+    path = str(data.get('path') or row.path or '').split('::')[0]
+    if not isinstance(targets, list) or not targets or not path:
+        return None
+    block = []
+    for target in targets[:TARGETS_SHOWN]:
+        if not isinstance(target, dict):
+            continue
+        name = str(target.get('target') or '').split('::', 1)[-1]
+        if name.startswith('@'):
+            name = name[1:] + ' = …'     # an assignment, not a definition
+        found = TARGET_START.search(str(target.get('range') or ''))
+        line = int(found.group(1)) if found else 1
+        doc = str(target.get('doc') or '')
+        text = '    ' * int(target.get('indent') or 0) + name
+        if doc and doc != '∅':
+            text += '    # ' + doc
+        block.append(('row', line, text, context.open_item(path, line)))
+    if len(targets) > TARGETS_SHOWN:
+        block.append(('row note', None, '… %s' % plural(len(targets) - TARGETS_SHOWN, 'more target'),
+                      context.open_item(path, 1)))
+    label = '%s  ·  %s' % (path, plural(len(targets), 'target'))
+    return code_rows_html(page, label, context.open_item(path, 1), [block], True)
+
+
+# --- Edits: WRITE, REPLACE, INSERT, DELETE ------------------------------------
+
+EDIT_CONTEXT_LINES = 2       # unchanged lines kept around each change
+EDIT_ROWS_SHOWN = 80         # diff rows drawn per file before "… more"
+
+
+def touched_text_files(row):
+    """The text-file changes this op made: Forge's own before and after
+    copies (result['touched'], what REVERT restores from)."""
+    result = getattr(row, 'result', None) or {}
+    return [touched for touched in (result.get('touched') or [])
+            if isinstance(touched, dict) and touched.get('kind', 'file') == 'file'
+            and isinstance(touched.get('rel'), str)]
+
+
+def diff_blocks(before_lines, after_lines, open_at):
+    """Changed lines with EDIT_CONTEXT_LINES around them, as code rows.
+    Unchanged and added lines carry their new line number, removed lines
+    none; a tap opens the file at the line (open_at(number) -> item)."""
+    import difflib                       # only edits need it
+    matcher = difflib.SequenceMatcher(None, before_lines, after_lines, autojunk=False)
+    blocks = []
+    for group in matcher.get_grouped_opcodes(EDIT_CONTEXT_LINES):
+        block = []
+        for tag, old_start, old_end, new_start, new_end in group:
+            if tag == 'equal':
+                block.extend(('row ctx', number + 1, after_lines[number], open_at(number + 1))
+                             for number in range(new_start, new_end))
+                continue
+            block.extend(('row remove', None, before_lines[number], open_at(new_start + 1))
+                         for number in range(old_start, old_end))
+            block.extend(('row add', number + 1, after_lines[number], open_at(number + 1))
+                         for number in range(new_start, new_end))
+        blocks.append(block)
+    return blocks
+
+
+def clip_blocks(blocks, limit, more_item):
+    """At most limit rows across blocks; a note row says how many were left out."""
+    total = sum(len(block) for block in blocks)
+    kept, count = [], 0
+    for block in blocks:
+        if count >= limit:
+            break
+        room = limit - count
+        kept.append(list(block[:room]))
+        count += min(len(block), room)
+    if kept and total > count:
+        kept[-1].append(('row note', None, '… %s: tap to open the file'
+                         % plural(total - count, 'more line'), more_item))
+    return kept or [[]]
+
+
+def edit_html(page, row, data, context):
+    """WRITE, REPLACE, INSERT and DELETE: what the op changed, as a diff in
+    the code view, from Forge's before and after copies of each file."""
+    parts = []
+    for touched in touched_text_files(row):
+        rel, root = touched['rel'], touched.get('root') or ''
+        shown = '%s:%s' % (root, rel) if root else rel
+
+        def open_at(number, rel=rel, root=root):
+            # Taps open project files; another root's files are shown only.
+            return None if root else context.open_item(rel, max(1, number))
+
+        before = str(touched.get('before') or '').splitlines()
+        after = str(touched.get('after') or '').splitlines()
+        first = 1
+        if not touched.get('existed_before', True):
+            blocks = [[('row add', number + 1, line, open_at(number + 1))
+                       for number, line in enumerate(after)]]
+            label = '%s  ·  new file  ·  %s' % (shown, plural(len(after), 'line'))
+        elif not touched.get('existed_after', True):
+            blocks = [[('row remove', number + 1, line, None) for number, line in enumerate(before)]]
+            label = '%s  ·  deleted  ·  %s' % (shown, plural(len(before), 'line'))
+        else:
+            blocks = diff_blocks(before, after, open_at)
+            rows = [one for block in blocks for one in block]
+            added = len([one for one in rows if one[0] == 'row add'])
+            removed = len([one for one in rows if one[0] == 'row remove'])
+            numbers = [one[1] for one in rows if one[0] == 'row add']
+            if numbers:
+                first = numbers[0]
+            where = '  ·  lines %d-%d' % (min(numbers), max(numbers)) if numbers else ''
+            label = '%s  ·  +%d −%d%s' % (shown, added, removed, where)
+            if not blocks:
+                blocks = [[('row note', None, 'The file was left as it was.', None)]]
+                label = '%s  ·  no change' % shown
+        blocks = clip_blocks(blocks, EDIT_ROWS_SHOWN, open_at(first))
+        parts.append(code_rows_html(page, label, open_at(first), blocks, is_python(rel)))
+    return ''.join(parts) or None
 
 
 # --- MAP --------------------------------------------------------------------
@@ -569,6 +700,10 @@ def forge_html(page, row, data, context):
 RENDERERS = {
     'SEARCH': search_html,
     'READ': read_html,
+    'WRITE': edit_html,
+    'REPLACE': edit_html,
+    'INSERT': edit_html,
+    'DELETE': edit_html,
     'MAP': map_html,
     'RUN': run_html,
     'MEMORY': memory_html,

@@ -8,12 +8,16 @@ touches no ui, so tests/smoke_page.py can check it headless.
     page = build_page(model, {'ops'})         # with Operations toggled
     tiles.Cards(window, extra_css=CSS)        # the tile needs Anvil's CSS
 
-Look: Forge's own for the run (Menlo, the pink double rule, the spaced
-verdict, timing and outcome bars); editorkit's code view for diffs and its
-docs look (prose) for output and failures.
+Look (2026-11-22): words in the system font, colour only for status. A
+clean run's verdict is one line; anything else is a card in its status
+colour with the outcome bars. One filled button (Copy packet, or Copy
+packet with reply when there is something to send back); history and
+Revert sit in a quiet row. Menlo stays for ops, paths and stamps;
+editorkit's code view for diffs and its docs look (prose) for output and
+failures.
 
-Top to bottom: verdict, outcome bars, buttons, failures, changed files,
-touched files (Toolbox file cards), operations. Sections fold; unfolded
+Top to bottom: verdict, buttons, failures, waiting for you, operations,
+changed files, touched files (Toolbox file cards). Sections fold; unfolded
 holds the names whose fold state the
 user has flipped from its default:
 
@@ -23,6 +27,7 @@ user has flipped from its default:
     ('op', number)    one operation's output (default: open on a look run,
                       one that changed nothing; else folded). Drawn by
                       renders.py where an op has a renderer.
+    ('ask', number)   an answered question (default: folded to its answer)
 
 Taps hand back the items below; landing.py acts on them.
 """
@@ -251,18 +256,13 @@ def section_label(page, words, aside='', fold=None, is_open=False):
                          mark, escape(words), escape(aside)))
 
 
-def add_banner(page, model):
-    words, tone = model.verdict
-    summary = '%s  ·  %s  ·  %s' % (model.mode.upper(), model.stamp or 'no stamp',
-                                    model.summary_line())
-    page.parts.append(
-        '<div class="av-banner"><div class="av-rule"></div>'
-        '<div class="av-verdict" style="color:%s">%s</div>'
-        '<div class="av-summary">%s</div><div class="av-rule"></div></div>'
-        % (TONE_COLOURS[tone], escape(spaced(words)), escape(summary)))
+def button_html(page, label, item, kind='secondary'):
+    """One button. kind 'primary' is the filled one: one per page section."""
+    return '<div class="av-button %s"%s>%s</div>' % (kind, page.go(item), escape(label))
 
 
-def add_outcomes(page, model):
+def outcomes_html(model):
+    """Applied, skipped and failed as bars in their status colours."""
     biggest = max(max(model.counts.values()), 1)
     rows = []
     for tone, word in TONE_WORDS:
@@ -272,22 +272,55 @@ def add_outcomes(page, model):
             '<span class="av-track"><span class="av-fill" style="width:%d%%;background:%s">'
             '</span></span><span class="av-count">%d</span></div>'
             % (colour, word, round(100.0 * count / biggest), colour, count))
-    page.parts.append('<div class="av-outcomes">%s</div>' % ''.join(rows))
+    return '<div class="av-outcomes">%s</div>' % ''.join(rows)
 
 
-def add_button_row(page, buttons):
+def add_banner(page, model):
+    """The verdict. A clean run is one line; anything else is a card in its
+    status colour with the outcome bars, so trouble is never just a line."""
+    words, tone = model.verdict
+    meta = [model.summary_line(), model.stamp or 'no stamp']
+    mode = (model.mode or '').lower()
+    if mode and mode != 'dev':
+        meta.insert(0, mode.upper())
+    meta_text = '  ·  '.join(meta)
+    colour = TONE_COLOURS[tone]
+    if is_clean(model):
+        page.parts.append(
+            '<div class="av-verdict-line"><span class="av-verdict-mark" style="color:%s">✓</span>'
+            '<span class="av-verdict-words">%s</span><span class="av-meta">%s</span></div>'
+            % (colour, escape(words.capitalize()), escape(meta_text)))
+        return
+    page.parts.append(
+        '<div class="av-verdict-card" style="--c:%s"><div class="av-verdict" style="color:%s">%s</div>'
+        '<div class="av-meta">%s</div>%s</div>'
+        % (colour, colour, escape(words.capitalize()), escape(meta_text), outcomes_html(model)))
+
+
+def add_outcomes(page, model):
+    page.parts.append(outcomes_html(model))
+
+
+def add_button_row(page, buttons, kind='secondary'):
     page.parts.append('<div class="av-buttons">%s</div>' % ''.join(
-        '<div class="av-button"%s>%s</div>' % (page.go(item), escape(label))
-        for label, item in buttons))
+        button_html(page, label, item, kind) for label, item in buttons))
 
 
-def add_buttons(page, model=None, history=None):
-    """The run's buttons. First row: copy and open. Second row, the
-    controls: step through Forge's run history (history=(older, newer)
-    stamps), and copy a bundle that carries a failed run on or reverts this
-    run. Controls only copy: the bundle is then run in Forge as usual."""
-    add_button_row(page, (('Copy packet', COPY_PACKET), ('Run Forge', RUN_FORGE),
-                          ('Copy DIFF', COPY_DIFF)))
+def add_buttons(page, model=None, history=None, reply=False):
+    """The run's buttons, loudest first. One filled button: Copy packet, or
+    Copy packet with reply when the bundle asked for something or notes are
+    written. Then Run Forge, and Copy DIFF when files changed. Last, a quiet
+    row of controls: step through Forge's run history (history=(older,
+    newer) stamps), and copy a bundle that carries a failed run on or
+    reverts this run. Controls only copy: the bundle is then run in Forge
+    as usual."""
+    primary = ('Copy packet with reply', COPY_REPLY) if reply else ('Copy packet', COPY_PACKET)
+    add_button_row(page, (primary,), kind='primary')
+    secondary = [('Copy packet', COPY_PACKET)] if reply else []
+    secondary.append(('Run Forge', RUN_FORGE))
+    if model is None or changed_files(model):
+        secondary.append(('Copy DIFF', COPY_DIFF))
+    add_button_row(page, secondary)
     if model is None:
         return
     older, newer = history or (None, None)
@@ -302,7 +335,10 @@ def add_buttons(page, model=None, history=None):
     if model.touched_files:          # files this run itself changed; a resumed run's
         controls.append(('⟲ Revert', COPY_REVERT))   # earlier edits belong to the first run
     if controls:
-        add_button_row(page, controls)
+        page.parts.append('<div class="av-controls">%s</div>' % ''.join(
+            '<span class="av-control%s"%s>%s</span>'
+            % (' danger' if item == COPY_REVERT else '', page.go(item), escape(label))
+            for label, item in controls))
 
 
 def add_failures(page, model):
@@ -324,14 +360,20 @@ def add_failures(page, model):
         page.parts.append(prose.article(*blocks))
 
 
-def waiting_html(page, item, answer):
-    """One requested item (an EDITOR OPEN, ASK, CHECK or NOTE) as a row."""
+def waiting_html(page, item, answer, unfolded=()):
+    """One requested item (an EDITOR OPEN, ASK, CHECK or NOTE) as a row,
+    numbered as in the reply block. An answered ASK folds to its question
+    and answer; a tap opens it again to change the answer."""
     kind, number = item['kind'], item['number']
     value = answer.get('value')
+    number_html = '<span class="av-num">%s</span>' % number
+
+    def line(text):
+        return ('<div class="av-wait-line">%s<span class="av-wait-text">%s</span></div>'
+                % (number_html, escape(text)))
 
     if kind == 'note':
-        return ('<div class="av-wait"><div class="av-wait-text">%s</div></div>'
-                % escape(item['text']))
+        return '<div class="av-wait">%s</div>' % line(item['text'])
 
     if kind == 'open':
         where = item['path']
@@ -339,22 +381,25 @@ def waiting_html(page, item, answer):
             where += ':%d' % item['target_line']
         if item.get('skipped'):
             reason = 'file not found' if item.get('missing') else 'not opened: the run was not clean'
-            return ('<div class="av-wait"><div class="av-wait-text">%s</div>'
-                    '<div class="av-skipped">%s</div></div>' % (escape(where), reason))
-        return ('<div class="av-file"><span class="av-path">%s</span>'
+            return '<div class="av-wait">%s<div class="av-skipped">%s</div></div>' % (line(where), reason)
+        return ('<div class="av-file">%s<span class="av-path">%s</span>'
                 '<b class="av-open"%s>Open</b></div>'
-                % (escape(where),
+                % (number_html, escape(where),
                    page.go(open_item(item['path'], item.get('target_line') or 1))))
 
     if kind == 'check':
         if item.get('skipped'):
-            return ('<div class="av-wait"><div class="av-wait-text">%s</div>'
-                    '<div class="av-skipped">skipped: the run was not clean</div></div>'
-                    % escape(item['text']))
-        return ('<div class="av-wait av-check%s"%s><span class="av-box">%s</span>'
+            return ('<div class="av-wait">%s<div class="av-skipped">skipped: the run was not clean</div></div>'
+                    % line(item['text']))
+        return ('<div class="av-wait av-check%s"%s>%s<span class="av-box">%s</span>'
                 '<span class="av-wait-text">%s</span></div>'
-                % (' on' if value else '', page.go(check_item(number)),
+                % (' on' if value else '', page.go(check_item(number)), number_html,
                    '☑' if value else '☐', escape(item['text'])))
+
+    fold = ('ask', number)
+    if value and fold not in unfolded:
+        return ('<div class="av-wait av-done"%s>%s<div class="av-answer">→ %s</div></div>'
+                % (page.go(fold_item(fold)), line(item['text']), escape(str(value))))
 
     options = list(item.get('options') or [])
     choices = ''.join(
@@ -366,9 +411,8 @@ def waiting_html(page, item, answer):
     choices += ('<div class="av-choice%s"%s>Other…</div>'
                 % (' on' if typed else '', page.go(other_item(number))))
     shown = '<div class="av-typed">%s</div>' % escape(str(value)) if typed else ''
-    return ('<div class="av-wait"><div class="av-wait-text">%s</div>'
-            '<div class="av-choices">%s</div>%s</div>'
-            % (escape(item['text']), choices, shown))
+    return ('<div class="av-wait">%s<div class="av-choices">%s</div>%s</div>'
+            % (line(item['text']), choices, shown))
 
 
 def notes_html(page, notes):
@@ -384,25 +428,27 @@ def notes_html(page, notes):
             % (page.go(NOTES), label, shown))
 
 
-def add_waiting(page, items, answers):
-    """Waiting for you: what the bundle asked for, then 📝 Notes (always),
-    and the way to reply once there is anything to send back."""
+def add_waiting(page, items, answers, unfolded=()):
+    """Waiting for you: what the bundle asked for, numbered as in the reply,
+    then 📝 Notes (always), and the reply button once there is anything to
+    send back. That button fills in when every question is answered."""
     answers = answers or {}
     to_answer = run_items.answerable(items) if items else []
+    answered = run_items.answered_count(items, answers) if to_answer else 0
     if items:
-        aside = ''
-        if to_answer:
-            aside = '%d of %d answered' % (run_items.answered_count(items, answers),
-                                           len(to_answer))
+        aside = '%d of %d answered' % (answered, len(to_answer)) if to_answer else ''
         section_label(page, 'WAITING FOR YOU', aside)
         page.parts.append(''.join(
-            waiting_html(page, item, answers.get(str(item['number'])) or {})
+            waiting_html(page, item, answers.get(str(item['number'])) or {}, unfolded)
             for item in items))
     notes = run_items.notes_of(answers)
     page.parts.append(notes_html(page, notes))
     if to_answer or notes:
-        page.parts.append('<div class="av-buttons"><div class="av-button"%s>'
-                          'Copy packet with reply</div></div>' % page.go(COPY_REPLY))
+        done = answered == len(to_answer)
+        label = 'Copy packet with reply'
+        if not done:
+            label += ' · %d of %d' % (answered, len(to_answer))
+        add_button_row(page, ((label, COPY_REPLY),), kind='primary' if done else 'secondary')
 
 
 def add_changed(page, model, unfolded):
@@ -446,19 +492,29 @@ def touched_files(model):
 
 
 def add_touched(page, model):
-    """Touched files as the Toolbox draws files (Home, Find): a card each."""
-    if filecards is None:
-        return
+    """Touched files as the Toolbox draws files (Home, Find): a card each.
+    Without the Toolbox's file cards, slim rows: name, folder, a tag when
+    edited; a tap opens the file either way."""
     paths, edited = touched_files(model)
     if not paths:
         return
     edited_count = len([path for path in paths if path in edited])
     section_label(page, 'TOUCHED', '%d edited · %d read or run'
                   % (edited_count, len(paths) - edited_count))
-    root = model.project_root
-    page.grid([filecards.file_card(os.path.join(root, path), open_item(path, 1),
-                                   where=os.path.dirname(path) or '.')
-               for path in paths], min_width=filecards.CARD_WIDTH)
+    if filecards is not None:
+        root = model.project_root
+        page.grid([filecards.file_card(os.path.join(root, path), open_item(path, 1),
+                                       where=os.path.dirname(path) or '.')
+                   for path in paths], min_width=filecards.CARD_WIDTH)
+        return
+    rows = []
+    for path in paths:
+        tag = '<span class="av-tag">edited</span>' if path in edited else ''
+        rows.append('<div class="av-touch"%s><span class="av-touch-name">%s</span>'
+                    '<span class="av-touch-where">%s</span>%s</div>'
+                    % (page.go(open_item(path, 1)), escape(os.path.basename(path)),
+                       escape(os.path.dirname(path) or '.'), tag))
+    page.parts.append('<div class="av-group">%s</div>' % ''.join(rows))
 
 
 def plain_output_html(row):
@@ -515,18 +571,21 @@ def build_page(model, unfolded=(), arriving=False, items=(), answers=None, histo
     """The whole run as one cards.Page.
 
     unfolded: see the module docstring. arriving=True plays the arrival
-    (the verdict pops, the bars grow); pass it only for a run's first draw,
-    or every fold tap would replay it. items and answers (items.py) are
-    what the bundle asked for and what has been answered so far.
+    (the verdict rises in, the bars grow); pass it only for a run's first
+    draw, or every fold tap would replay it. items and answers (items.py)
+    are what the bundle asked for and what has been answered so far.
     """
     unfolded = set(unfolded)
+    items = list(items)
+    answers = answers or {}
+    reply = bool((run_items.answerable(items) if items else [])
+                 or run_items.notes_of(answers))
     page = cards.Page()
     page.parts.append('<div class="av-page%s">' % (' av-arrive' if arriving else ''))
     add_banner(page, model)
-    add_outcomes(page, model)
-    add_buttons(page, model, history)
+    add_buttons(page, model, history, reply=reply)
     add_failures(page, model)
-    add_waiting(page, list(items), answers)
+    add_waiting(page, items, answers, unfolded)
     add_operations(page, model, unfolded)
     add_changed(page, model, unfolded)
     add_touched(page, model)
@@ -646,37 +705,49 @@ def build_live_page(snapshot, active_seconds=0.0):
 
 # --- The look ---------------------------------------------------------------
 #
-# Theme tokens (var(--muted), --rule, --wash-strong) for everything that is
-# not Forge's own identity; the pink rule and blue accents are Forge's.
+# Theme tokens (var(--text), --muted, --wash, --wash-strong, --rule) for
+# everything; colour only says status (TONE_COLOURS) or "tap me" (Forge
+# blue). Words in the system font; Menlo for ops, paths and stamps.
 
-CSS = ':root { --av-pink: %s; --av-blue: %s; }\n' % (FORGE_PINK, FORGE_BLUE) + """
+CSS = ':root { --av-blue: %s; }\n' % FORGE_BLUE + """
+.av-verdict-line { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 8px;
+    padding: 10px 4px 2px; font: 16px/1.4 -apple-system, sans-serif; }
+.av-verdict-mark { font-weight: 700; }
+.av-verdict-words { font-weight: 600; }
+.av-meta { font: 11px/1.5 Menlo, monospace; color: var(--muted); overflow-wrap: anywhere; }
+.av-verdict-card { margin: 8px 2px 2px; padding: 10px 12px 8px; border-radius: 12px;
+    background: var(--wash); box-shadow: inset 3px 0 0 var(--c, transparent); }
+.av-verdict { font: 600 18px/1.3 -apple-system, sans-serif; }
 .av-banner { text-align: center; }
-.av-rule { height: 3px; border-top: 2px solid var(--av-pink);
-    border-bottom: 1px solid var(--av-pink); margin: 8px 2px; }
-.av-verdict { font: bold 20px/1.3 Menlo, monospace; white-space: pre-wrap; }
+.av-rule { border-top: 1px solid var(--rule); margin: 8px 2px; }
 .av-summary { font: 11px/1.5 Menlo, monospace; color: var(--muted); padding: 2px 4px 0; }
-.av-outcomes { padding: 6px 4px 2px; }
-.av-outcome { display: flex; align-items: center; font: 12px/1.7 Menlo, monospace; }
+.av-outcomes { padding: 8px 0 2px; }
+.av-outcome { display: flex; align-items: center; font: 13px/1.7 -apple-system, sans-serif; }
 .av-name { flex: 0 0 66px; }
 .av-track { display: block; flex: 1 1 auto; height: 8px; border-radius: 4px;
     background: var(--wash-strong); overflow: hidden; }
 .av-fill { display: block; height: 100%; border-radius: 4px; background: var(--av-blue); }
-.av-count { flex: 0 0 30px; text-align: right; }
-.av-buttons { display: flex; padding: 10px 2px 4px; }
-.av-button { flex: 1 1 0; min-width: 0; margin: 0 4px; text-align: center; padding: 9px 2px;
-    border: 1px solid var(--av-blue); color: var(--av-blue); border-radius: 8px;
-    font: bold 12px Menlo, monospace; cursor: pointer; }
-.av-section { font: bold 11px/1.4 Menlo, monospace; color: var(--muted);
-    padding: 14px 4px 6px; letter-spacing: 0.04em; }
-.av-aside { font-weight: normal; margin-left: 10px; letter-spacing: 0; }
+.av-count { flex: 0 0 30px; text-align: right; font-family: Menlo, monospace; }
+.av-buttons { display: flex; padding: 8px 2px 0; }
+.av-button { flex: 1 1 0; min-width: 0; margin: 0 4px; text-align: center; padding: 10px 4px;
+    border-radius: 10px; font: 600 14px/1.2 -apple-system, sans-serif; cursor: pointer;
+    color: var(--av-blue); background: var(--wash-strong); }
+.av-button.primary { color: #0B1220; background: var(--av-blue); padding: 13px 4px; font-size: 16px; }
+.av-controls { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px 22px;
+    padding: 10px 4px 0; font: 14px/1.4 -apple-system, sans-serif; }
+.av-control { color: var(--muted); cursor: pointer; padding: 4px 2px; }
+.av-control.danger { color: #FF5A5F; }
+.av-section { font: 600 11px/1.4 -apple-system, sans-serif; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.06em; padding: 18px 4px 6px; }
+.av-aside { font-weight: normal; margin-left: 10px; letter-spacing: 0; text-transform: none; }
 .av-fold { display: inline-block; width: 1.3em; color: var(--av-blue); }
 .av-file { display: flex; align-items: baseline; padding: 8px 4px;
     border-top: 1px solid var(--rule); font: 12px/1.4 Menlo, monospace; cursor: pointer; }
 .av-path { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; padding-right: 8px; }
 .av-plus { color: #4CD964; padding-right: 6px; }
 .av-minus { color: #FF5A5F; padding-right: 10px; }
-.av-open { flex: 0 0 auto; font: bold 11px Menlo, monospace; color: var(--av-blue);
-    border: 1px solid var(--av-blue); border-radius: 6px; padding: 2px 8px; }
+.av-open { flex: 0 0 auto; font: 600 13px -apple-system, sans-serif; color: var(--av-blue);
+    background: var(--wash-strong); border-radius: 8px; padding: 4px 10px; }
 .av-op { padding: 6px 4px 7px; border-top: 1px solid var(--rule); cursor: pointer; }
 .av-op-top { display: flex; align-items: center; font: 13px/1.4 Menlo, monospace; }
 .av-glyph { flex: 0 0 18px; font-weight: bold; }
@@ -688,24 +759,35 @@ CSS = ':root { --av-pink: %s; --av-blue: %s; }\n' % (FORGE_PINK, FORGE_BLUE) + "
 .av-target { font: 10px/1.4 Menlo, monospace; color: var(--muted); padding-left: 18px;
     overflow-wrap: anywhere; }
 .av-detail { padding: 6px 0 0; }
-@keyframes av-pop { from { opacity: 0; transform: scale(1.25); }
-    to { opacity: 1; transform: scale(1); } }
+@keyframes av-pop { from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: none; } }
 @keyframes av-grow { from { width: 0; } }
-.av-arrive .av-verdict { animation: av-pop 0.3s ease-out; }
+.av-arrive .av-verdict-line, .av-arrive .av-verdict-card { animation: av-pop 0.3s ease-out; }
 .av-arrive .av-fill { animation: av-grow 0.45s ease-out; }
-.av-wait { padding: 9px 4px; border-top: 1px solid var(--rule);
-    font: 14px/1.4 -apple-system, sans-serif; }
-.av-wait-text { overflow-wrap: anywhere; }
-.av-choices { display: flex; flex-wrap: wrap; padding-top: 8px; }
-.av-choice { margin: 0 8px 6px 0; padding: 8px 16px; border-radius: 8px;
-    border: 1px solid var(--av-blue); color: var(--av-blue);
-    font: bold 13px Menlo, monospace; cursor: pointer; }
-.av-choice.on { background: var(--av-blue); color: #111111; }
+.av-wait { padding: 11px 4px; border-top: 1px solid var(--rule);
+    font: 15px/1.4 -apple-system, sans-serif; }
+.av-wait-line { display: flex; align-items: baseline; }
+.av-wait-text { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.av-num { flex: 0 0 24px; color: var(--muted); font: 600 13px/1.4 -apple-system, sans-serif; }
+.av-choices { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 0 2px 24px; }
+.av-choice { padding: 8px 15px; border-radius: 18px; background: var(--wash-strong);
+    color: var(--text); font: 15px/1.2 -apple-system, sans-serif; cursor: pointer; }
+.av-choice.on { background: var(--av-blue); color: #0B1220; font-weight: 600; }
+.av-done { cursor: pointer; }
+.av-answer { padding: 3px 0 0 24px; color: var(--muted); font-size: 14px; }
 .av-check { display: flex; align-items: center; cursor: pointer; padding: 12px 4px; }
-.av-box { flex: 0 0 38px; font-size: 28px; line-height: 1; color: var(--av-blue); }
+.av-box { flex: 0 0 34px; font-size: 24px; line-height: 1; color: var(--av-blue); }
 .av-check.on .av-wait-text { opacity: 0.6; }
-.av-skipped { color: var(--muted); font-size: 12px; padding-top: 3px; }
-.av-typed { color: var(--muted); font-size: 13px; padding-top: 2px; }
+.av-skipped { color: var(--muted); font-size: 13px; padding: 3px 0 0 24px; }
+.av-typed { color: var(--muted); font-size: 14px; padding: 4px 0 0 24px; }
+.av-group { margin: 0 2px; border-radius: 12px; background: var(--wash); overflow: hidden; }
+.av-touch { display: flex; align-items: baseline; gap: 8px; padding: 10px 12px;
+    border-top: 1px solid var(--rule); cursor: pointer; font: 15px/1.3 -apple-system, sans-serif; }
+.av-touch:first-child { border-top: none; }
+.av-touch-name { font-weight: 600; }
+.av-touch-where { flex: 1 1 auto; min-width: 0; color: var(--muted); font-size: 13px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.av-tag { font: 600 12px -apple-system, sans-serif; color: #4CD964; }
 .av-muted { color: var(--muted); }
 .av-project-title { font: 600 18px/1.3 -apple-system, sans-serif; padding: 10px 4px 4px; }
 .av-field { padding: 6px 4px; font: 14px/1.4 -apple-system, sans-serif; }

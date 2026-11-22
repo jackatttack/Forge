@@ -602,6 +602,21 @@ def _line_matcher(pattern, match_mode, case_sensitive):
     return lambda line: needle in line.lower()
 
 
+def _match_label(match_mode, case_sensitive):
+    """
+    Header line naming the match mode and whether case counts.
+
+    Exact, regex and AST matching ignore case unless CASE: yes. That is easy
+    to forget when an EXPECT_HITS: 0 fails on a hit in a different case, so
+    the header always says which one ran. Fuzzy matching always ignores case.
+    """
+    if match_mode == 'fuzzy':
+        return 'MATCH=fuzzy, any case'
+    if case_sensitive:
+        return 'MATCH=%s, case-sensitive' % match_mode
+    return 'MATCH=%s, any case (CASE: yes to match case)' % match_mode
+
+
 def _record_hit(file_hits, lines, lineno, context):
     """Add one matching line, and its CONTEXT neighbours, to a file's hit table."""
     start = max(1, lineno - context)
@@ -692,7 +707,7 @@ def _execute_multi_pattern(result, root, abs_path, target, patterns, scope):
     ]
     header.append('EXT=' + _describe_exts(exts))
     header.extend(_scope_notes(exts, scan_stats))
-    header.append('MATCH=' + scope['match_mode'])
+    header.append(_match_label(scope['match_mode'], scope['case_sensitive']))
     if scope['path_filter']:
         header.append('FILTER=%r' % scope['path_filter'])
     if scope['exclude_terms']:
@@ -1009,7 +1024,7 @@ def execute(ctx, parsed_op, result):
                 files_hit, '' if files_hit == 1 else 's',
             ),
         ]
-        header.append('MATCH=ast')
+        header.append(_match_label('ast', case_sensitive))
         if criteria.get('defines'):
             header.append('DEFINES=%r' % criteria.get('defines'))
         if criteria.get('calls'):
@@ -1200,7 +1215,7 @@ def execute(ctx, parsed_op, result):
     ]
     header.append('EXT=' + _describe_exts(exts))
     header.extend(_scope_notes(exts, scan_stats))
-    header.append('MATCH=' + match_mode)
+    header.append(_match_label(match_mode, case_sensitive))
     if path_filter:
         header.append('FILTER=%r' % path_filter)
     if globs:
