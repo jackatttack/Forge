@@ -19,7 +19,7 @@ PACKAGE = __name__.rsplit('.', 1)[0]     # 'anvil' or 'forge.adapters.pythonista
 
 def card():
     return {
-        'name': 'Anvil',
+        'name': 'Forge',
         'emoji': '🔨',
         'what': 'Forge runs',
         'module': PACKAGE + '.tool',

@@ -3,7 +3,8 @@
 
 Pure: build_runs(summaries, current) turns history.recent() into a
 cards.Page. A tap on a card hands back ('history', stamp); Refresh hands
-back ('runs_refresh',). The run Anvil is showing is outlined.
+back ('runs_refresh',); ◀ Back to run hands back ('history_close',). The
+run Anvil is showing is outlined.
 """
 from editorkit.web import cards
 
@@ -15,6 +16,7 @@ CHANGED_SHOWN = 3            # changed files listed on a card before "+N more"
 OP_NAMES_SHOWN = 6           # op names listed on a card
 VERDICT_WORDS = {'success': 'Clean', 'warning': 'Partial', 'danger': 'Failed'}
 REFRESH = ('runs_refresh',)
+BACK_TO_RUN = ('history_close',)
 
 
 def counts_words(counts):
@@ -52,8 +54,10 @@ def build_runs(summaries, current=None):
     page = cards.Page()
     page.parts.append('<div class="av-page">')
     run_page.section_label(page, 'RECENT RUNS', '%d shown' % len(summaries))
-    page.parts.append('<div class="av-buttons"><div class="av-button"%s>↻ Refresh</div></div>'
-                      % page.go(REFRESH))
+    back = ('<div class="av-button"%s>◀ Back to run</div>' % page.go(BACK_TO_RUN)
+            if current else '')
+    page.parts.append('<div class="av-buttons">%s<div class="av-button"%s>↻ Refresh</div></div>'
+                      % (back, page.go(REFRESH)))
     if not summaries:
         page.parts.append('<div style="color:var(--muted)">No stored runs yet.</div>')
     for summary in summaries:

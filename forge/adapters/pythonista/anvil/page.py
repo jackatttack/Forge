@@ -66,8 +66,9 @@ FOLDED, UNFOLDED = '▸', '▾'
 
 COPY_PACKET = ('copy_packet',)
 COPY_DIFF = ('copy_diff',)
-LAST_EDIT = ('last_edit',)
+RUN_FORGE = ('run_forge',)             # run the bundle on the clipboard (run_forge.py)
 COPY_REPLY = ('copy_reply',)
+NOTES = ('notes',)                     # open the run's notes in the composer
 COPY_REVERT = ('copy_revert',)       # copy a REVERT bundle for the run shown
 COPY_CARRY_ON = ('copy_carry_on',)   # copy its FORGE resume / rerun bundle
 CARRY_ON_COMMAND = re.compile(r'FORGE (resume|rerun) \S+')
@@ -285,7 +286,7 @@ def add_buttons(page, model=None, history=None):
     controls: step through Forge's run history (history=(older, newer)
     stamps), and copy a bundle that carries a failed run on or reverts this
     run. Controls only copy: the bundle is then run in Forge as usual."""
-    add_button_row(page, (('Copy packet', COPY_PACKET), ('Last edit', LAST_EDIT),
+    add_button_row(page, (('Copy packet', COPY_PACKET), ('Run Forge', RUN_FORGE),
                           ('Copy DIFF', COPY_DIFF)))
     if model is None:
         return
@@ -370,21 +371,36 @@ def waiting_html(page, item, answer):
             % (escape(item['text']), choices, shown))
 
 
+def notes_html(page, notes):
+    """📝 Notes: on every run, under what the bundle asked for. Shows what
+    is written so far; a tap opens it to add more."""
+    if notes:
+        label = '📝 Notes · tap to add more'
+        shown = '<div class="av-typed" style="white-space:pre-wrap">%s</div>' % escape(notes)
+    else:
+        label = '📝 Notes · tap to add your thoughts on this run'
+        shown = ''
+    return ('<div class="av-wait" style="cursor:pointer"%s><div class="av-wait-text">%s</div>%s</div>'
+            % (page.go(NOTES), label, shown))
+
+
 def add_waiting(page, items, answers):
-    """Waiting for you: what the bundle asked for, and the way to reply."""
-    if not items:
-        return
+    """Waiting for you: what the bundle asked for, then 📝 Notes (always),
+    and the way to reply once there is anything to send back."""
     answers = answers or {}
-    to_answer = run_items.answerable(items)
-    aside = ''
-    if to_answer:
-        aside = '%d of %d answered' % (run_items.answered_count(items, answers),
-                                       len(to_answer))
-    section_label(page, 'WAITING FOR YOU', aside)
-    page.parts.append(''.join(
-        waiting_html(page, item, answers.get(str(item['number'])) or {})
-        for item in items))
-    if to_answer:
+    to_answer = run_items.answerable(items) if items else []
+    if items:
+        aside = ''
+        if to_answer:
+            aside = '%d of %d answered' % (run_items.answered_count(items, answers),
+                                           len(to_answer))
+        section_label(page, 'WAITING FOR YOU', aside)
+        page.parts.append(''.join(
+            waiting_html(page, item, answers.get(str(item['number'])) or {})
+            for item in items))
+    notes = run_items.notes_of(answers)
+    page.parts.append(notes_html(page, notes))
+    if to_answer or notes:
         page.parts.append('<div class="av-buttons"><div class="av-button"%s>'
                           'Copy packet with reply</div></div>' % page.go(COPY_REPLY))
 
@@ -511,9 +527,9 @@ def build_page(model, unfolded=(), arriving=False, items=(), answers=None, histo
     add_buttons(page, model, history)
     add_failures(page, model)
     add_waiting(page, list(items), answers)
+    add_operations(page, model, unfolded)
     add_changed(page, model, unfolded)
     add_touched(page, model)
-    add_operations(page, model, unfolded)
     page.parts.append('</div>')
     return page
 
@@ -551,20 +567,52 @@ def live_row_html(number, entry, slowest):
                status, width, entry['seconds'], escape(short(entry.get('target')))))
 
 
-def active_row_html(number, active):
+def clock_text(seconds):
+    """How long an op has run: 3.4s under a minute, then 1:05."""
+    if seconds < 60:
+        return '%.1fs' % seconds
+    return '%d:%02d' % (seconds // 60, seconds % 60)
+
+
+# The running op's clock ticks in the page itself, so it keeps counting
+# while Python is busy with the op. Each drawn clock carries the seconds
+# already run (data-base); a page that redraws picks up from there. Safe
+# to run again: it starts one interval per page.
+CLOCK_SCRIPT = """
+if (!window.avClock) {
+  window.avClock = setInterval(function () {
+    var clock = document.getElementById('av-clock');
+    if (!clock) return;
+    if (!clock.dataset.t0)
+      clock.dataset.t0 = Date.now() - parseFloat(clock.dataset.base || '0') * 1000;
+    var s = (Date.now() - clock.dataset.t0) / 1000;
+    var r = Math.floor(s % 60);
+    clock.textContent = s < 60 ? s.toFixed(1) + 's'
+                               : Math.floor(s / 60) + ':' + (r < 10 ? '0' : '') + r;
+  }, 100);
+}
+"""
+
+
+def active_row_html(number, active, seconds=0.0):
+    """The op still running: its name, a pulse, and a clock counting up
+    from seconds (CLOCK_SCRIPT keeps it ticking)."""
     return ('<div class="av-op av-running"><div class="av-op-top">'
             '<span class="av-glyph" style="color:var(--av-blue)">•</span>'
             '<span class="av-counter">%d</span>'
             '<span class="av-opname" style="color:var(--av-blue)">%s '
-            '<span class="av-status">running…</span></span></div>'
+            '<span class="av-status">running…</span></span>'
+            '<span class="av-secs" id="av-clock" data-base="%.2f">%s</span></div>'
             '<div class="av-target">%s</div></div>'
-            % (number, escape(active.get('op') or '?'), escape(short(active.get('target')))))
+            % (number, escape(active.get('op') or '?'), seconds, clock_text(seconds),
+               escape(short(active.get('target')))))
 
 
-def build_live_page(snapshot):
+def build_live_page(snapshot, active_seconds=0.0):
     """A run still going, as one cards.Page, from Forge's live record
     (forge.adapters.pythonista.landing.live.LiveRun.snapshot(): stamp, mode,
-    total, finished [{op, target, status, seconds}], active, done)."""
+    total, finished [{op, target, status, seconds}], active, done).
+    active_seconds: how long the active op has run so far, for its clock."""
     finished = list(snapshot.get('finished') or [])
     active = snapshot.get('active')
     total = snapshot.get('total') or 0
@@ -590,7 +638,7 @@ def build_live_page(snapshot):
     slowest = max([entry['seconds'] for entry in finished] + [0.001])
     rows = [live_row_html(index + 1, entry, slowest) for index, entry in enumerate(finished)]
     if active:
-        rows.append(active_row_html(step, active))
+        rows.append(active_row_html(step, active, active_seconds))
     page.parts.append(''.join(rows))
     page.parts.append('</div>')
     return page

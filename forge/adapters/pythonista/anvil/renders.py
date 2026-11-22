@@ -491,7 +491,7 @@ def is_code_line(line):
                 and not text.endswith('.')))
 
 
-def forge_text_blocks(text):
+def forge_text_blocks(text, limit=FORGE_TEXT_LINES_SHOWN):
     """Forge's own plain text (help, config, briefs, lists) as prose blocks.
 
     Code: everything from a BEGIN_ marker to its END_ marker, and once a
@@ -499,8 +499,9 @@ def forge_text_blocks(text):
     example stays one block to copy. A CAPS line is a heading only after a
     blank line; straight under other text it is a command."""
     lines = [line.rstrip() for line in str(text).splitlines()]
+    limit = len(lines) if limit is None else limit     # None: every line (Help pages)
     built = ProseBuilder()
-    index, shown = 0, min(len(lines), FORGE_TEXT_LINES_SHOWN)
+    index, shown = 0, min(len(lines), limit)
     in_body = False
     while index < shown:
         line = lines[index]
@@ -538,9 +539,9 @@ def forge_text_blocks(text):
         else:
             built.add('prose', stripped)
         index += 1
-    if len(lines) > FORGE_TEXT_LINES_SHOWN:
+    if len(lines) > limit:
         built.note('… %s: the packet has it all.'
-                   % plural(len(lines) - FORGE_TEXT_LINES_SHOWN, 'more line'))
+                   % plural(len(lines) - limit, 'more line'))
     return built.finished_blocks()
 
 

@@ -104,8 +104,28 @@ def save_answers(stamp, answers, runs_folder=RUNS_FOLDER):
 
 # --- The way back to the chat -----------------------------------------------
 
+NOTES_KEY = 'notes'          # the reader's notes on a run, saved beside its answers
+
+
+def notes_of(answers):
+    """The notes written on a run, or ''."""
+    return str(((answers or {}).get(NOTES_KEY) or {}).get('value') or '')
+
+
+def with_notes(answers, text):
+    """answers with the notes set to text; blank text removes them."""
+    answers = dict(answers or {})
+    text = str(text or '').rstrip()
+    if text.strip():
+        answers[NOTES_KEY] = {'value': text}
+    else:
+        answers.pop(NOTES_KEY, None)
+    return answers
+
+
 def reply_text(stamp, items, answers):
-    """The REPLY block appended to the packet by Copy packet with reply."""
+    """The REPLY block appended to the packet by Copy packet with reply:
+    each item's answer, then the notes."""
     lines = ['=== REPLY ===', 'Run: %s' % stamp]
     for item in items:
         kind, number = item.get('kind'), item['number']
@@ -122,4 +142,7 @@ def reply_text(stamp, items, answers):
         elif kind == 'open' and item.get('skipped'):
             reason = 'file not found' if item.get('missing') else 'the run was not clean'
             lines.append('%d. OPEN %s -> not opened (%s)' % (number, item['path'], reason))
+    notes = notes_of(answers)
+    if notes:
+        lines += ['NOTES', notes]
     return '\n'.join(lines)
