@@ -23,6 +23,7 @@ SPEC = {
         'ARGS',
         'CONFIRM',
         'OUTPUT',
+        'PATHS',
         'STOP_ON_FAIL',
     ]),
     'required_directives': set(),
@@ -34,19 +35,25 @@ SPEC = {
 # OUTPUT lets a bundle keep repeated, passing runs short in the packet.
 # Editable: how many lines "tail" keeps by default, and the most it accepts.
 DEFAULT_TAIL_LINES = 8
+DEFAULT_ENDS_LINES = 6     # "ends": this many first lines and this many last lines
 MAX_TAIL_LINES = 200
 
 OUTPUT_USAGE = (
-    'OUTPUT must be full, tail, tail N (1-%d) or summary' % MAX_TAIL_LINES
+    'OUTPUT must be full, tail, tail N, ends, ends N (1-%d) or summary' % MAX_TAIL_LINES
+)
+PATHS_USAGE = (
+    'PATHS must be project-relative folders separated by commas, '
+    'for example PATHS: projects/papers'
 )
 
 
 HELP = {
     'summary': 'Execute a project-relative Python file in-process and capture its output.',
     'brief': (
-        'OUTPUT: tail|summary shortens a passing run (failures always show '
+        'OUTPUT: tail|ends|summary shortens a passing run (failures always show '
         'everything) · STOP_ON_FAIL: yes makes a non-zero exit gate the '
-        'rest of the bundle · ARGS sets argv.'
+        'rest of the bundle · ARGS sets argv · PATHS: folder puts project '
+        'folders on sys.path for the run.'
     ),
     'minimal_example': [
         'RUN smoke.py',
@@ -67,10 +74,18 @@ HELP = {
         ),
         'OUTPUT': (
             'How much output a successful run shows: full (default), '
-            'tail (last %d lines of each stream), tail N, or summary '
-            '(last line of each stream). A failed run always shows full '
-            'output, and result data always keeps everything.'
-            % DEFAULT_TAIL_LINES
+            'tail (last %d lines of each stream), tail N, ends (first and '
+            'last %d lines of each stream), ends N, or summary (last line of '
+            'each stream). A failed run always shows full output, and result '
+            'data always keeps everything.'
+            % (DEFAULT_TAIL_LINES, DEFAULT_ENDS_LINES)
+        ),
+        'PATHS': (
+            'Project-relative folders, separated by commas, put at the front '
+            'of sys.path for this run only, so a script can import a '
+            "project's package (PATHS: projects/papers) without editing "
+            'sys.path itself. Workspace modules are imported fresh on every '
+            'RUN anyway.'
         ),
     },
     'internal_directives': [],
@@ -135,7 +150,7 @@ HINTS = {
             'OUTPUT: tail 12',
         ],
         'next': [
-            'Use full, tail, tail N or summary.',
+            'Use full, tail, tail N, ends, ends N or summary.',
         ],
     },
 
@@ -169,6 +184,14 @@ def _parse_output_mode(raw):
     if words == ['summary']:
         return 'summary', 1, ''
 
+    if words[0] == 'ends':
+        if len(words) == 1:
+            return 'ends', DEFAULT_ENDS_LINES, ''
+        if len(words) == 2 and words[1].isdigit():
+            count = int(words[1])
+            if 1 <= count <= MAX_TAIL_LINES:
+                return 'ends', count, ''
+
     if words[0] == 'tail':
         if len(words) == 1:
             return 'tail', DEFAULT_TAIL_LINES, ''
@@ -185,6 +208,31 @@ def _last_lines(text, count):
     lines = text.splitlines()
     hidden = max(0, len(lines) - count)
     return '\n'.join(lines[hidden:]), hidden
+
+
+def _first_and_last_lines(text, count):
+    """Return (first count + last count lines of text, how many middle lines were dropped)."""
+    lines = text.splitlines()
+    hidden = len(lines) - 2 * count
+    if hidden <= 0:
+        return text, 0
+    kept = lines[:count] + ['... (%d lines hidden) ...' % hidden] + lines[-count:]
+    return '\n'.join(kept), hidden
+
+
+def _parse_paths(raw):
+    """Read a PATHS directive as (list of project-relative folders, error)."""
+    if raw is None:
+        return [], ''
+    folders = [part.strip().strip('/') for part in str(raw).split(',')]
+    folders = [folder for folder in folders if folder]
+    if not folders:
+        return [], PATHS_USAGE
+    for folder in folders:
+        parts = folder.replace('\\', '/').split('/')
+        if os.path.isabs(folder) or ':' in folder or '..' in parts:
+            return [], '%s; %r is not inside the project' % (PATHS_USAGE, folder)
+    return folders, ''
 
 
 EFFECT = 'execute'
@@ -210,6 +258,10 @@ def validate(parsed_op):
     _, _, output_error = _parse_output_mode(directives.get('OUTPUT'))
     if output_error:
         return [output_error]
+
+    _, paths_error = _parse_paths(directives.get('PATHS'))
+    if paths_error:
+        return [paths_error]
 
     return []
 
@@ -308,6 +360,7 @@ def _format_preview(
     stdout_text,
     stderr_text,
     tail_lines=None,
+    head_lines=None,
 ):
     """
     Build the packet preview for one RUN.
@@ -327,7 +380,15 @@ def _format_preview(
         shown = text.rstrip()
         heading = '--- %s ---' % stream_name
 
-        if tail_lines is not None:
+        if head_lines is not None:
+            shown, hidden = _first_and_last_lines(shown, head_lines)
+            if hidden:
+                heading = '--- %s (%s middle lines hidden) ---' % (
+                    stream_name,
+                    hidden,
+                )
+                hidden_total += hidden
+        elif tail_lines is not None:
             shown, hidden = _last_lines(shown, tail_lines)
             if hidden:
                 heading = '--- %s (%s earlier lines hidden) ---' % (
@@ -418,6 +479,17 @@ def execute(ctx, parsed_op, result):
         )
         return
 
+    # PATHS: project folders the script may import from (validated as
+    # project-relative before the bundle ran; existence is checked here).
+    extra_paths = []
+    for folder in _parse_paths(directives.get('PATHS'))[0]:
+        full = os.path.normpath(os.path.join(root, folder))
+        if not os.path.isdir(full):
+            result['status'] = 'FAILED_NOT_FOUND'
+            result['message'] = 'PATHS folder not found: ' + folder
+            return
+        extra_paths.append(full)
+
     stdout_buffer = io.StringIO()
     stderr_buffer = io.StringIO()
     exit_code = 0
@@ -458,6 +530,10 @@ def execute(ctx, parsed_op, result):
         sys.exit = _script_exit
         sys.argv = argv
         os.chdir(root)
+
+        for extra in reversed(extra_paths):
+            if extra not in sys.path:
+                sys.path.insert(0, extra)
 
         for path in (
             script_dir,
@@ -530,14 +606,15 @@ def execute(ctx, parsed_op, result):
     output_mode, tail_lines, _ = _parse_output_mode(
         directives.get('OUTPUT')
     )
-    shown_tail_lines = tail_lines if exit_code == 0 else None
+    shown_lines = tail_lines if exit_code == 0 else None
 
     result['preview'] = _format_preview(
         target,
         exit_code,
         stdout_text,
         stderr_text,
-        tail_lines=shown_tail_lines,
+        tail_lines=shown_lines if output_mode != 'ends' else None,
+        head_lines=shown_lines if output_mode == 'ends' else None,
     )
 
     result['data'] = {

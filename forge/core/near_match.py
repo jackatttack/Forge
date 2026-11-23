@@ -128,3 +128,50 @@ def describe_closest(text, wanted, label='OLD'):
         lines.append('  file: %s' % _shown(file_line))
 
     return '\n'.join(lines)
+
+
+def _clip_match_line(text):
+    """A shown line, shortened to MAX_SHOWN_LINE characters."""
+    if len(text) <= MAX_SHOWN_LINE:
+        return text
+    return text[:MAX_SHOWN_LINE - 3] + '...'
+
+
+def describe_matches(text, wanted, label='OLD'):
+    """Packet lines listing where a repeated exact block matched.
+
+    Each match shows its first line number and that whole line, so the fix
+    (OCCURRENCE: N, or a wider block) is clear without a READ. A match that
+    starts or ends partway through a line is flagged: it is usually a short
+    block matching inside a longer line by accident, for example
+    "x = None" inside "x = None if ready else y".
+    Matches are counted like str.count: left to right, not overlapping.
+    """
+    shown = []
+    total = 0
+    any_partial = False
+    start = text.find(wanted) if wanted else -1
+    while start != -1:
+        total += 1
+        end = start + len(wanted)
+        line_start = text.rfind('\n', 0, start) + 1
+        line_end = text.find('\n', start)
+        if line_end == -1:
+            line_end = len(text)
+        partial = start != line_start or (end < len(text) and text[end] != '\n')
+        any_partial = any_partial or partial
+        if len(shown) < MAX_LISTED_LINES:
+            shown.append('  %d. line %d: %s%s' % (
+                total,
+                text.count('\n', 0, start) + 1,
+                _clip_match_line(repr(text[line_start:line_end])),
+                '  (inside a longer line)' if partial else '',
+            ))
+        start = text.find(wanted, end)
+    if total > len(shown):
+        shown.append('  (+%d more)' % (total - len(shown)))
+    lines = ['%s matches:' % label] + shown
+    if any_partial:
+        lines.append('A match inside a longer line usually means %s is too short: '
+                     'widen it to whole lines.' % label)
+    return '\n'.join(lines)

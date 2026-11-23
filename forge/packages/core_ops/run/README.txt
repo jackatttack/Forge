@@ -82,6 +82,8 @@ RUNs that are repeated many times in a session:
 - `full` — every line (the default).
 - `tail` — the last 8 lines of each stream.
 - `tail N` — the last N lines of each stream, from 1 to 200.
+- `ends` — the first and last 6 lines of each stream, the middle counted.
+- `ends N` — the first and last N lines of each stream, from 1 to 200.
 - `summary` — the last line of each stream.
 
 A run that exits non-zero always shows its full output, whatever `OUTPUT`
@@ -90,6 +92,22 @@ many and that `OUTPUT: full` shows them.
 
 Keep diagnostic output bounded anyway. A noisy script that fails still produces
 a very large packet and makes the interactive loop difficult to use.
+
+## Importing project code
+
+RUN puts the script's folder and the project root at the front of
+sys.path, and drops cached workspace modules first, so project code is
+always imported fresh.
+
+`PATHS` adds project-relative folders for one run, so a script can import
+a project's package without editing sys.path itself:
+
+    RUN scratch/probe.py
+    PATHS: projects/papers
+
+Separate several folders with commas. Absolute paths, named roots and `..`
+are refused before the bundle runs; a folder that does not exist fails the
+RUN with FAILED_NOT_FOUND. sys.path is restored after the run.
 
 ## Core confirmation
 

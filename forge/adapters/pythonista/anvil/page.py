@@ -375,6 +375,10 @@ def waiting_html(page, item, answer, unfolded=()):
     if kind == 'note':
         return '<div class="av-wait">%s</div>' % line(item['text'])
 
+    if kind == 'ask' and item.get('skipped'):
+        return ('<div class="av-wait">%s<div class="av-skipped">not asked: the run was not clean'
+                ' \u2014 answer after the fix</div></div>' % line(item['text']))
+
     if kind == 'open':
         where = item['path']
         if item.get('target_line'):

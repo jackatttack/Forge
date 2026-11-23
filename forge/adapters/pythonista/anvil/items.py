@@ -23,7 +23,8 @@ import os
 RUNS_FOLDER = os.path.expanduser('~/.forge/artifacts/runs')
 ANSWERS_FILE = 'anvil.json'
 ANSWERABLE = ('ask', 'check')        # kinds that go into the reply as answers
-NEEDS_CLEAN_RUN = ('open', 'check')  # kinds skipped when the run was not clean
+NEEDS_CLEAN_RUN = ('open', 'check', 'ask')  # kinds held when the run was not clean:
+                                            # a device question about work that did not land is moot
 
 
 # --- Items ------------------------------------------------------------------
@@ -131,7 +132,10 @@ def reply_text(stamp, items, answers):
         kind, number = item.get('kind'), item['number']
         value = ((answers or {}).get(str(number)) or {}).get('value')
         if kind == 'ask':
-            outcome = value if value else 'not answered'
+            if item.get('skipped'):
+                outcome = 'held (the run was not clean)'
+            else:
+                outcome = value if value else 'not answered'
             lines.append('%d. ASK %s -> %s' % (number, item['text'], outcome))
         elif kind == 'check':
             if item.get('skipped'):

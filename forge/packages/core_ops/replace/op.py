@@ -636,7 +636,11 @@ def _execute_block(ctx, parsed_op, result):
 
         if count > 1 and 'OCCURRENCE' not in directives:
             result['status'] = 'FAILED_AMBIGUOUS'
-            result['message'] = 'OLD block matched %d times; use OCCURRENCE: N or ALL: yes' % count
+            from forge.core.near_match import describe_matches
+            result['message'] = (
+                'OLD block matched %d times; use OCCURRENCE: N or ALL: yes\n' % count
+                + describe_matches(before, old)
+            )
             return
 
         parts = before.split(old)

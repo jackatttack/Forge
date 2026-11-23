@@ -37,6 +37,11 @@ NOISE_DIR_NAMES = frozenset([
 ])
 NOISE_FILE_NAMES = frozenset(['.DS_Store', 'crash_log.txt', 'crash_trail.json'])
 
+# Data folders a directory map folds into its "filtered" note: caches,
+# thumbnails and backups can hold thousands of files and no code. Mapping a
+# path inside one of them shows everything. Symbol indexes are unaffected.
+DATA_DIR_NAMES = frozenset(['cache', 'caches', 'thumbs', 'thumbnails', 'previews', 'backups'])
+
 # How many filtered names a directory note spells out before "+N".
 FILTERED_NAMES_SHOWN = 4
 
@@ -2579,6 +2584,11 @@ def _render_directory(root, abs_path, target, mode, depth, docs, limit):
     """Select entries fairly, then render each once under its parent."""
     noise_dirs = NOISE_DIR_NAMES
     noise_files = NOISE_FILE_NAMES
+    relative = os.path.relpath(abs_path, root) if root else abs_path
+    inside_data = any(part in DATA_DIR_NAMES
+                      for part in os.path.normpath(relative).split(os.sep))
+    if not inside_data:
+        noise_dirs = noise_dirs | DATA_DIR_NAMES
 
     def make_node(path, name, is_dir, level):
         return {

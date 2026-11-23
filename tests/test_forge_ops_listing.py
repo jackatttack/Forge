@@ -31,7 +31,7 @@ class ForgeOpsListing(ForgeCase):
 
     def test_briefs_surface_key_capabilities(self):
         text = self.ops_preview()
-        self.assertIn('OUTPUT: tail|summary shortens a passing run', text)
+        self.assertIn('OUTPUT: tail|ends|summary shortens a passing run', text)
         self.assertIn('one pattern per body line', text)
         self.assertIn('MODE: symbols indexes every Python file', text)
 
