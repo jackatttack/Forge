@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 DIFF operation.
+
+Role: present · Part of: forge/ops/diff
 
 Shows the stored change for a run, then shows current disk drift when the file
 has changed again since the run was stored.

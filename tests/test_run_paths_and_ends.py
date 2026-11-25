@@ -1,7 +1,8 @@
-# -*- coding: utf-8 -*-
 """
 RUN PATHS (project folders on sys.path for one run) and OUTPUT: ends
 (first and last lines of a passing run).
+
+Role: check · Part of: forge/tests · Entry
 
 Feedback 2026-11-23: scratch scripts repeated sys.path boilerplate to
 import a project package; tail hid the summary lines at the top.

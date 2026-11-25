@@ -1,2 +1,4 @@
-# -*- coding: utf-8 -*-
-"""Portable implementation core for Forge."""
+"""Portable implementation core for Forge.
+
+Role: contracts · Part of: forge/core
+"""

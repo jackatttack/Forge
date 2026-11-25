@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Read and write the iOS clipboard without freezing Pythonista.
+
+Role: gather, store · Part of: forge/adapters/pythonista
 
 Pythonista's clipboard module, called from a script thread, waits for the
 main thread while it still holds Python's lock. If the main thread needs

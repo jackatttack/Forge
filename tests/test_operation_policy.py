@@ -1,5 +1,7 @@
-# -*- coding: utf-8 -*-
-"""Resolving an operation's declared effect into its gating policy."""
+"""Resolving an operation's declared effect into its gating policy.
+
+Role: check · Part of: forge/tests · Entry
+"""
 
 import types
 import unittest

@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
-Reboot execution engine.
+Execution engine: runs each parsed op and records its result.
+
+Role: run · Part of: forge/core
 
 Executes parsed ops against a plain context dict and returns structured results.
 

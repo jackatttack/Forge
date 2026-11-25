@@ -1,5 +1,7 @@
-# -*- coding: utf-8 -*-
-"""Binary reporting must stay compact, root-aware and sensitive to drift."""
+"""Binary reporting must stay compact, root-aware and sensitive to drift.
+
+Role: check · Part of: forge/tests
+"""
 
 import os
 

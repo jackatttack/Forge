@@ -1,7 +1,8 @@
-# -*- coding: utf-8 -*-
 """
 Operation execution policy: what an operation's effect is, and how that
 effect decides failure gating.
+
+Role: run · Part of: forge/core
 
 Each operation module declares its effect, either as a constant:
 

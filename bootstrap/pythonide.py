@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Portable Forge bootstrap for PythonIDE.
+
+Role: run · Part of: forge/bootstrap · Entry
 
 This development bootstrap installs directly from the current GitHub main
 branch rather than PyPI.

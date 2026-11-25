@@ -1,7 +1,8 @@
-# -*- coding: utf-8 -*-
 """
 FORGE ops shows each op's directives, body shape and brief, so a cold
 session can see what every op can do without a help call per op.
+
+Role: check · Part of: forge/tests · Entry
 """
 
 import unittest

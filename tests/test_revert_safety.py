@@ -1,5 +1,7 @@
-# -*- coding: utf-8 -*-
-"""Recovery must preserve newer work and record its own changes."""
+"""Recovery must preserve newer work and record its own changes.
+
+Role: check · Part of: forge/tests · Entry
+"""
 
 import json
 import os

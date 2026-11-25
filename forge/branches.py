@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Standalone viewer for stored Forge branch checkpoints.
+
+Role: present · Part of: forge/branches · Entry
 
 Branch checkpoints live under the Forge home, which on iOS is a hidden
 directory outside anything Pythonista's file browser or the Files app can

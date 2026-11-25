@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 """Forge's presenter: forge.json names this module to show runs in Anvil.
+
+Role: run · Part of: anvil/presenter
 
     {"config_version": 1, "presenter": "anvil.forge_presenter"}
 

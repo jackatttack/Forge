@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Small source editing helpers for Forge.
+
+Role: clean · Part of: forge/core
 
 Keep this boring and testable. AST ops should resolve precise source locations
 first, then use these helpers for text replacement/insertion.

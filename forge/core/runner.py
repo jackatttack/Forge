@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Portable high-level Forge runner.
+
+Role: run · Part of: forge/core
 
 Core execution owns:
 

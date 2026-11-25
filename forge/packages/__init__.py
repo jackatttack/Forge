@@ -1,2 +1,4 @@
-# -*- coding: utf-8 -*-
-"""Forge-owned operation packages."""
+"""Forge-owned operation packages.
+
+Role: contracts · Part of: forge/ops
+"""

@@ -1,5 +1,7 @@
 """Live run state for the Forge Landing.
 
+Role: store · Part of: forge/landing
+
 Forge calls its on_event listener on Forge's own thread. LandingListener
 forwards each event to the console renderer, records it in LiveRun, and
 docks the live landing when the run starts. The panel reads snapshot() from

@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Validation failures with no op-specific hint get a hint built from the rule.
+
+Role: check · Part of: forge/tests · Entry
 
 The validation message already names the rule, so the hint leads with it
 and quotes the help for each directive it mentions, instead of the generic

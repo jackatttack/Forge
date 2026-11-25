@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 """FORGE rerun <stamp>: replay a repaired FAILED_PARSE bundle.
+
+Role: check · Part of: forge/tests · Entry
 
 A bundle refused at parse time ran nothing. Its stored bundle.txt can be
 repaired in place, then replayed as a fresh run with its own stamp.

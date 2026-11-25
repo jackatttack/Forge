@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 AST-powered structural search helpers for Forge.
+
+Role: gather · Part of: forge/core
 
 This module supports SEARCH MATCH: ast. It is deliberately a locator, not a
 dependency graph engine.

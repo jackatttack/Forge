@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 One noisy file cannot take every hit of a directory search.
+
+Role: check · Part of: forge/tests · Entry
 
 Each file shows at most a quarter of LIMIT (minimum 3) in a directory
 search. Hidden hits are counted. Single-file searches and EXPECT_HITS see

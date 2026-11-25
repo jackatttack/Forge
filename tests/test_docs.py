@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 """Exercise documentation through the intended Forge runtime.
+
+Role: check · Part of: forge/tests · Entry
 
 Run with the checkout isolation runner when invoked from an installed host.
 Also usable by the repository's installed-wheel test mode.

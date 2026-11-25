@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 """Forge's run history for Anvil: stored runs found, summed up and loaded.
+
+Role: gather · Part of: anvil/runs · Pure
 
 Pure apart from Forge's model, so tests/smoke_history.py checks it headless
 with a made-up runs folder. Forge keeps each run in

@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Standard text presentation for portable Forge.
+
+Role: present · Part of: forge/presentation
 
 The canonical packet remains untouched. Standard presentation appends one
 small human summary after it.

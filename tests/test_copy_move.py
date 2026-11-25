@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 COPY and MOVE: files and directory trees, across roots, fully recorded.
+
+Role: check · Part of: forge/tests · Entry
 
 These tests pin the behaviour the help promises: a transfer is planned in
 full and refused before writing if anything is wrong, every changed file is

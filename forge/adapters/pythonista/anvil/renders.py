@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """Op renders: an operation's output drawn from its result data, the way
 the Toolbox draws code, instead of the packet's plain text.
+
+Role: present · Part of: anvil/renders · Pure
 
 Pure (no ui), so tests/smoke_renders.py checks it headless. Forge's OpRow
 keeps only the packet preview, so the presenter attaches each result's data

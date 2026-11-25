@@ -1,5 +1,7 @@
-# -*- coding: utf-8 -*-
-"""Smallest useful example of embedding Portable Forge."""
+"""Smallest useful example of embedding Portable Forge.
+
+Role: run · Part of: forge/examples · Entry
+"""
 
 import os
 

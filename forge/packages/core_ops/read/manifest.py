@@ -1,3 +1,8 @@
+"""READ op manifest: what Forge's registry needs to load it.
+
+Role: contracts · Part of: forge/ops/read
+"""
+
 MANIFEST = {
     'name': 'read',
     'op': 'READ',

@@ -1,5 +1,7 @@
-# -*- coding: utf-8 -*-
-"""Shared TestCase base for Forge behaviour tests."""
+"""Shared TestCase base for Forge behaviour tests.
+
+Role: check · Part of: forge/tests
+"""
 
 import os
 import sys

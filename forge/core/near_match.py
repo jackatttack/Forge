@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Near-miss guidance for exact-match failures.
+
+Role: clean, present · Part of: forge/core
 
 When an exact OLD block matches nothing, the next question is always
 "where is the text I meant, and what is different about it?". Answering

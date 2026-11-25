@@ -1,5 +1,7 @@
-# -*- coding: utf-8 -*-
-"""install.py adapter files: Juno install, refusals, and the PythonIDE wrappers."""
+"""install.py adapter files: Juno install, refusals, and the PythonIDE wrappers.
+
+Role: check · Part of: forge/tests · Entry
+"""
 
 import importlib.util
 import os

@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 INSERT operation.
+
+Role: store · Part of: forge/ops/insert
 
 Unified insertion operation for files and AST targets.
 

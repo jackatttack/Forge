@@ -1,1 +1,4 @@
-"""HTML renderers for the Pythonista adapter: syntax-highlighted code (code.py) on shared theme helpers (html_base.py)."""
+"""HTML renderers for the Pythonista adapter: syntax-highlighted code (code.py) on shared theme helpers (html_base.py).
+
+Role: contracts · Part of: forge/render
+"""

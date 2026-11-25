@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Smallest useful Forge host loop.
+
+Role: run · Part of: forge/examples · Entry
 
 Replace get_bundle_text() and set_result_text() with whatever makes sense
 for the environment.

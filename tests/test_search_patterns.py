@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 SEARCH body patterns (several at once, per-pattern LIMIT) and GLOB scoping.
+
+Role: check · Part of: forge/tests · Entry
 """
 
 import unittest

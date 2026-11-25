@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 RUN Forge op.
+
+Role: run · Part of: forge/ops/run
 
 Execute one project-relative Python script in-process and capture output.
 """

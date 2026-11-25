@@ -1,3 +1,8 @@
+"""BRANCH op manifest: what Forge's registry needs to load it.
+
+Role: contracts · Part of: forge/ops/branch
+"""
+
 MANIFEST = {
     'name': 'branch',
     'op': 'BRANCH',

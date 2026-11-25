@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """Anvil's Help page: Forge's operations, its docs and the workspace's
 guides, in the prose look of the Toolbox's Explain.
+
+Role: present · Part of: anvil/help · Pure
 
 Pure: build_list, build_op and build_doc turn help_data's records into
 cards.Page objects. Taps hand back:

@@ -1,7 +1,8 @@
-# -*- coding: utf-8 -*-
 """
 The stale-read guard: IF_VERSION pins a mutation to the file version the
 model last saw, and a stale pin leaves the file untouched.
+
+Role: check · Part of: forge/tests · Entry
 """
 
 import hashlib

@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Pre-flight validation and content-anchored INSERT.
+
+Role: check · Part of: forge/tests · Entry
 
 Pre-flight: every op's static validate() runs before any op executes, so a
 bundle refused for a directive rule has run nothing (FAILED_PARSE).

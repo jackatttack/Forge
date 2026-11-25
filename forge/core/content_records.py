@@ -1,5 +1,7 @@
-# -*- coding: utf-8 -*-
-"""Shared change aggregation and persistence of byte-exact content records."""
+"""Shared change aggregation and persistence of byte-exact content records.
+
+Role: store · Part of: forge/core
+"""
 
 import os
 

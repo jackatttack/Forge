@@ -1,4 +1,7 @@
-# -*- coding: utf-8 -*-
+"""SEARCH op manifest: what Forge's registry needs to load it.
+
+Role: contracts · Part of: forge/ops/search
+"""
 
 MANIFEST = {
     'name': 'search',

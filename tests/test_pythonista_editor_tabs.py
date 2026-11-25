@@ -1,5 +1,7 @@
-# -*- coding: utf-8 -*-
-"""Headless tests: open Pythonista editor tabs follow Forge's writes."""
+"""Headless tests: open Pythonista editor tabs follow Forge's writes.
+
+Role: check · Part of: forge/tests · Entry
+"""
 
 import os
 import tempfile

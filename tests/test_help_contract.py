@@ -1,5 +1,7 @@
-# -*- coding: utf-8 -*-
-"""Help rendering and structured directive-documentation contracts."""
+"""Help rendering and structured directive-documentation contracts.
+
+Role: check · Part of: forge/tests · Entry
+"""
 
 import unittest
 

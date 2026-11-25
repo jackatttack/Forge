@@ -1,2 +1,4 @@
-# -*- coding: utf-8 -*-
-"""Pythonista host integration for Forge."""
+"""Pythonista host integration for Forge.
+
+Role: contracts · Part of: forge/adapters/pythonista
+"""

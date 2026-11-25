@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 RUN OUTPUT: shorten the preview of a successful run, never of a failure.
+
+Role: check · Part of: forge/tests · Entry
 
 Result data must always keep the complete streams, whatever OUTPUT says.
 """

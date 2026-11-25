@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Compatibility wrapper for alias expansion.
+
+Role: clean · Part of: forge/ops/alias
 
 Alias expansion is owned by forge.core.preparse. This module remains only so
 older references to the custom-op-local expander continue to resolve.

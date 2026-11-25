@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 """FORGE resume <stamp>: carry on a partly applied run.
+
+Role: check · Part of: forge/tests · Entry
 
 A bundle that fails part-way leaves earlier operations applied and later
 ones skipped. Resume replays the stored bundle from the first operation

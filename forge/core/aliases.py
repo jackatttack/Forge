@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Portable Forge alias persistence.
+
+Role: store · Part of: forge/core
 
 This module owns where aliases are read and written.
 

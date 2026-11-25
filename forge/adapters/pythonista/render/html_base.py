@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
-forge_ui.renderer.html_base
+Shared HTML and CSS for the Pythonista adapter's renderers.
+
+Role: present · Part of: forge/render
 
 Shared HTML/CSS foundation for Forge UI renderers.
 """

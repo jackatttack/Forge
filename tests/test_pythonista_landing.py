@@ -1,4 +1,7 @@
-"""Headless tests for the Pythonista Forge Landing: model, detail HTML, hook rules."""
+"""Headless tests for the Pythonista Forge Landing: model, detail HTML, hook rules.
+
+Role: check · Part of: forge/tests
+"""
 import os
 import tempfile
 import unittest

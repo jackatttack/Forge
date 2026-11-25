@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
-Forge Next public language definition.
+Forge's public language: the everyday ops, kept apart from optional installed ones.
+
+Role: contracts · Part of: forge/core
 
 Installed operations and public language are deliberately different concepts.
 

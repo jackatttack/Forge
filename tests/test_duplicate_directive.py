@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 A directive may appear once per operation.
+
+Role: check · Part of: forge/tests · Entry
 
 A repeated directive used to replace the earlier value without a word, so
 the operation ran with a setting the bundle's reader could not predict.

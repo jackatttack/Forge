@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Portable LLM-facing Forge packet renderer.
+
+Role: contracts · Part of: forge/protocol
 
 This module is part of the environment-independent Forge protocol.
 

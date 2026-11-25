@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # SEARCH operation.
 #
 # Find text in files under a project-relative file or directory.
@@ -8,6 +7,11 @@
 #
 # Defaults are tuned for daily-driver use: source/doc extensions by default,
 # noisy generated directories skipped, results grouped by file for scanning.
+
+"""SEARCH operation.
+
+Role: gather · Part of: forge/ops/search
+"""
 
 import os
 import re

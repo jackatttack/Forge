@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 REVERT Forge op.
+
+Role: store · Part of: forge/ops/revert
 
 Restore project-owned touched files from a stored Forge run.
 """

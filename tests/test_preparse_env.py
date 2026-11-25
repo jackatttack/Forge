@@ -1,5 +1,7 @@
-# -*- coding: utf-8 -*-
-"""Optional ENV: first line naming the app a bundle is meant for."""
+"""Optional ENV: first line naming the app a bundle is meant for.
+
+Role: check · Part of: forge/tests · Entry
+"""
 
 import importlib
 import unittest

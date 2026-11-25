@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 FORGE meta op.
+
+Role: present · Part of: forge/ops/forge
 
 One read-only home for Forge's own machinery:
 

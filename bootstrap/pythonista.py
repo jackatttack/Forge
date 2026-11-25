@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Portable Forge bootstrap for Pythonista.
+
+Role: run · Part of: forge/bootstrap · Entry
 
 The bootstrap installs the current Portable Forge main branch.
 

@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
-forge_ui.renderer.code
+Syntax-highlighted code as an HTML page, for the Pythonista adapter.
+
+Role: present · Part of: forge/render · Entry
 
 Reusable syntax-highlighted code renderer for Forge UI.
 

@@ -1,4 +1,7 @@
-# -*- coding: utf-8 -*-
+"""ALIAS op manifest: what Forge's registry needs to load it.
+
+Role: contracts · Part of: forge/ops/alias
+"""
 
 MANIFEST = {
     'name': 'alias',

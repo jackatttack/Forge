@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 The packet's FAILURE section: each failure explained once.
+
+Role: check · Part of: forge/tests · Entry
 
 A failed run used to state the same explanation under Errors, in the Ops
 line, in a hint and again in the preview, and every skipped op repeated

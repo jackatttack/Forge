@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Static project relationship index for Forge.
+
+Role: gather · Part of: forge/core
 
 V1 is deliberately read-only and conservative:
 - discover Python files under a requested scope

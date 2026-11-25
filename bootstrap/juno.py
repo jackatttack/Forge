@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Portable Forge bootstrap for Juno.
+
+Role: run · Part of: forge/bootstrap · Entry
 
 Installs or updates Forge from the current GitHub main branch. Like the
 other bootstraps it contains no installation logic of its own:

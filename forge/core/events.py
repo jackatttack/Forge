@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Lightweight execution events for Portable Forge.
+
+Role: contracts · Part of: forge/core
 
 Forge Core emits structured facts. Hosts decide how, or whether, to present
 them.

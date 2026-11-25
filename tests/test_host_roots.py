@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 The opt-in host_roots feature adds forge_home: and home: roots.
+
+Role: check · Part of: forge/tests · Entry
 
 These tests run real bundles against a written forge.json, like
 test_root_end_to_end, so they prove the whole chain from configuration to

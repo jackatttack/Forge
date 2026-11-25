@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 MOVE operation.
+
+Role: store · Part of: forge/ops/move
 
 Move one file or a whole directory tree, within a root or across named
 roots. MOVE shares COPY's engine (forge.core.file_transfer): it plans the

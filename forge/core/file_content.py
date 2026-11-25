@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 """Byte-exact content snapshots for transfers and recovery.
+
+Role: store · Part of: forge/core
 
 Small UTF-8 files remain inline for readable diffs. Binary and large files
 use immutable temporary snapshots owned by ContentStore. Callers must keep

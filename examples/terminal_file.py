@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Educational terminal wrapper.
+
+Role: run · Part of: forge/examples · Entry
 
 For normal terminal use, prefer the built-in command:
 

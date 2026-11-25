@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Symbol index for Python directories.
+
+Role: gather · Part of: forge/core
 
 One line per Python file, naming its top-level classes and functions, and
 optionally the literal values given to a named key (for example every

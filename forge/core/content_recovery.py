@@ -1,5 +1,7 @@
-# -*- coding: utf-8 -*-
-"""Recovery of content-aware records alongside legacy text recovery."""
+"""Recovery of content-aware records alongside legacy text recovery.
+
+Role: store · Part of: forge/core
+"""
 
 import os
 import stat

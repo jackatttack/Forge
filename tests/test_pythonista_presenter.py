@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Headless tests for the Pythonista presenter seam.
+
+Role: check · Part of: forge/tests
 
 forge.json may name a presenter module that shows a finished run in place
 of the built-in Forge Landing. The seam must never make a run worse: any

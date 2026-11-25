@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Shared file/path safety helpers for Forge.
+
+Role: clean · Part of: forge/core
 
 Keep this small and boring. Mutating ops should use the same project-root
 checks so safety behaviour is consistent across CREATE/REPLACE/DELETE/MOVE.

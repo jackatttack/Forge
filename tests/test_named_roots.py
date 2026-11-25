@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Named roots let one bundle address a second configured filesystem root.
+
+Role: check · Part of: forge/tests · Entry
 
 The default must stay exactly as it was: a path with no prefix resolves
 against project_root. A prefixed path resolves against its configured

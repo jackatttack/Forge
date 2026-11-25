@@ -1,3 +1,8 @@
+"""Headless tests for the Pythonista clipboard adapter (pasteboard.py).
+
+Role: check · Part of: forge/tests · Entry
+"""
+
 import sys
 import types
 import unittest

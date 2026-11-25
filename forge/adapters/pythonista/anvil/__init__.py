@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 """Anvil: Forge's home inside editorkit and the Toolbox.
+
+Role: contracts · Part of: anvil · Pure
 
     page.py             a finished run as a card page (pure, tested headless)
     landing.py          the window that shows the page and acts on taps

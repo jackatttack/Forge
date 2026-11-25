@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """Forge's aliases for Anvil's Aliases page: find aliases.json, read it,
 check an edit and write it back.
+
+Role: gather, store · Part of: anvil/aliases · Pure
 
 Pure Python, no ui. Reading and writing go through Forge's own
 forge.core.aliases (normalise_aliases, save_aliases), so the file keeps the

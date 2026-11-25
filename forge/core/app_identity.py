@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Which app is running Forge: pythonista, pythonide, juno or unknown.
+
+Role: gather · Part of: forge/core
 
 Identity only, read from sys.executable; no paths and no configuration.
 Used to print App: in the packet and to check an optional ENV: header

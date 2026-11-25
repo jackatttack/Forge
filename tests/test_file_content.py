@@ -1,5 +1,7 @@
-# -*- coding: utf-8 -*-
-"""Exact snapshots and failure-safe writes for binary transfer support."""
+"""Exact snapshots and failure-safe writes for binary transfer support.
+
+Role: check · Part of: forge/tests · Entry
+"""
 
 import hashlib
 import os

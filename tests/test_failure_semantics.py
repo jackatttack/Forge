@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 How Forge behaves after an operation fails.
+
+Role: check · Part of: forge/tests · Entry
 
 These tests pin CURRENT behaviour so the planned policy refactor has a
 baseline to break against. Where current behaviour is believed to be

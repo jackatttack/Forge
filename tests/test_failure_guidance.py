@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Failures that answer the next question.
+
+Role: check · Part of: forge/tests · Entry
 
 An ambiguous anchor names the lines it matched, so OCCURRENCE can be
 chosen without another READ. An OLD block that matches nothing names the

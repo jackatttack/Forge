@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 """Anvil as a Toolbox tool: open the latest stored Forge run.
+
+Role: run · Part of: anvil/toolbox
 
 Toolbox/tools/forge.json names this module and main (written by
 projects/anvil/tools/install.py).

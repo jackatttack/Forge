@@ -1,5 +1,7 @@
-# -*- coding: utf-8 -*-
-"""Portable Forge presentation."""
+"""Portable Forge presentation.
+
+Role: contracts · Part of: forge/presentation
+"""
 
 from forge.core.presentation.plain import format_plain
 from forge.core.presentation.standard import (

@@ -1,5 +1,7 @@
-# -*- coding: utf-8 -*-
-"""Directory MAP navigation and bounded traversal regressions."""
+"""Directory MAP navigation and bounded traversal regressions.
+
+Role: check · Part of: forge/tests
+"""
 
 import os
 import shutil

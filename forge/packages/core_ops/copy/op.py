@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 COPY operation.
+
+Role: store · Part of: forge/ops/copy
 
 Copy one file or a whole directory tree, within a root or across named
 roots. The shared engine in forge.core.file_transfer plans the complete

@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 AST targets on root-level files must not be mistaken for named roots.
+
+Role: check · Part of: forge/tests · Entry
 
 "app.py::main" once parsed as root "app.py" with path ":main", so any
 AST target on a file at the project root failed as an unknown root.

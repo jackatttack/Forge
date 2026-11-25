@@ -1,5 +1,7 @@
 """Forge Landing model: everything the landing shows, from a Forge run.
 
+Role: clean · Part of: forge/landing · Pure · Entry
+
 Pure Python with no ui, so it can be checked headlessly:
 
     python -m forge.adapters.pythonista.landing.model <run stamp>

@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 ALIAS custom op.
+
+Role: store · Part of: forge/ops/alias
 
 Manage local Forge aliases.
 

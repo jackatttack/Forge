@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Headless tests for the presenter's automatic choice.
+
+Role: check · Part of: forge/tests · Entry
 
 With no presenter in forge.json, Forge uses the Anvil run view it ships
 with when editorkit and its Toolbox are installed, and the built-in landing

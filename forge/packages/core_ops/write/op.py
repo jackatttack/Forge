@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 WRITE Forge op.
+
+Role: store · Part of: forge/ops/write
 
 One complete-file verb:
 

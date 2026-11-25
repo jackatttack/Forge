@@ -1,5 +1,7 @@
-# -*- coding: utf-8 -*-
-"""Strict whole-submission Markdown fence support."""
+"""Strict whole-submission Markdown fence support.
+
+Role: check · Part of: forge/tests · Entry
+"""
 
 import unittest
 

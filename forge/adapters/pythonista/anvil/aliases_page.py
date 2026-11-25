@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 """Anvil's Aliases page: Forge's aliases by tag, and one alias in full.
+
+Role: present · Part of: anvil/aliases · Pure
 
 Pure: build_list and build_detail turn aliases_data's {name: entry} into
 cards.Page objects, in Help's look (help_page.CSS). On an alias's page

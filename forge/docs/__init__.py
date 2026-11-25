@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 """Portable workflow guides and small, deterministic full-text search.
+
+Role: present · Part of: forge/docs
 
 Resources ship with Forge. No journal, network, disk cache or host adapter
 is required. Only catalogue entries can be retrieved as guide files.

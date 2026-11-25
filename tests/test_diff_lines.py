@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 DIFF shows real changes, not positional line mismatches.
+
+Role: check · Part of: forge/tests · Entry
 
 Before this, one inserted line made every later line of the file show as
 changed. These tests pin the difflib-based output.

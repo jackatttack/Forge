@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Resolved Forge environment context.
+
+Role: gather · Part of: forge/core
 
 This module normalises environmental facts supplied by a host adapter.
 

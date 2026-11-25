@@ -1,7 +1,8 @@
-# -*- coding: utf-8 -*-
 """
 Host hooks: let a host adapter react to files Forge writes, without core
 knowing which host it runs on.
+
+Role: contracts · Part of: forge/core
 
 Core calls before_write(path) just before it replaces a file and
 after_write(path) just after. Nothing is registered by default, so on a

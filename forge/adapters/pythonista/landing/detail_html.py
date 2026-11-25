@@ -1,5 +1,7 @@
 """Detail-card HTML for Forge Landing: what an op changed, syntax highlighted.
 
+Role: present · Part of: forge/landing · Pure
+
 Pure text in, HTML out (no ui), built on the code renderer in
 forge/adapters/pythonista/render/code.py.
 

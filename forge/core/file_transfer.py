@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Shared transfer engine for COPY and MOVE.
+
+Role: store · Part of: forge/core
 
 A transfer copies one file, or a whole directory tree, from a source path to
 a destination path. Either path may carry a named-root prefix such as

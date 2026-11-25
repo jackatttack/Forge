@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Whitespace handling in INSERT.
+
+Role: check · Part of: forge/tests · Entry
 
 Plain-file insertion writes the body exactly as given. AST insertion
 re-aligns the body to its destination in the syntax tree.

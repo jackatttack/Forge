@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Optional presenter for the Pythonista launcher.
+
+Role: run · Part of: forge/adapters/pythonista
 
 forge.json may name a presenter: a module that shows a finished run in
 place of the built-in Forge Landing.

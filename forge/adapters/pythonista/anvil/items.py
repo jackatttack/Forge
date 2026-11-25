@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 """What a bundle asks for: EDITOR items, the answers given, and the reply.
+
+Role: contracts, clean · Part of: anvil/items · Pure
 
 Pure (no ui): tests/smoke_items.py checks it.
 

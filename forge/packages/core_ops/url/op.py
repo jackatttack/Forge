@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 URL HTTP access op.
+
+Role: gather · Part of: forge/ops/url
 
 HTTP client for Portable Forge.
 

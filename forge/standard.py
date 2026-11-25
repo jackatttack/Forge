@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Standard host for portable Forge.
+
+Role: run · Part of: forge/hosts
 
 This is the ordinary Python edge around the portable core.
 

@@ -1,5 +1,7 @@
-# -*- coding: utf-8 -*-
-"""Portable Forge protocol output."""
+"""Portable Forge protocol output.
+
+Role: contracts · Part of: forge/protocol
+"""
 
 from forge.core.protocol.packet import format_packet
 

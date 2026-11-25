@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 """Anvil's window: one editorkit window that shows a Forge run and acts on taps.
+
+Role: present, run · Part of: anvil/window
 
     from anvil import landing
     landing.show_run(model, items)     # model: Forge's LandingModel; items: items.py

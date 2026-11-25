@@ -1,6 +1,8 @@
 """
 Opt-in bundle controls: directives that let a bundle stop itself.
 
+Role: clean · Part of: forge/core
+
 Forge behaves exactly as before unless a bundle asks for these.
 
 STOP_ON_FAIL: yes

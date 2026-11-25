@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Opt-in bundle controls: a bundle can ask to stop itself.
+
+Role: check · Part of: forge/tests · Entry
 """
 
 import unittest

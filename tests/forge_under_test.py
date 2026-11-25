@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Decide and assert WHICH Forge these tests are exercising.
+
+Role: check · Part of: forge/tests
 
 Forge is a runtime that can inspect and modify its own source, so a test
 run that silently imports a different Forge than intended produces

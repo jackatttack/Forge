@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 """Focused RUN boundary tests, runnable directly inside Pythonista Forge.
+
+Role: check · Part of: forge/tests · Entry
 
 Load the checkout operation under a private name. Its safe_target dependency
 comes from the already selected Forge package; this tests the changed operation,

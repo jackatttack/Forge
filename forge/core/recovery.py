@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 """Conflict-aware recovery of legacy text and byte-exact file changes.
+
+Role: store · Part of: forge/core
 
 Validate every target and snapshot before mutation. Recheck each target
 immediately before installation, then report each completed change.

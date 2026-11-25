@@ -1,5 +1,7 @@
-# -*- coding: utf-8 -*-
-"""Regression tests for bounded stored-run inspection output."""
+"""Regression tests for bounded stored-run inspection output.
+
+Role: check · Part of: forge/tests · Entry
+"""
 
 import ast
 import os

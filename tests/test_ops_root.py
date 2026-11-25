@@ -1,5 +1,7 @@
-# -*- coding: utf-8 -*-
-"""The trusted personal-ops folder: default, configured, and safe fallback."""
+"""The trusted personal-ops folder: default, configured, and safe fallback.
+
+Role: check · Part of: forge/tests · Entry
+"""
 
 import os
 import shutil

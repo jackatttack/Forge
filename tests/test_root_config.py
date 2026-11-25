@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Configured named roots must survive validation and resolution intact.
+
+Role: check · Part of: forge/tests · Entry
 
 A root name becomes a path prefix, so a malformed name has to fail at
 configuration time with a clear message. A silently accepted bad root

@@ -1,4 +1,7 @@
-# -*- coding: utf-8 -*-
+"""Run Forge from a terminal: python -m forge.
+
+Role: run · Part of: forge · Entry
+"""
 
 from .standard import main
 

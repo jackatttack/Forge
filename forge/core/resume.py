@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 FORGE resume <stamp>: carry on a partly applied run from the op that failed.
+
+Role: run · Part of: forge/core
 
 A bundle that fails part-way leaves its earlier operations applied and its
 later ones skipped. Resending the whole bundle would repeat the applied

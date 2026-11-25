@@ -1,6 +1,8 @@
 """
 File versions for Forge's stale-read guard.
 
+Role: clean · Part of: forge/core
+
 A file's version is a short hash of its exact bytes. READ reports it, and
 every successful WRITE, REPLACE, INSERT or DELETE reports the version it
 left behind. A mutation may pin the version it expects with IF_VERSION;

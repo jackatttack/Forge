@@ -1,5 +1,7 @@
-# -*- coding: utf-8 -*-
-"""Binary transfers exercise the real runner, storage and recovery path."""
+"""Binary transfers exercise the real runner, storage and recovery path.
+
+Role: check · Part of: forge/tests
+"""
 
 import os
 from unittest.mock import patch

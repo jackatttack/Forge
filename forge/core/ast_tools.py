@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 AST helpers for the Forge.
+
+Role: clean · Part of: forge/core
 
 This is intentionally close to Forge2's proven target model:
     file.py::function

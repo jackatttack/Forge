@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Durable run storage for the Forge.
+
+Role: store · Part of: forge/core
 
 Stores:
 - source bundle

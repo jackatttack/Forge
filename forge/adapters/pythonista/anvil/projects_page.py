@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 """Anvil's Projects page: every registered project, or one with its notes.
+
+Role: present · Part of: anvil/projects · Pure
 
 Pure: builds editorkit cards.Pages and touches no ui.
 

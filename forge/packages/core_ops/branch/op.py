@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 BRANCH checkpoint op.
+
+Role: store · Part of: forge/ops/branch · Entry
 
 Named filesystem checkpoints for the Forge.
 

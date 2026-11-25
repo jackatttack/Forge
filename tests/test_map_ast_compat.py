@@ -1,5 +1,7 @@
-# -*- coding: utf-8 -*-
-"""Regression coverage for MAP across Python AST versions."""
+"""Regression coverage for MAP across Python AST versions.
+
+Role: check · Part of: forge/tests · Entry
+"""
 
 import ast
 import importlib

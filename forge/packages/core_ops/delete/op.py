@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 DELETE operation.
+
+Role: store · Part of: forge/ops/delete
 
 Public deletion verb for Forge.
 

@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Symbol index used by MAP MODE: symbols.
+
+Role: check · Part of: forge/tests · Entry
 """
 
 import os

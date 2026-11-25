@@ -1,7 +1,8 @@
-# -*- coding: utf-8 -*-
 """
 Text edits preserve every byte they do not deliberately change, and record
 the exact original so REVERT restores it byte for byte.
+
+Role: check · Part of: forge/tests · Entry
 
 Tests marked expectedFailure pin damage that Forge does today: text-mode
 reads turn CRLF into LF and undecodable bytes into U+FFFD, and the writes

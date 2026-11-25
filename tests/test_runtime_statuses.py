@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Runtime failures report what went wrong, never FAILED_PARSE.
+
+Role: check · Part of: forge/tests · Entry
 
 FAILED_PARSE promises that nothing in the bundle ran. A problem that only
 shows up against the file as it is now (lines past the end, a missing or

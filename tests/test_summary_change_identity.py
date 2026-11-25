@@ -1,7 +1,8 @@
-# -*- coding: utf-8 -*-
 """
 The standard summary counts changed files by root and path, using the
 same collector as the packet, run storage and DIFF.
+
+Role: check · Part of: forge/tests · Entry
 """
 
 import unittest

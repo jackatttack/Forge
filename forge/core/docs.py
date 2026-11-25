@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
-Small reboot docs registry.
+Docs registry: Forge's workflow guides, read from plain .txt files.
+
+Role: present · Part of: forge/core
 
 Docs are plain .txt files under forge/docs.
 

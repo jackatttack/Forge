@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 REPLACE operation.
+
+Role: store · Part of: forge/ops/replace
 
 Unified replacement operation for files and AST targets.
 

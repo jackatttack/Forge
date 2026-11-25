@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Follow-on runs: fix and replay in one bundle.
+
+Role: run · Part of: forge/core
 
 A bundle may end with FORGE rerun <stamp> or FORGE resume <stamp>. The
 operations before that line run first, as a run of their own. Only if that

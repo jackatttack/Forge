@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Portable Forge live console renderer for Pythonista.
+
+Role: present · Part of: forge/adapters/pythonista
 
 This is a host-side presentation adapter.
 

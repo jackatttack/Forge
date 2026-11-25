@@ -1,3 +1,8 @@
+"""DELETE op manifest: what Forge's registry needs to load it.
+
+Role: contracts · Part of: forge/ops/delete
+"""
+
 MANIFEST = {
     'name': 'delete',
     'op': 'DELETE',

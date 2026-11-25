@@ -1,5 +1,7 @@
 """Run Forge: run the bundle on the clipboard, the way the wrench menu does.
 
+Role: run · Part of: anvil/run_forge · Entry
+
 The Run page's Run Forge button. It opens Pythonista's own URL for the
 launcher (forge_entry.py in Documents), so the run starts as a fresh script
 like any other run, and Anvil fills in with it as usual. Nothing runs inside

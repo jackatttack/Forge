@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 What Forge accepts at bundle command level.
+
+Role: check · Part of: forge/tests · Entry
 
 The rule: outside BEGIN_/END_ blocks a bundle may contain only blank
 lines, known op headers, and DIRECTIVE: value lines. Anything else is a

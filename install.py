@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Portable Forge installer.
+
+Role: run · Part of: forge/install · Entry
 
 Uses only the Python standard library.
 

@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 A WRITE whose Python body cannot compile refuses the whole bundle.
+
+Role: check · Part of: forge/tests · Entry
 
 The body is the complete file, so the check needs nothing from disk. It
 used to run when the WRITE executed, after earlier operations had already

@@ -1,4 +1,7 @@
-"""Behaviour checks for Pythonista's live Forge console renderer."""
+"""Behaviour checks for Pythonista's live Forge console renderer.
+
+Role: check · Part of: forge/tests · Entry
+"""
 
 import io
 import sys

@@ -1,7 +1,8 @@
-# -*- coding: utf-8 -*-
 # portable-forge-juno-clipboard-v1
 """
 Clipboard for Juno, which has no clipboard module.
+
+Role: gather, store · Part of: forge/adapters/juno
 
 Talks to iOS UIPasteboard through the Objective-C runtime with ctypes only.
 Same get()/set() shape as Pythonista's clipboard, so the Forge entry script

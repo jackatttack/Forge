@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Failure gating for extension operations.
+
+Role: check · Part of: forge/tests · Entry
 
 An extension op that does not declare a policy must be treated as
 effectful: skipped after an earlier failure, and stopping later effects

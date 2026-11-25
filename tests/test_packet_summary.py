@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 The packet's Ops summary and ambiguity hints say what actually happened.
+
+Role: check · Part of: forge/tests · Entry
 
 A targetless op (FORGE, MEMORY, GIT) shows its subcommand instead of "?".
 An ambiguous REPLACE or DELETE gets advice about repeated OLD blocks, not

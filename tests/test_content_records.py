@@ -1,5 +1,7 @@
-# -*- coding: utf-8 -*-
-"""Byte snapshots stay out of JSON and aggregation preserves true endpoints."""
+"""Byte snapshots stay out of JSON and aggregation preserves true endpoints.
+
+Role: check · Part of: forge/tests
+"""
 
 import json
 import os

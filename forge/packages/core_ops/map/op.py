@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 MAP core op.
+
+Role: gather · Part of: forge/ops/map
 
 Show structure, not full contents.
 

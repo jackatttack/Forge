@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 The packet's Changed files line must describe what a run left behind.
+
+Role: check · Part of: forge/tests · Entry
 
 Several changes to one file in a run are merged into one line, so the
 line has to use the first change's "existed before" and the last

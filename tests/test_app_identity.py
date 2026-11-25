@@ -1,5 +1,7 @@
-# -*- coding: utf-8 -*-
-"""detect_app() names the app from sys.executable."""
+"""detect_app() names the app from sys.executable.
+
+Role: check · Part of: forge/tests · Entry
+"""
 
 import importlib
 import sys

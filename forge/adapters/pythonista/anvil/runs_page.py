@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 """Anvil's Runs page: Forge's recent runs, newest first, one card each.
+
+Role: present · Part of: anvil/runs · Pure
 
 Pure: build_runs(summaries, current) turns history.recent() into a
 cards.Page. A tap on a card hands back ('history', stamp); Refresh hands

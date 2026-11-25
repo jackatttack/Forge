@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 """Anvil's run page: a finished Forge run as a card page.
+
+Role: present · Part of: anvil/run_page · Pure
 
 Pure: build_page turns Forge's LandingModel into an editorkit cards.Page and
 touches no ui, so tests/smoke_page.py can check it headless.

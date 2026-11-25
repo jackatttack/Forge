@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 A root configured in forge.json must actually reach a running bundle.
+
+Role: check · Part of: forge/tests · Entry
 
 Every other roots test builds its context by hand, so all of them would
 still pass if the wiring between configuration, the standard host, the

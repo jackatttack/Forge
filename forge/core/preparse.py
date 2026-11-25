@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Pre-parse bundle transforms.
+
+Role: clean · Part of: forge/core
 
 This layer runs before Forge's normal bundle parser. It must stay small,
 boring, and explicit because mistakes here affect the language boundary.

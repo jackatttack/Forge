@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 """An unclosed block names its operation and where the end was lost.
+
+Role: check · Part of: forge/tests · Entry
 
 The message must be enough to repair the stored bundle in one REPLACE:
 which operation, and the swallowed operation header to close before.

@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
-Tiny reboot bundle parser.
+Bundle parser: turns bundle text into ops with their directives and blocks.
+
+Role: clean · Part of: forge/core
 
 Design rule:
 Forge should preserve current Forge command-language behaviour unless

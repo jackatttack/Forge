@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 REPLACE must never leave a file half-edited.
+
+Role: check · Part of: forge/tests · Entry
 
 A refused mutation should leave the original bytes untouched, because
 the whole Forge contract depends on a failed packet meaning nothing

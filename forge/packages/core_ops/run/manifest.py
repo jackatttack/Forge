@@ -1,4 +1,7 @@
-# -*- coding: utf-8 -*-
+"""RUN op manifest: what Forge's registry needs to load it.
+
+Role: contracts · Part of: forge/ops/run
+"""
 
 MANIFEST = {
     'name': 'run',

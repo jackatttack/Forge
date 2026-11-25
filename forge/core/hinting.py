@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Failure guidance for Forge.
+
+Role: present · Part of: forge/core
 
 There are two failure paths:
 

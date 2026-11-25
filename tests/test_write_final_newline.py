@@ -1,7 +1,8 @@
-# -*- coding: utf-8 -*-
 """
 WRITE FINAL_NEWLINE: bundle bodies drop trailing blank lines, so this
 directive is the only way to write a file that ends with a newline.
+
+Role: check · Part of: forge/tests · Entry
 """
 
 import unittest

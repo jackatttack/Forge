@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 FORGE bundle and the bundle syntax guide.
+
+Role: check · Part of: forge/tests · Entry
 
 The guide ships inside the package so the installed runtime is always
 the authority on its own grammar, the same arrangement as FIRST_BOOT.txt

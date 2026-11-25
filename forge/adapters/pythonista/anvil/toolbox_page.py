@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 """The Toolbox tab: Toolbox's tools and recent scripts inside Anvil.
+
+Role: present · Part of: anvil/toolbox
 
     if toolbox_page.available():
         board = tiles.Cards(window, on_pick=picked, extra_css=toolbox_page.css())

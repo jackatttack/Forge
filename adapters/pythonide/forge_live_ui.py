@@ -1,7 +1,8 @@
-# -*- coding: utf-8 -*-
 # portable-forge-pythonide-live-ui-v1
 """
 Rich live dashboard for Portable Forge on PythonIDE.
+
+Role: present · Part of: forge/adapters/pythonide
 
 Presentation only. Forge's canonical packet is produced separately and remains
 plain text for the clipboard.

@@ -1,7 +1,8 @@
-# -*- coding: utf-8 -*-
 # portable-forge-juno-launcher-v1
 """
 Portable Forge clipboard bridge for Juno.
+
+Role: run · Part of: forge/adapters/juno · Entry
 
 1. Copy a Forge bundle.
 2. Run forge_entry.py from Juno's Documents folder (a Shortcut can do it).

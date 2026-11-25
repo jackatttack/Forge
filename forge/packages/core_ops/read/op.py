@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 READ operation.
+
+Role: gather · Part of: forge/ops/read
 
 Public read-only inspection verb for Forge.
 

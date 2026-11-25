@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 """Tagged block markers: BEGIN_BODY @tag closes only at END_BODY @tag.
+
+Role: check · Part of: forge/tests · Entry
 
 A tagged block treats bare markers inside it as plain text, so a bundle can
 write or edit text that itself contains Forge block markers, such as a

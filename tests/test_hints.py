@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Recovery hints: the most specific evidence must win.
+
+Role: check · Part of: forge/tests · Entry
 
 A hint that points the wrong way costs a round trip, so these tests pin
 the matching order rather than the wording.

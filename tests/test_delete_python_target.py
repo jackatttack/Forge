@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 DELETE path::Target removes one whole Python definition.
+
+Role: check · Part of: forge/tests · Entry
 
 READ, REPLACE and INSERT all take Python targets, so DELETE refusing them
 sent the model to an exact OLD block of the whole definition, which fails

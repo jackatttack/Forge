@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 SEARCH says in its header whether case counted.
+
+Role: check · Part of: forge/tests · Entry
 
 Exact, regex and AST matching ignore case unless CASE: yes, so an
 EXPECT_HITS: 0 on 'LAST_EDIT' can fail on 'last_edit'. The header line

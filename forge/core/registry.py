@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Package-shaped op registry for Forge.
+
+Role: contracts · Part of: forge/core
 
 Discovers ops from:
 

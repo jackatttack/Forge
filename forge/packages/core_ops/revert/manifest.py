@@ -1,4 +1,7 @@
-# -*- coding: utf-8 -*-
+"""REVERT op manifest: what Forge's registry needs to load it.
+
+Role: contracts · Part of: forge/ops/revert
+"""
 
 MANIFEST = {
     'name': 'revert',

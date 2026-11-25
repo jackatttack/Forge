@@ -1,5 +1,7 @@
 """Forge Landing panel: the screen a Forge run ends on, docked in the console.
 
+Role: present · Part of: forge/landing
+
 Ways in:
     show_live_landing(live)     docks when the run starts; op rows, progress
                                 and the running op fill in from Forge's events

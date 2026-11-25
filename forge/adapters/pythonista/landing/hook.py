@@ -1,5 +1,7 @@
 """Forge Landing for the Pythonista launcher.
 
+Role: run · Part of: forge/landing
+
 adapters/pythonista/Forge.py uses two entry points:
     make_listener(renderer)      the on_event for forge.run_text; docks the
                                  landing when the run starts and fills it live

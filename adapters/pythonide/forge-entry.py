@@ -1,7 +1,8 @@
-# -*- coding: utf-8 -*-
 # portable-forge-pythonide-launcher-v1
 """
 Portable Forge clipboard bridge for PythonIDE.
+
+Role: run · Part of: forge/adapters/pythonide · Entry
 
 Workflow:
 1. Copy a Forge bundle.

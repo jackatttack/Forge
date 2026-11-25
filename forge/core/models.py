@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
-Small dict-based models for the Forge.
+The shapes of Forge's data: a result and a run, as plain dicts.
+
+Role: contracts · Part of: forge/core
 
 Kept deliberately simple for Pythonista compatibility and easy packet rendering.
 """

@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 """Anvil's card in the Toolbox hub: Toolbox/tools/forge.json.
+
+Role: store · Part of: anvil/toolbox
 
     toolbox_entry.ensure()     write it when missing (each run Anvil shows)
     toolbox_entry.write()      write it now (the installer)

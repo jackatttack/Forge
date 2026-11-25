@@ -1,7 +1,8 @@
-# -*- coding: utf-8 -*-
 """
 MAP folds data folders (cache, thumbs, previews, backups) into the
 "filtered" note, unless the map is of a path inside one.
+
+Role: check · Part of: forge/tests · Entry
 
 Feedback 2026-11-23: MAP projects/papers at DEPTH 2 listed 50 cached
 thumbnails.

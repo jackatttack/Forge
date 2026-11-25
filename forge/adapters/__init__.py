@@ -1,2 +1,4 @@
-# -*- coding: utf-8 -*-
-"""Optional host adapters for Forge."""
+"""Optional host adapters for Forge.
+
+Role: contracts · Part of: forge/adapters
+"""

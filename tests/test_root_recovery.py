@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 REVERT must restore a file to the root it was actually written to.
+
+Role: check · Part of: forge/tests · Entry
 
 Recovery resolves a recorded relative path against a root. If a write
 into a named root were recorded without that root, recovery would

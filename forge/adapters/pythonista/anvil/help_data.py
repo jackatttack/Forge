@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """What Anvil's Help page shows: Forge's operations, its workflow docs, the
 bundle grammar and the workspace's guides.
+
+Role: gather · Part of: anvil/help · Pure
 
 Pure Python, no ui. Everything is read in-process from the Forge that is
 running (its op registry, its docs package, the FORGE op's own text), so

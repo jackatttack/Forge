@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Portable Forge public Python API.
+
+Role: contracts · Part of: forge
 
 Normal use:
 

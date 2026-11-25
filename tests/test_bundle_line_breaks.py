@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Only newlines end a line of a bundle.
+
+Role: check · Part of: forge/tests · Entry
 
 str.splitlines() also breaks at form feeds, U+2028 and other characters.
 Inside a body or an OLD block those are content; splitting there turned

@@ -1,4 +1,7 @@
-# -*- coding: utf-8 -*-
+"""FORGE op manifest: what Forge's registry needs to load it.
+
+Role: contracts · Part of: forge/ops/forge
+"""
 
 MANIFEST = {
     'name': 'forge',

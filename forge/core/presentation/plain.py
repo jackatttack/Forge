@@ -1,5 +1,7 @@
-# -*- coding: utf-8 -*-
-"""Compatibility name for Forge's small plain-text human summary."""
+"""Compatibility name for Forge's small plain-text human summary.
+
+Role: present · Part of: forge/presentation
+"""
 
 from forge.core.presentation.standard import format_summary
 

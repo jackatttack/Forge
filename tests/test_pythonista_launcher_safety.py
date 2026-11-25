@@ -1,5 +1,7 @@
-# -*- coding: utf-8 -*-
-"""Regression tests for the Pythonista launcher clipboard boundary."""
+"""Regression tests for the Pythonista launcher clipboard boundary.
+
+Role: check · Part of: forge/tests · Entry
+"""
 
 import ast
 import os

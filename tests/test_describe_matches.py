@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 A repeated OLD block names where it matched, so the fix needs no READ.
+
+Role: check · Part of: forge/tests · Entry
 
 Covers near_match.describe_matches and its use by REPLACE (DELETE shares
 the same call). Feedback 2026-11-23: "self.tier = None" also matched inside

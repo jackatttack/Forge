@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 The standalone branch viewer must never mislead a recovery session.
+
+Role: check · Part of: forge/tests · Entry
 
 This module exists for the moment when Forge itself is broken or a
 checkpoint seems lost, so its failure mode matters more than its

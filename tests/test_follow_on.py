@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 """Fix and replay in one bundle.
+
+Role: check · Part of: forge/tests · Entry
 
 A bundle may end with FORGE rerun <stamp> or FORGE resume <stamp>. The
 operations before it run first; the replay starts only if they applied.

@@ -1,5 +1,7 @@
-# -*- coding: utf-8 -*-
-"""Content-aware recovery preserves bytes, newer work, and undo history."""
+"""Content-aware recovery preserves bytes, newer work, and undo history.
+
+Role: check · Part of: forge/tests
+"""
 
 import json
 import os

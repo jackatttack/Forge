@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Keep Pythonista's open editor tabs in step with files Forge writes.
+
+Role: store · Part of: forge/adapters/pythonista
 
 Pythonista holds an open tab's text in memory. When Forge rewrote a file
 on disk, a background tab kept the old text, and running that tab could

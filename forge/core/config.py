@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Portable Forge configuration.
+
+Role: settings · Part of: forge/core
 
 This module reads and validates forge.json.
 

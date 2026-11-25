@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Portable Forge launcher for Pythonista.
+
+Role: run · Part of: forge/adapters/pythonista · Entry
 
 Forge itself is installed in site-packages.
 

@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 """Projects for Anvil: the registered projects and notes left on them.
+
+Role: gather · Part of: anvil/projects · Pure
 
     from anvil import projects
     rows = projects.load_projects(workspace)          # every registered project

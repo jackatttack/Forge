@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """
 Alias placeholders are filled in one pass.
+
+Role: check · Part of: forge/tests · Entry
 
 $1 used to be replaced before $10, so the tenth word came out as the
 first word followed by a 0, and a word that looked like a placeholder
