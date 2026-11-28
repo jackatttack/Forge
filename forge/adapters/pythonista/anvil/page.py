@@ -38,6 +38,11 @@ import re
 from editorkit.web import cards, codeview, prose
 
 try:
+    from editorkit.web import visuals
+except Exception:                # older editorkit without visuals
+    visuals = None
+
+try:
     from editorkit_toolbox import filecards
 except Exception:                # no Toolbox: the touched-files cards are left out
     filecards = None
@@ -286,16 +291,32 @@ def add_banner(page, model):
         meta.insert(0, mode.upper())
     meta_text = '  ·  '.join(meta)
     colour = TONE_COLOURS[tone]
+    badge_html = (visuals.badge(words.upper(), colour=colour)
+                  if visuals is not None and hasattr(visuals, 'badge') else '')
+    stats_html = ''
+    if visuals is not None and hasattr(visuals, 'stats'):
+        elapsed_label = ('%.1fs' % model.run_elapsed
+                         if getattr(model, 'run_elapsed', None) is not None else 'done')
+        stats_html = visuals.stats([
+            ('Ops', str(len(model.rows)), '', colour if is_clean(model) else None),
+            ('Changed', str(len(changed_files(model))), '', None),
+            ('Time', elapsed_label, '', None),
+        ])
     if is_clean(model):
         page.parts.append(
             '<div class="av-verdict-line"><span class="av-verdict-mark" style="color:%s">✓</span>'
-            '<span class="av-verdict-words">%s</span><span class="av-meta">%s</span></div>'
-            % (colour, escape(words.capitalize()), escape(meta_text)))
+            '<span class="av-verdict-words">%s</span>%s<span class="av-meta">%s</span></div>'
+            % (colour, escape(words.capitalize()), badge_html, escape(meta_text)))
+        if stats_html:
+            page.parts.append(stats_html)
         return
     page.parts.append(
-        '<div class="av-verdict-card" style="--c:%s"><div class="av-verdict" style="color:%s">%s</div>'
-        '<div class="av-meta">%s</div>%s</div>'
-        % (colour, colour, escape(words.capitalize()), escape(meta_text), outcomes_html(model)))
+        '<div class="av-verdict-card" style="--c:%s">'
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
+        '<div class="av-verdict" style="color:%s">%s</div>%s</div>'
+        '<div class="av-meta">%s</div>%s%s</div>'
+        % (colour, colour, escape(words.capitalize()), badge_html,
+           escape(meta_text), stats_html, outcomes_html(model)))
 
 
 def add_outcomes(page, model):
@@ -402,20 +423,27 @@ def waiting_html(page, item, answer, unfolded=()):
                    '☑' if value else '☐', escape(item['text'])))
 
     fold = ('ask', number)
-    if value and fold not in unfolded:
-        return ('<div class="av-wait av-done"%s>%s<div class="av-answer">→ %s</div></div>'
-                % (page.go(fold_item(fold)), line(item['text']), escape(str(value))))
-
     options = list(item.get('options') or [])
+    typed = bool(value) and value not in options
+    status_badge = ''
+    if value and visuals is not None and hasattr(visuals, 'badge'):
+        badge_text = 'TYPED' if typed else 'ANSWERED'
+        badge_col = FORGE_BLUE if typed else '#4CD964'
+        status_badge = ' ' + visuals.badge(badge_text, colour=badge_col)
+
+    if value and fold not in unfolded:
+        return ('<div class="av-wait av-done"%s>%s<div class="av-answer">→ %s%s</div></div>'
+                % (page.go(fold_item(fold)), line(item['text']), escape(str(value)), status_badge))
+
     choices = ''.join(
         '<div class="av-choice%s"%s>%s</div>'
         % (' on' if value == option else '', page.go(answer_item(number, option)),
            escape(option))
         for option in options)
-    typed = bool(value) and value not in options
     choices += ('<div class="av-choice%s"%s>Other…</div>'
                 % (' on' if typed else '', page.go(other_item(number))))
-    shown = '<div class="av-typed">%s</div>' % escape(str(value)) if typed else ''
+    shown = ('<div class="av-typed">%s%s</div>' % (escape(str(value)), status_badge)
+             if typed else '')
     return ('<div class="av-wait">%s<div class="av-choices">%s</div>%s</div>'
             % (line(item['text']), choices, shown))
 
@@ -443,6 +471,11 @@ def add_waiting(page, items, answers, unfolded=()):
     if items:
         aside = '%d of %d answered' % (answered, len(to_answer)) if to_answer else ''
         section_label(page, 'WAITING FOR YOU', aside)
+        if to_answer and visuals is not None and hasattr(visuals, 'meter'):
+            all_done = answered == len(to_answer)
+            meter_col = '#4CD964' if all_done else FORGE_BLUE
+            page.parts.append(visuals.meter(answered, total=len(to_answer),
+                                            label='Replies ready', colour=meter_col))
         page.parts.append(''.join(
             waiting_html(page, item, answers.get(str(item['number'])) or {}, unfolded)
             for item in items))
@@ -504,8 +537,15 @@ def add_touched(page, model):
     if not paths:
         return
     edited_count = len([path for path in paths if path in edited])
+    read_or_run_count = len(paths) - edited_count
     section_label(page, 'TOUCHED', '%d edited · %d read or run'
-                  % (edited_count, len(paths) - edited_count))
+                  % (edited_count, read_or_run_count))
+    if visuals is not None and hasattr(visuals, 'stats') and len(paths) >= 2:
+        page.parts.append(visuals.stats([
+            ('Edited', str(edited_count), '', '#4CD964' if edited_count else None),
+            ('Read/Run', str(read_or_run_count), '', FORGE_BLUE if read_or_run_count else None),
+            ('Touched', str(len(paths)), '', None),
+        ]))
     if filecards is not None:
         root = model.project_root
         page.grid([filecards.file_card(os.path.join(root, path), open_item(path, 1),
@@ -566,6 +606,9 @@ def add_operations(page, model, unfolded):
                         for tone, word in TONE_WORDS if model.counts[tone])
     section_label(page, 'OPERATIONS', summary, fold='ops', is_open=is_open)
     if is_open:
+        if visuals is not None and hasattr(visuals, 'steps') and len(model.rows) <= 16:
+            pill_items = [('%d·%s' % (row.number, row.op), row.tone) for row in model.rows]
+            page.parts.append(visuals.steps(pill_items))
         page.parts.append(''.join(operation_html(page, row, model.slowest, unfolded, look)
                                   for row in model.rows))
 
@@ -687,11 +730,19 @@ def build_live_page(snapshot, active_seconds=0.0):
                                             snapshot.get('stamp') or 'no stamp', where, elapsed)
     page = cards.Page()
     page.parts.append('<div class="av-page">')
+    live_badge = (visuals.badge('LIVE', colour=FORGE_BLUE)
+                  if visuals is not None and hasattr(visuals, 'badge') else '')
     page.parts.append(
         '<div class="av-banner"><div class="av-rule"></div>'
-        '<div class="av-verdict" style="color:var(--av-blue)">%s</div>'
+        '<div class="av-verdict" style="color:var(--av-blue)">%s %s</div>'
         '<div class="av-summary">%s</div><div class="av-rule"></div></div>'
-        % (escape(spaced('RUNNING')), escape(summary)))
+        % (escape(spaced('RUNNING')), live_badge, escape(summary)))
+    if visuals is not None and hasattr(visuals, 'stats'):
+        page.parts.append(visuals.stats([
+            ('Done', '%d/%d' % (len(finished), total) if total else str(len(finished)), '', FORGE_BLUE),
+            ('Elapsed', '%.1fs' % elapsed, '', None),
+            ('Active', active.get('op').upper() if active and active.get('op') else '—', '', FORGE_BLUE if active else None),
+        ]))
     done_width = round(100.0 * len(finished) / total) if total else 0
     page.parts.append(
         '<div class="av-outcomes"><div class="av-outcome">'
@@ -699,6 +750,14 @@ def build_live_page(snapshot, active_seconds=0.0):
         '<span class="av-track"><span class="av-fill" style="width:%d%%"></span></span>'
         '<span class="av-count">%d</span></div></div>' % (done_width, len(finished)))
     section_label(page, 'OPERATIONS', '%d of %d' % (len(finished), total) if total else '')
+    if visuals is not None and hasattr(visuals, 'steps'):
+        step_pills = [(str(idx + 1) + '·' + str(entry.get('op') or '?').upper(),
+                       live_tone(entry.get('status')))
+                      for idx, entry in enumerate(finished)]
+        if active:
+            step_pills.append((str(step) + '·' + str(active.get('op') or '?').upper(), 'active'))
+        if step_pills:
+            page.parts.append(visuals.steps(step_pills))
     slowest = max([entry['seconds'] for entry in finished] + [0.001])
     rows = [live_row_html(index + 1, entry, slowest) for index, entry in enumerate(finished)]
     if active:
@@ -805,5 +864,7 @@ CSS = ':root { --av-blue: %s; }\n' % FORGE_BLUE + """
 
 
 def tile_css():
-    """CSS for a tile showing Anvil's pages: Anvil's look plus file cards'."""
-    return CSS + (filecards.CSS if filecards is not None else '')
+    """CSS for a tile showing Anvil's pages: visuals, file cards, and Anvil's look."""
+    vis_css = visuals.CSS if visuals is not None else ''
+    cards_css = filecards.CSS if filecards is not None else ''
+    return vis_css + cards_css + CSS

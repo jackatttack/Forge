@@ -489,6 +489,8 @@ class Landing(object):
     def set_answer(self, number, value):
         """Record an answer, save it beside the run at once, and redraw."""
         self.answers[str(number)] = {'value': value}
+        self.unfolded.discard(('ask', number))
+        self.unfolded.discard(('ask', str(number)))
         run_items.save_answers(self.model.stamp, self.answers)
         self.draw()
 
